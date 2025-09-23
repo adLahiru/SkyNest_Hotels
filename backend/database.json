@@ -1,0 +1,74 @@
+{
+  "development": {
+    "driver": "mysql",
+    "host": {
+      "ENV": "DB_HOST"
+    },
+    "port": {
+      "ENV": "DB_PORT"
+    },
+    "user": {
+      "ENV": "DB_USER"
+    },
+    "password": {
+      "ENV": "DB_PASS"
+    },
+    "database": {
+      "ENV": "DB_NAME"
+    }
+  },
+  "test": {
+    "driver": "mysql",
+    "host": {
+      "ENV": "DB_HOST"
+    },
+    "port": {
+      "ENV": "DB_PORT"
+    },
+    "user": {
+      "ENV": "DB_USER"
+    },
+    "password": {
+      "ENV": "DB_PASS"
+    },
+    "database": {
+      "ENV": "DB_NAME"
+    }
+  },
+  "production": {
+    "driver": "mysql",
+    "host": {
+      "ENV": "DB_HOST"
+    },
+    "port": {
+      "ENV": "DB_PORT"
+    },
+    "user": {
+      "ENV": "DB_USER"
+    },
+    "password": {
+      "ENV": "DB_PASS"
+    },
+    "database": {
+      "ENV": "DB_NAME"
+    }
+  },
+  "example": {
+    "driver": "mysql",
+    "host": {
+      "ENV": "DB_HOST"
+    },
+    "port": {
+      "ENV": "DB_PORT"
+    },
+    "user": {
+      "ENV": "DB_USER"
+    },
+    "password": {
+      "ENV": "DB_PASS"
+    },
+    "database": {
+      "ENV": "DB_NAME"
+    }
+  }
+}
