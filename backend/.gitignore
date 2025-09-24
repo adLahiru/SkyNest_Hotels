@@ -49,7 +49,7 @@ config/.env.test.local
 config/.env.production.local
 
 # Database migration files that might be generated
-migrations/
+# migrations/
 
 # Database dumps and backups
 *.sql
