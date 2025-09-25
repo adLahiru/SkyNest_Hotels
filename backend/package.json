@@ -17,6 +17,12 @@
     "rollback:test": "dotenv -e config/.env.test -- db-migrate down -e test",
     "rollback:prod": "dotenv -e config/.env.production -- db-migrate down -e production",
     "rollback:example": "dotenv -e config/.env.example -- db-migrate down -e example",
+    "rollback:all:dev": "dotenv -e ./config/.env.development -- db-migrate reset -e development",
+    "rollback:all:test": "dotenv -e ./config/.env.test -- db-migrate reset -e test",
+    "rollback:all:prod": "dotenv -e ./config/.env.production -- db-migrate reset -e production",
+    "rollback:count:dev": "dotenv -e ./config/.env.development -- db-migrate down -c",
+    "rollback:count:test": "dotenv -e ./config/.env.test -- db-migrate down -c",
+    "rollback:count:prod": "dotenv -e ./config/.env.production -- db-migrate down -c",
     "create-admin": "ts-node src/scripts/createAdmin.ts"
   },
   "keywords": [],

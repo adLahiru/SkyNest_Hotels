@@ -13,7 +13,7 @@ const createAdminUser = async () => {
     // Admin user details
     const adminDetails = {
         name:"Lahiru Dilshan",
-        role:"Admin",
+        role:"ADMIN",
         email:"adlahiru65@gmail.com",
         phone:"0714566635",
         hire_date:"2023-10-01",
@@ -42,16 +42,27 @@ const createAdminUser = async () => {
     const userID = uuidv7();
 
     await conn.query(
-        'INSERT INTO users (user_id, name, role, email, phone, nic_no, username, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [userID, adminDetails.name, adminDetails.role, adminDetails.email, adminDetails.phone, adminDetails.nic_no, adminDetails.username, hashedPassword]
+        'INSERT INTO users (user_id, name, email, phone, nic_no, username, password) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [userID, adminDetails.name, adminDetails.email, adminDetails.phone, adminDetails.nic_no, adminDetails.username, hashedPassword]
+    );
+    const branchID = uuidv7();
+    await conn.query(
+        'INSERT INTO hotel_branches (branch_id, branch_name, address, phone, email) VALUES (?, ?, ?, ?, ?)',
+        [
+            branchID,
+            'Head Office',
+            'No 123, Main Street, City',
+            '0714566635',
+            'headoffice@example.com'
+        ]
     );
 
-    const staffID = uuidv7();
     await conn.query(
-    'INSERT INTO staff (staff_id, user_id,hire_date,salary) VALUES (?, ?, ?, ?)',
+    'INSERT INTO staff (staff_id,branch_id,role,hire_date,salary) VALUES (?, ?, ?, ?, ?)',
     [
-        staffID,
         userID,
+        branchID,
+        adminDetails.role,
         adminDetails.hire_date,
         adminDetails.salary
     ]
