@@ -1,0 +1,329 @@
+import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+import { 
+  AuthenticatedRequest, 
+  JWTPayload, 
+  UserRole, 
+  RoleHierarchy, 
+  ApiResponse 
+} from '../types';
+import authController from '../controllers/authController';
+
+/**
+ * Middleware to authenticate JWT token
+ */
+export const authenticateToken = async (
+  req: AuthenticatedRequest, 
+  res: Response, 
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    console.log(token);   
+
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        message: 'Access token required'
+      } as ApiResponse);
+      return;
+    }
+
+    // Validate token and get user info
+    const validation = await authController.validateToken(token);
+    
+    if (!validation.success || !validation.user) {
+      res.status(401).json({
+        success: false,
+        message: validation.error || 'Invalid token'
+      } as ApiResponse);
+      return;
+    }
+
+    // Attach user info to request
+    req.user = validation.user;
+    req.session_id = validation.session_id;
+
+    next();
+  } catch (error) {
+    console.error('Authentication error:', error);
+    res.status(401).json({
+      success: false,
+      message: 'Token validation failed'
+    } as ApiResponse);
+  }
+};
+
+/**
+ * Middleware to check if user has required role
+ * @param requiredRole - Minimum required role
+ * @param allowSelf - Allow user to access their own resources
+ */
+export const requireRole = (requiredRole: UserRole, allowSelf: boolean = false) => {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+    try {
+      const user = req.user;
+      
+      if (!user) {
+        res.status(401).json({
+          success: false,
+          message: 'User not authenticated'
+        } as ApiResponse);
+        return;
+      }
+
+      // For guests, only allow access to their own resources if allowSelf is true
+      if (user.is_guest && allowSelf) {
+        next();
+        return;
+      }
+
+      // Staff role check
+      if (!user.role) {
+        res.status(403).json({
+          success: false,
+          message: 'Access denied: No role assigned'
+        } as ApiResponse);
+        return;
+      }
+
+      const userRoleLevel = RoleHierarchy[user.role];
+      const requiredRoleLevel = RoleHierarchy[requiredRole];
+
+      if (userRoleLevel < requiredRoleLevel) {
+        res.status(403).json({
+          success: false,
+          message: 'Access denied: Insufficient privileges'
+        } as ApiResponse);
+        return;
+      }
+
+      next();
+    } catch (error) {
+      console.error('Role authorization error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Authorization check failed'
+      } as ApiResponse);
+    }
+  };
+};
+
+/**
+ * Middleware to check if user has any of the specified roles
+ */
+export const requireAnyRole = (allowedRoles: UserRole[]) => {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+    try {
+      const user = req.user;
+      
+      if (!user) {
+        res.status(401).json({
+          success: false,
+          message: 'User not authenticated'
+        } as ApiResponse);
+        return;
+      }
+
+      // For guests, check if guest role is allowed
+      if (user.is_guest) {
+        if (allowedRoles.includes(UserRole.GUEST)) {
+          next();
+          return;
+        }
+        res.status(403).json({
+          success: false,
+          message: 'Access denied: Guests not allowed'
+        } as ApiResponse);
+        return;
+      }
+
+      // Staff role check
+      if (!user.role) {
+        res.status(403).json({
+          success: false,
+          message: 'Access denied: No role assigned'
+        } as ApiResponse);
+        return;
+      }
+
+      if (!allowedRoles.includes(user.role)) {
+        res.status(403).json({
+          success: false,
+          message: 'Access denied: Role not authorized'
+        } as ApiResponse);
+        return;
+      }
+
+      next();
+    } catch (error) {
+      console.error('Role authorization error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Authorization check failed'
+      } as ApiResponse);
+    }
+  };
+};
+
+/**
+ * Middleware to check if user belongs to a specific branch or is admin
+ */
+export const requireBranchAccess = (allowAdminOverride: boolean = true) => {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+    try {
+      const user = req.user;
+      const targetBranchId = req.params.branchId || req.body.branch_id;
+
+      if (!user) {
+        res.status(401).json({
+          success: false,
+          message: 'User not authenticated'
+        } as ApiResponse);
+        return;
+      }
+
+      // Admin can access all branches if override is allowed
+      if (allowAdminOverride && user.role === UserRole.ADMIN) {
+        next();
+        return;
+      }
+
+      // Check if user belongs to the target branch
+      if (user.branch_id !== targetBranchId) {
+        res.status(403).json({
+          success: false,
+          message: 'Access denied: Branch access restricted'
+        } as ApiResponse);
+        return;
+      }
+
+      next();
+    } catch (error) {
+      console.error('Branch authorization error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Branch authorization check failed'
+      } as ApiResponse);
+    }
+  };
+};
+
+/**
+ * Middleware to allow access only to own resources or admin override
+ */
+export const requireSelfOrAdmin = (userIdField: string = 'userId') => {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+    try {
+      const user = req.user;
+      const targetUserId = req.params[userIdField] || req.body[userIdField];
+
+      if (!user) {
+        res.status(401).json({
+          success: false,
+          message: 'User not authenticated'
+        } as ApiResponse);
+        return;
+      }
+
+      // Admin can access all resources
+      if (user.role === UserRole.ADMIN) {
+        next();
+        return;
+      }
+
+      // User can only access their own resources
+      if (user.user_id !== targetUserId) {
+        res.status(403).json({
+          success: false,
+          message: 'Access denied: Can only access own resources'
+        } as ApiResponse);
+        return;
+      }
+
+      next();
+    } catch (error) {
+      console.error('Self authorization error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Self authorization check failed'
+      } as ApiResponse);
+    }
+  };
+};
+
+/**
+ * Middleware for admin-only access
+ */
+export const requireAdmin = requireRole(UserRole.ADMIN);
+
+/**
+ * Middleware for manager-level access and above
+ */
+export const requireManager = requireRole(UserRole.MANAGER);
+
+/**
+ * Middleware for receptionist-level access and above
+ */
+export const requireReceptionist = requireRole(UserRole.RECEPTIONIST);
+
+/**
+ * Middleware for staff-only access (excludes guests)
+ */
+export const requireStaff = (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+  const user = req.user;
+  
+  if (!user) {
+    res.status(401).json({
+      success: false,
+      message: 'User not authenticated'
+    } as ApiResponse);
+    return;
+  }
+
+  if (user.is_guest) {
+    res.status(403).json({
+      success: false,
+      message: 'Access denied: Staff access required'
+    } as ApiResponse);
+    return;
+  }
+
+  next();
+};
+
+/**
+ * Optional authentication - doesn't fail if no token provided
+ * But validates token if present
+ */
+export const optionalAuth = async (
+  req: AuthenticatedRequest, 
+  res: Response, 
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+      // No token provided, continue without authentication
+      next();
+      return;
+    }
+
+    // Validate token if provided
+    const validation = await authController.validateToken(token);
+    
+    if (validation.success && validation.user) {
+      req.user = validation.user;
+      req.session_id = validation.session_id;
+    }
+
+    next();
+  } catch (error) {
+    // Don't fail on optional auth, just log the error
+    console.error('Optional authentication error:', error);
+    next();
+  }
+};
