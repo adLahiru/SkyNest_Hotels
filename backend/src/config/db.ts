@@ -12,27 +12,31 @@ console.log(`📁 Environment file: ${envFile}`);
 // Load environment variables from the specific .env file
 dotenv.config({ path: envFile });
 
-// Create connection with error handling
-const connection = async () => {
-  try {
-    const dbConfig = {
-      host: process.env.DB_HOST || 'localhost',
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASS || process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'SkyNest_Hotels',
-      port: parseInt(process.env.DB_PORT || '3306'),
-    };
+// Database configuration
+const dbConfig = {
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASS || process.env.DB_PASSWORD || '',
+  database: process.env.DB_NAME || 'SkyNest_Hotels',
+  port: parseInt(process.env.DB_PORT || '3306'),
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+};
 
-    console.log(`🔗 Connecting to database: ${dbConfig.database} at ${dbConfig.host}:${dbConfig.port}`);
-    // console.log(`👤 Using user: ${dbConfig.user}`);
-    
-    const connection = await mysql.createConnection(dbConfig);
-    
+// Create connection pool for better performance
+console.log(`🔗 Creating database pool: ${dbConfig.database} at ${dbConfig.host}:${dbConfig.port}`);
+export const db = mysql.createPool(dbConfig);
+
+// Test connection function
+export const testConnection = async () => {
+  try {
+    const connection = await db.getConnection();
     console.log(`✅ Database connected successfully to ${environment} environment!`);
-    // console.log(`📊 Database: ${dbConfig.database}`);
+    console.log(`📊 Database: ${dbConfig.database}`);
     console.log('─'.repeat(50));
-    
-    return connection;
+    connection.release();
+    return true;
   } catch (error) {
     console.error(`❌ Database connection failed for ${environment} environment:`);
     console.error('Error details:', error);
@@ -41,5 +45,15 @@ const connection = async () => {
   }
 };
 
+// Legacy connection function for backward compatibility
+const connection = async () => {
+  try {
+    return await mysql.createConnection(dbConfig);
+  } catch (error) {
+    console.error(`❌ Database connection failed for ${environment} environment:`);
+    console.error('Error details:', error);
+    throw error;
+  }
+};
 
 export default connection;
