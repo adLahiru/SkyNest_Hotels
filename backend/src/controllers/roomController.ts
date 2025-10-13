@@ -1,0 +1,828 @@
+import { Response } from 'express';
+import { ResultSetHeader, RowDataPacket } from 'mysql2';
+import { db } from '../config/db';
+import { UserRole, AuthenticatedRequest } from '../types/auth.types';
+
+/**
+ * Room Controller
+ * Handles CRUD operations for hotel rooms
+ * Admins can manage rooms in any branch
+ * Managers can only manage rooms in their own branch
+ */
+
+// Room state enum
+export enum RoomState {
+  AVAILABLE = 'available',
+  OCCUPIED = 'occupied',
+  MAINTENANCE = 'maintenance'
+}
+
+interface Room extends RowDataPacket {
+  room_id: number;
+  room_type_id: string;
+  branch_id: string;
+  room_no: string;
+  floor_no: number;
+  state: RoomState;
+  created_at: Date;
+  updated_at: Date;
+  // Joined fields
+  room_type?: string;
+  branch_name?: string;
+  capacity?: number;
+  daily_rate?: number;
+}
+
+/**
+ * Validate if user can manage rooms in a branch
+ */
+const canManageRoomInBranch = (req: AuthenticatedRequest, branchId: string): boolean => {
+  // Admins can manage rooms in any branch
+  if (req.user?.role === UserRole.ADMIN) {
+    return true;
+  }
+  
+  // Managers can only manage rooms in their own branch
+  if (req.user?.role === UserRole.MANAGER) {
+    return req.user.branch_id === branchId;
+  }
+  
+  return false;
+};
+
+/**
+ * Validate minimum role requirement
+ */
+const hasMinimumRole = (req: AuthenticatedRequest, minRole: UserRole): boolean => {
+  const roleHierarchy = {
+    [UserRole.ADMIN]: 4,
+    [UserRole.MANAGER]: 3,
+    [UserRole.RECEPTIONIST]: 2,
+    [UserRole.HOUSEKEEPING]: 1,
+    [UserRole.GUEST]: 0
+  };
+  
+  const userRoleLevel = roleHierarchy[req.user?.role || UserRole.GUEST];
+  const minRoleLevel = roleHierarchy[minRole];
+  
+  return userRoleLevel >= minRoleLevel;
+};
+
+/**
+ * Create a new room
+ * Admin: can add to any branch
+ * Manager: can only add to their own branch
+ * POST /api/rooms
+ */
+export const createRoom = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const connection = await db.getConnection();
+  
+  try {
+    // Check if user is at least a manager
+    if (!hasMinimumRole(req, UserRole.MANAGER)) {
+      res.status(403).json({
+        success: false,
+        message: 'Access denied. Only administrators and managers can add rooms.'
+      });
+      return;
+    }
+
+    const { room_type_id, branch_id, room_no, floor_no, state = RoomState.AVAILABLE } = req.body;
+
+    // Validate required fields
+    if (!room_type_id || !branch_id || !room_no || floor_no === undefined) {
+      res.status(400).json({
+        success: false,
+        message: 'Missing required fields: room_type_id, branch_id, room_no, and floor_no are required.'
+      });
+      return;
+    }
+
+    // Check if user can manage rooms in this branch
+    if (!canManageRoomInBranch(req, branch_id)) {
+      res.status(403).json({
+        success: false,
+        message: 'Access denied. Managers can only add rooms to their own branch.'
+      });
+      return;
+    }
+
+    // Validate room_no length
+    if (room_no.length > 20) {
+      res.status(400).json({
+        success: false,
+        message: 'Room number must be 20 characters or less.'
+      });
+      return;
+    }
+
+    // Validate floor_no is positive
+    if (floor_no < 0) {
+      res.status(400).json({
+        success: false,
+        message: 'Floor number must be a non-negative integer.'
+      });
+      return;
+    }
+
+    // Validate state
+    if (!Object.values(RoomState).includes(state as RoomState)) {
+      res.status(400).json({
+        success: false,
+        message: `Invalid state. Must be one of: ${Object.values(RoomState).join(', ')}`
+      });
+      return;
+    }
+
+    await connection.beginTransaction();
+
+    // Check if room_type_id exists
+    const [roomTypes] = await connection.query<RowDataPacket[]>(
+      'SELECT room_type_id FROM room_types WHERE room_type_id = ?',
+      [room_type_id]
+    );
+
+    if (roomTypes.length === 0) {
+      await connection.rollback();
+      res.status(404).json({
+        success: false,
+        message: 'Room type not found.'
+      });
+      return;
+    }
+
+    // Check if branch_id exists
+    const [branches] = await connection.query<RowDataPacket[]>(
+      'SELECT branch_id FROM hotel_branches WHERE branch_id = ?',
+      [branch_id]
+    );
+
+    if (branches.length === 0) {
+      await connection.rollback();
+      res.status(404).json({
+        success: false,
+        message: 'Branch not found.'
+      });
+      return;
+    }
+
+    // Check if room_no already exists in this branch
+    const [existingRooms] = await connection.query<RowDataPacket[]>(
+      'SELECT room_id FROM rooms WHERE branch_id = ? AND room_no = ?',
+      [branch_id, room_no]
+    );
+
+    if (existingRooms.length > 0) {
+      await connection.rollback();
+      res.status(409).json({
+        success: false,
+        message: `Room number "${room_no}" already exists in this branch.`
+      });
+      return;
+    }
+
+    // Insert new room
+    const [result] = await connection.query<ResultSetHeader>(
+      `INSERT INTO rooms 
+       (room_type_id, branch_id, room_no, floor_no, state) 
+       VALUES (?, ?, ?, ?, ?)`,
+      [room_type_id, branch_id, room_no, floor_no, state]
+    );
+
+    // Fetch the created room with joined data
+    const [newRoom] = await connection.query<Room[]>(
+      `SELECT r.*, rt.type as room_type, rt.capacity, rt.daily_rate, hb.branch_name 
+       FROM rooms r
+       LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
+       LEFT JOIN hotel_branches hb ON r.branch_id = hb.branch_id
+       WHERE r.room_id = ?`,
+      [result.insertId]
+    );
+
+    if (!newRoom[0]) {
+      await connection.rollback();
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve created room.'
+      });
+      return;
+    }
+
+    await connection.commit();
+
+    const room = newRoom[0];
+
+    res.status(201).json({
+      success: true,
+      message: 'Room created successfully.',
+      data: {
+        room: {
+          room_id: room.room_id,
+          room_type_id: room.room_type_id,
+          room_type: room.room_type,
+          branch_id: room.branch_id,
+          branch_name: room.branch_name,
+          room_no: room.room_no,
+          floor_no: room.floor_no,
+          state: room.state,
+          capacity: room.capacity,
+          daily_rate: room.daily_rate ? parseFloat(room.daily_rate.toString()) : null,
+          created_at: room.created_at,
+          updated_at: room.updated_at
+        }
+      }
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error creating room:', error);
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred while creating the room.',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  } finally {
+    connection.release();
+  }
+};
+
+/**
+ * Get all rooms
+ * Admins: can view all rooms
+ * Managers: can only view rooms in their branch
+ * Others: can view all available rooms
+ * GET /api/rooms
+ */
+export const getRooms = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { branch_id, room_type_id, state, floor_no } = req.query;
+
+    let query = `SELECT r.*, rt.type as room_type, rt.capacity, rt.daily_rate, hb.branch_name 
+                 FROM rooms r
+                 LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
+                 LEFT JOIN hotel_branches hb ON r.branch_id = hb.branch_id
+                 WHERE 1=1`;
+    const params: any[] = [];
+
+    // If manager, only show rooms from their branch
+    if (req.user?.role === UserRole.MANAGER && req.user.branch_id) {
+      query += ' AND r.branch_id = ?';
+      params.push(req.user.branch_id);
+    }
+
+    // Filter by branch_id if provided
+    if (branch_id && req.user?.role !== UserRole.MANAGER) {
+      query += ' AND r.branch_id = ?';
+      params.push(branch_id);
+    }
+
+    // Filter by room_type_id if provided
+    if (room_type_id) {
+      query += ' AND r.room_type_id = ?';
+      params.push(room_type_id);
+    }
+
+    // Filter by state if provided
+    if (state) {
+      if (!Object.values(RoomState).includes(state as RoomState)) {
+        res.status(400).json({
+          success: false,
+          message: `Invalid state. Must be one of: ${Object.values(RoomState).join(', ')}`
+        });
+        return;
+      }
+      query += ' AND r.state = ?';
+      params.push(state);
+    }
+
+    // Filter by floor_no if provided
+    if (floor_no) {
+      query += ' AND r.floor_no = ?';
+      params.push(parseInt(floor_no as string));
+    }
+
+    query += ' ORDER BY hb.branch_name, r.floor_no, r.room_no';
+
+    const [rooms] = await db.query<Room[]>(query, params);
+
+    const formattedRooms = rooms.map((room: Room) => ({
+      room_id: room.room_id,
+      room_type_id: room.room_type_id,
+      room_type: room.room_type,
+      branch_id: room.branch_id,
+      branch_name: room.branch_name,
+      room_no: room.room_no,
+      floor_no: room.floor_no,
+      state: room.state,
+      capacity: room.capacity,
+      daily_rate: room.daily_rate ? parseFloat(room.daily_rate.toString()) : null,
+      created_at: room.created_at,
+      updated_at: room.updated_at
+    }));
+
+    res.status(200).json({
+      success: true,
+      message: 'Rooms retrieved successfully.',
+      data: {
+        rooms: formattedRooms,
+        count: formattedRooms.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching rooms:', error);
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred while retrieving rooms.',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+/**
+ * Get room by ID
+ * GET /api/rooms/:room_id
+ */
+export const getRoomById = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { room_id } = req.params;
+
+    const [rooms] = await db.query<Room[]>(
+      `SELECT r.*, rt.type as room_type, rt.capacity, rt.daily_rate, rt.amenities, hb.branch_name 
+       FROM rooms r
+       LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
+       LEFT JOIN hotel_branches hb ON r.branch_id = hb.branch_id
+       WHERE r.room_id = ?`,
+      [room_id]
+    );
+
+    if (rooms.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: 'Room not found.'
+      });
+      return;
+    }
+
+    const room = rooms[0];
+    
+    if (!room) {
+      res.status(404).json({
+        success: false,
+        message: 'Room not found.'
+      });
+      return;
+    }
+
+    // If manager, check if room is in their branch
+    if (req.user?.role === UserRole.MANAGER && req.user.branch_id !== room.branch_id) {
+      res.status(403).json({
+        success: false,
+        message: 'Access denied. You can only view rooms in your branch.'
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Room retrieved successfully.',
+      data: {
+        room: {
+          room_id: room.room_id,
+          room_type_id: room.room_type_id,
+          room_type: room.room_type,
+          branch_id: room.branch_id,
+          branch_name: room.branch_name,
+          room_no: room.room_no,
+          floor_no: room.floor_no,
+          state: room.state,
+          capacity: room.capacity,
+          daily_rate: room.daily_rate ? parseFloat(room.daily_rate.toString()) : null,
+          created_at: room.created_at,
+          updated_at: room.updated_at
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching room:', error);
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred while retrieving the room.',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+/**
+ * Update a room
+ * Admin: can update any room
+ * Manager: can only update rooms in their branch
+ * PUT /api/rooms/:room_id
+ */
+export const updateRoom = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const connection = await db.getConnection();
+  
+  try {
+    // Check if user is at least a manager
+    if (!hasMinimumRole(req, UserRole.MANAGER)) {
+      res.status(403).json({
+        success: false,
+        message: 'Access denied. Only administrators and managers can update rooms.'
+      });
+      return;
+    }
+
+    const { room_id } = req.params;
+    const { room_type_id, branch_id, room_no, floor_no, state } = req.body;
+
+    // Check if room exists
+    const [existingRooms] = await connection.query<Room[]>(
+      'SELECT * FROM rooms WHERE room_id = ?',
+      [room_id]
+    );
+
+    if (existingRooms.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: 'Room not found.'
+      });
+      return;
+    }
+
+    const existingRoom = existingRooms[0];
+    
+    if (!existingRoom) {
+      res.status(404).json({
+        success: false,
+        message: 'Room not found.'
+      });
+      return;
+    }
+
+    // Check if user can manage this room
+    if (!canManageRoomInBranch(req, existingRoom.branch_id)) {
+      res.status(403).json({
+        success: false,
+        message: 'Access denied. Managers can only update rooms in their own branch.'
+      });
+      return;
+    }
+
+    // If branch_id is being changed, check if user can manage the new branch
+    if (branch_id && branch_id !== existingRoom.branch_id) {
+      if (!canManageRoomInBranch(req, branch_id)) {
+        res.status(403).json({
+          success: false,
+          message: 'Access denied. You cannot move rooms to a branch you do not manage.'
+        });
+        return;
+      }
+    }
+
+    // Validate room_no if provided
+    if (room_no !== undefined && (room_no.length === 0 || room_no.length > 20)) {
+      res.status(400).json({
+        success: false,
+        message: 'Room number must be between 1 and 20 characters.'
+      });
+      return;
+    }
+
+    // Validate floor_no if provided
+    if (floor_no !== undefined && floor_no < 0) {
+      res.status(400).json({
+        success: false,
+        message: 'Floor number must be a non-negative integer.'
+      });
+      return;
+    }
+
+    // Validate state if provided
+    if (state !== undefined && !Object.values(RoomState).includes(state as RoomState)) {
+      res.status(400).json({
+        success: false,
+        message: `Invalid state. Must be one of: ${Object.values(RoomState).join(', ')}`
+      });
+      return;
+    }
+
+    await connection.beginTransaction();
+
+    // Validate room_type_id if provided
+    if (room_type_id !== undefined) {
+      const [roomTypes] = await connection.query<RowDataPacket[]>(
+        'SELECT room_type_id FROM room_types WHERE room_type_id = ?',
+        [room_type_id]
+      );
+
+      if (roomTypes.length === 0) {
+        await connection.rollback();
+        res.status(404).json({
+          success: false,
+          message: 'Room type not found.'
+        });
+        return;
+      }
+    }
+
+    // Validate branch_id if provided
+    if (branch_id !== undefined) {
+      const [branches] = await connection.query<RowDataPacket[]>(
+        'SELECT branch_id FROM hotel_branches WHERE branch_id = ?',
+        [branch_id]
+      );
+
+      if (branches.length === 0) {
+        await connection.rollback();
+        res.status(404).json({
+          success: false,
+          message: 'Branch not found.'
+        });
+        return;
+      }
+    }
+
+    // Check for duplicate room_no if being changed
+    if (room_no !== undefined) {
+      const targetBranchId = branch_id || existingRoom.branch_id;
+      const [duplicates] = await connection.query<RowDataPacket[]>(
+        'SELECT room_id FROM rooms WHERE branch_id = ? AND room_no = ? AND room_id != ?',
+        [targetBranchId, room_no, room_id]
+      );
+
+      if (duplicates.length > 0) {
+        await connection.rollback();
+        res.status(409).json({
+          success: false,
+          message: `Room number "${room_no}" already exists in this branch.`
+        });
+        return;
+      }
+    }
+
+    // Build update query dynamically
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (room_type_id !== undefined) {
+      updates.push('room_type_id = ?');
+      values.push(room_type_id);
+    }
+    if (branch_id !== undefined) {
+      updates.push('branch_id = ?');
+      values.push(branch_id);
+    }
+    if (room_no !== undefined) {
+      updates.push('room_no = ?');
+      values.push(room_no);
+    }
+    if (floor_no !== undefined) {
+      updates.push('floor_no = ?');
+      values.push(floor_no);
+    }
+    if (state !== undefined) {
+      updates.push('state = ?');
+      values.push(state);
+    }
+
+    if (updates.length === 0) {
+      await connection.rollback();
+      res.status(400).json({
+        success: false,
+        message: 'No fields to update.'
+      });
+      return;
+    }
+
+    values.push(room_id);
+
+    await connection.query(
+      `UPDATE rooms SET ${updates.join(', ')} WHERE room_id = ?`,
+      values
+    );
+
+    // Fetch updated room with joined data
+    const [updatedRooms] = await connection.query<Room[]>(
+      `SELECT r.*, rt.type as room_type, rt.capacity, rt.daily_rate, hb.branch_name 
+       FROM rooms r
+       LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
+       LEFT JOIN hotel_branches hb ON r.branch_id = hb.branch_id
+       WHERE r.room_id = ?`,
+      [room_id]
+    );
+
+    await connection.commit();
+
+    const room = updatedRooms[0];
+    
+    if (!room) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve updated room.'
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Room updated successfully.',
+      data: {
+        room: {
+          room_id: room.room_id,
+          room_type_id: room.room_type_id,
+          room_type: room.room_type,
+          branch_id: room.branch_id,
+          branch_name: room.branch_name,
+          room_no: room.room_no,
+          floor_no: room.floor_no,
+          state: room.state,
+          capacity: room.capacity,
+          daily_rate: room.daily_rate ? parseFloat(room.daily_rate.toString()) : null,
+          created_at: room.created_at,
+          updated_at: room.updated_at
+        }
+      }
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error updating room:', error);
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred while updating the room.',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  } finally {
+    connection.release();
+  }
+};
+
+/**
+ * Delete a room
+ * Admin: can delete any room
+ * Manager: can only delete rooms in their branch
+ * DELETE /api/rooms/:room_id
+ */
+export const deleteRoom = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const connection = await db.getConnection();
+  
+  try {
+    // Check if user is at least a manager
+    if (!hasMinimumRole(req, UserRole.MANAGER)) {
+      res.status(403).json({
+        success: false,
+        message: 'Access denied. Only administrators and managers can delete rooms.'
+      });
+      return;
+    }
+
+    const { room_id } = req.params;
+
+    // Check if room exists
+    const [rooms] = await connection.query<Room[]>(
+      'SELECT * FROM rooms WHERE room_id = ?',
+      [room_id]
+    );
+
+    if (rooms.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: 'Room not found.'
+      });
+      return;
+    }
+
+    const room = rooms[0];
+    
+    if (!room) {
+      res.status(404).json({
+        success: false,
+        message: 'Room not found.'
+      });
+      return;
+    }
+
+    // Check if user can manage this room
+    if (!canManageRoomInBranch(req, room.branch_id)) {
+      res.status(403).json({
+        success: false,
+        message: 'Access denied. Managers can only delete rooms in their own branch.'
+      });
+      return;
+    }
+
+    await connection.beginTransaction();
+
+    // Check if room is being used in bookings
+    const [bookings] = await connection.query<RowDataPacket[]>(
+      'SELECT COUNT(*) as count FROM bookings WHERE room_id = ?',
+      [room_id]
+    );
+
+    const bookingCount = bookings[0]?.count ?? 0;
+
+    if (bookingCount > 0) {
+      await connection.rollback();
+      res.status(409).json({
+        success: false,
+        message: 'Cannot delete room. It has associated bookings. Consider changing its state to maintenance instead.'
+      });
+      return;
+    }
+
+    // Delete the room
+    await connection.query(
+      'DELETE FROM rooms WHERE room_id = ?',
+      [room_id]
+    );
+
+    await connection.commit();
+
+    res.status(200).json({
+      success: true,
+      message: 'Room deleted successfully.',
+      data: {
+        deleted_room_id: room_id
+      }
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error deleting room:', error);
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred while deleting the room.',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  } finally {
+    connection.release();
+  }
+};
+
+/**
+ * Get available rooms
+ * GET /api/rooms/available
+ */
+export const getAvailableRooms = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { branch_id, room_type_id, floor_no } = req.query;
+
+    let query = `SELECT r.*, rt.type as room_type, rt.capacity, rt.daily_rate, hb.branch_name 
+                 FROM rooms r
+                 LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
+                 LEFT JOIN hotel_branches hb ON r.branch_id = hb.branch_id
+                 WHERE r.state = 'available'`;
+    const params: any[] = [];
+
+    if (branch_id) {
+      query += ' AND r.branch_id = ?';
+      params.push(branch_id);
+    }
+
+    if (room_type_id) {
+      query += ' AND r.room_type_id = ?';
+      params.push(room_type_id);
+    }
+
+    if (floor_no) {
+      query += ' AND r.floor_no = ?';
+      params.push(parseInt(floor_no as string));
+    }
+
+    query += ' ORDER BY hb.branch_name, r.floor_no, r.room_no';
+
+    const [rooms] = await db.query<Room[]>(query, params);
+
+    const formattedRooms = rooms.map((room: Room) => ({
+      room_id: room.room_id,
+      room_type_id: room.room_type_id,
+      room_type: room.room_type,
+      branch_id: room.branch_id,
+      branch_name: room.branch_name,
+      room_no: room.room_no,
+      floor_no: room.floor_no,
+      capacity: room.capacity,
+      daily_rate: room.daily_rate ? parseFloat(room.daily_rate.toString()) : null,
+      created_at: room.created_at,
+      updated_at: room.updated_at
+    }));
+
+    res.status(200).json({
+      success: true,
+      message: 'Available rooms retrieved successfully.',
+      data: {
+        rooms: formattedRooms,
+        count: formattedRooms.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching available rooms:', error);
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred while retrieving available rooms.',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};

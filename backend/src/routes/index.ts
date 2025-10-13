@@ -2,6 +2,11 @@ import { Router } from 'express';
 import authRoutes from './authRoutes';
 import userRoutes from './userRoutes';
 import branchRoutes from './branchRoutes';
+import roomTypeRoutes from './roomTypeRoutes';
+import serviceCatalogueRoutes from './serviceCatalogueRoutes';
+import discountRoutes from './discountRoutes';
+import roomRoutes from './roomRoutes';
+import bookingRoutes from './bookingRoutes';
 
 const router: Router = Router();
 
@@ -14,6 +19,21 @@ router.use('/users', userRoutes);
 // Mount branch management routes
 router.use('/branches', branchRoutes);
 
+// Mount room type management routes
+router.use('/room-types', roomTypeRoutes);
+
+// Mount room management routes
+router.use('/rooms', roomRoutes);
+
+// Mount booking routes
+router.use('/bookings', bookingRoutes);
+
+// Mount service catalogue routes
+router.use('/services', serviceCatalogueRoutes);
+
+// Mount discount routes
+router.use('/discounts', discountRoutes);
+
 // Health check for the entire API
 router.get('/health', (req, res) => {
   res.json({
@@ -24,7 +44,12 @@ router.get('/health', (req, res) => {
     services: {
       auth: 'Available at /api/auth',
       users: 'Available at /api/users',
-      branches: 'Available at /api/branches'
+      branches: 'Available at /api/branches',
+      roomTypes: 'Available at /api/room-types',
+      rooms: 'Available at /api/rooms',
+      bookings: 'Available at /api/bookings',
+      services: 'Available at /api/services',
+      discounts: 'Available at /api/discounts'
     }
   });
 });

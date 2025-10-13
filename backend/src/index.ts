@@ -40,7 +40,12 @@ app.get('/', (req, res) => {
       health: '/api/health',
       auth: '/api/auth',
       users: '/api/users',
-      branches: '/api/branches'
+      branches: '/api/branches',
+      roomTypes: '/api/room-types',
+      rooms: '/api/rooms',
+      bookings: '/api/bookings',
+      services: '/api/services',
+      discounts: '/api/discounts'
     }
   });
 });
@@ -71,9 +76,14 @@ const startServer = async () => {
       console.log(`\n🚀 Server is running on port ${PORT}`);
       console.log(`🌐 API Base URL: http://localhost:${PORT}/api`);
       console.log(`🔐 Auth Endpoints: http://localhost:${PORT}/api/auth`);
-      console.log(`� User Management: http://localhost:${PORT}/api/users`);
+      console.log(`👥 User Management: http://localhost:${PORT}/api/users`);
       console.log(`🏢 Branch Management: http://localhost:${PORT}/api/branches`);
-      console.log(`�📊 Health Check: http://localhost:${PORT}/api/health`);
+      console.log(`🏠 Room Type Management: http://localhost:${PORT}/api/room-types`);
+      console.log(`🚪 Room Management: http://localhost:${PORT}/api/rooms`);
+      console.log(`📅 Booking System: http://localhost:${PORT}/api/bookings`);
+      console.log(`🛎️  Service Catalogue: http://localhost:${PORT}/api/services`);
+      console.log(`🎟️  Discount Management: http://localhost:${PORT}/api/discounts`);
+      console.log(`📊 Health Check: http://localhost:${PORT}/api/health`);
       console.log('─'.repeat(50));
     });
   } catch (error) {
