@@ -49,7 +49,7 @@ An elegant and luxurious hotel website built with React, featuring modern design
    ```
 
 4. **Open your browser**
-   Navigate to `http://localhost:3000` to view the website
+   Navigate to `http://localhost:8084` to view the website
 
 ## Project Structure
 

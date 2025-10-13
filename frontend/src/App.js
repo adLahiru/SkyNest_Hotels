@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import IntroPage from './components/IntroPage';
 import Navigation from './components/Navigation';
 import HomePage from './components/HomePage';
@@ -10,6 +10,7 @@ import ContactPage from './components/ContactPage';
 import LoginPage from './components/LoginPage';
 import UserProfilePage from './components/UserProfilePage';
 import Footer from './components/Footer';
+import authService from './services/authService';
 import './styles/App.css';
 
 const App = () => {
@@ -23,6 +24,21 @@ const App = () => {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [pendingBookingRoom, setPendingBookingRoom] = useState(null); // For login redirect
   const [returnToPage, setReturnToPage] = useState(null); // For login redirect
+
+  // Check if user is already logged in on component mount
+  useEffect(() => {
+    const checkAuth = () => {
+      if (authService.isAuthenticated()) {
+        const currentUser = authService.getCurrentUser();
+        if (currentUser) {
+          setIsLoggedIn(true);
+          setUser(currentUser);
+        }
+      }
+    };
+    
+    checkAuth();
+  }, []);
 
   const handleLogin = (userData) => {
     setIsLoggedIn(true);
@@ -42,7 +58,10 @@ const App = () => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Call backend logout API
+    await authService.logout();
+    
     setIsLoggedIn(false);
     setUser(null);
     setSelectedBranch(null);

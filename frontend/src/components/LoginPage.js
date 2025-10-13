@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { User, Lock, Mail, Eye, EyeOff, LogIn, UserPlus, CheckCircle, AlertCircle } from 'lucide-react';
+import authService from '../services/authService';
 
 const LoginPage = ({ onLogin, setCurrentPage }) => {
   const [isLogin, setIsLogin] = useState(true);
@@ -8,9 +9,10 @@ const LoginPage = ({ onLogin, setCurrentPage }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState({});
   const [showSuccess, setShowSuccess] = useState(false);
+  const [apiError, setApiError] = useState('');
 
   const [loginForm, setLoginForm] = useState({
-    email: '',
+    username: '',
     password: ''
   });
 
@@ -26,8 +28,7 @@ const LoginPage = ({ onLogin, setCurrentPage }) => {
   const validateLoginForm = () => {
     const errors = {};
     
-    if (!loginForm.email.trim()) errors.email = 'Email is required';
-    else if (!/\S+@\S+\.\S+/.test(loginForm.email)) errors.email = 'Email is invalid';
+    if (!loginForm.username.trim()) errors.username = 'Username is required';
     if (!loginForm.password) errors.password = 'Password is required';
     
     setFormErrors(errors);
@@ -57,19 +58,25 @@ const LoginPage = ({ onLogin, setCurrentPage }) => {
     if (!validateLoginForm()) return;
     
     setIsSubmitting(true);
+    setApiError('');
     
-    // Simulate API call
-    setTimeout(() => {
-      // For demo purposes, accept any valid email/password combination
-      const userData = {
-        name: loginForm.email.split('@')[0],
-        email: loginForm.email,
-        id: Date.now()
-      };
+    try {
+      // Call backend API
+      const result = await authService.login(loginForm.username, loginForm.password);
       
-      onLogin(userData);
+      if (result.success) {
+        // Pass user data to parent component
+        onLogin(result.user);
+        setIsSubmitting(false);
+      } else {
+        setApiError(result.message || 'Login failed. Please check your credentials.');
+        setIsSubmitting(false);
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setApiError('An error occurred during login. Please try again.');
       setIsSubmitting(false);
-    }, 1500);
+    }
   };
 
   const handleRegister = async (e) => {
@@ -78,38 +85,59 @@ const LoginPage = ({ onLogin, setCurrentPage }) => {
     if (!validateRegisterForm()) return;
     
     setIsSubmitting(true);
+    setApiError('');
     
-    // Simulate API call
-    setTimeout(() => {
-      setShowSuccess(true);
-      setIsSubmitting(false);
+    try {
+      // Call backend API for registration
+      const result = await authService.register({
+        name: registerForm.name,
+        email: registerForm.email,
+        phone: registerForm.phone,
+        password: registerForm.password,
+        confirmPassword: registerForm.confirmPassword,
+        nic_no: '', // Optional field, can be added to form if needed
+      });
       
-      // Auto switch to login after showing success
-      setTimeout(() => {
-        setShowSuccess(false);
-        setIsLogin(true);
-        setRegisterForm({
-          name: '',
-          email: '',
-          phone: '',
-          password: '',
-          confirmPassword: '',
-          agreeToTerms: false
-        });
-        setFormErrors({});
-      }, 3000);
-    }, 2000);
+      if (result.success) {
+        setShowSuccess(true);
+        setIsSubmitting(false);
+        
+        // Auto switch to login after showing success
+        setTimeout(() => {
+          setShowSuccess(false);
+          setIsLogin(true);
+          setRegisterForm({
+            name: '',
+            email: '',
+            phone: '',
+            password: '',
+            confirmPassword: '',
+            agreeToTerms: false
+          });
+          setFormErrors({});
+          setApiError('');
+        }, 3000);
+      } else {
+        setApiError(result.message || 'Registration failed. Please try again.');
+        setIsSubmitting(false);
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      setApiError('An error occurred during registration. Please try again.');
+      setIsSubmitting(false);
+    }
   };
 
   const switchForm = () => {
     setIsLogin(!isLogin);
     setFormErrors({});
     setShowSuccess(false);
+    setApiError('');
   };
 
   const demoLogin = () => {
     setLoginForm({
-      email: 'demo@skynest.com',
+      username: 'demo',
       password: 'demo123'
     });
   };
@@ -187,21 +215,29 @@ const LoginPage = ({ onLogin, setCurrentPage }) => {
                 <p className="text-gray-600">Sign in to your account to continue</p>
               </div>
 
+              {/* API Error Message */}
+              {apiError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-start">
+                  <AlertCircle className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
+                  <span className="text-sm">{apiError}</span>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address
+                  Username
                 </label>
                 <input
-                  type="email"
-                  value={loginForm.email}
-                  onChange={(e) => setLoginForm({...loginForm, email: e.target.value})}
-                  className={`form-input ${formErrors.email ? 'border-red-500' : ''}`}
-                  placeholder="Enter your email"
+                  type="text"
+                  value={loginForm.username}
+                  onChange={(e) => setLoginForm({...loginForm, username: e.target.value})}
+                  className={`form-input ${formErrors.username ? 'border-red-500' : ''}`}
+                  placeholder="Enter your username"
                 />
-                {formErrors.email && (
+                {formErrors.username && (
                   <p className="text-red-500 text-sm mt-1 flex items-center">
                     <AlertCircle className="w-4 h-4 mr-1" />
-                    {formErrors.email}
+                    {formErrors.username}
                   </p>
                 )}
               </div>
@@ -286,6 +322,14 @@ const LoginPage = ({ onLogin, setCurrentPage }) => {
                 <h2 className="text-2xl font-semibold text-gray-800 mb-2">Create Account</h2>
                 <p className="text-gray-600">Join Sky Nest Hotels family</p>
               </div>
+
+              {/* API Error Message */}
+              {apiError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-start">
+                  <AlertCircle className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
+                  <span className="text-sm">{apiError}</span>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
