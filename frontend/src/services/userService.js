@@ -146,16 +146,25 @@ const userService = {
 
   /**
    * Get all users (admin/manager only)
+   * @param {Object} filters - Optional filters (search, role, branch_id)
    * @returns {Promise} Response with users list
    */
-  getAllUsers: async () => {
+  getAllUsers: async (filters = {}) => {
     try {
-      const response = await apiClient.get('/users');
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (filters.search) params.append('search', filters.search);
+      if (filters.role) params.append('role', filters.role);
+      if (filters.branch_id) params.append('branch_id', filters.branch_id);
+
+      const queryString = params.toString() ? `?${params.toString()}` : '';
+      const response = await apiClient.get(`/users${queryString}`);
 
       if (response.data.success) {
         return {
           success: true,
           users: response.data.data,
+          meta: response.data.meta,
         };
       }
 
@@ -168,6 +177,162 @@ const userService = {
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch users',
+        error: error,
+      };
+    }
+  },
+
+  /**
+   * Create a new user
+   * @param {Object} userData - User data for creation
+   * @returns {Promise} Response with created user data
+   */
+  createUser: async (userData) => {
+    try {
+      const response = await apiClient.post('/users', userData);
+
+      if (response.data.success) {
+        return {
+          success: true,
+          message: response.data.message || 'User created successfully',
+          user: response.data.data,
+        };
+      }
+
+      return {
+        success: false,
+        message: response.data.message || 'Failed to create user',
+      };
+    } catch (error) {
+      console.error('Create user error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to create user. Please try again.',
+        error: error,
+      };
+    }
+  },
+
+  /**
+   * Search users by query
+   * @param {string} searchQuery - Search query string
+   * @returns {Promise} Response with filtered users
+   */
+  searchUsers: async (searchQuery) => {
+    try {
+      const response = await apiClient.get(`/users?search=${encodeURIComponent(searchQuery)}`);
+
+      if (response.data.success) {
+        return {
+          success: true,
+          users: response.data.data,
+          meta: response.data.meta,
+        };
+      }
+
+      return {
+        success: false,
+        message: response.data.message || 'Failed to search users',
+      };
+    } catch (error) {
+      console.error('Search users error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to search users',
+        error: error,
+      };
+    }
+  },
+
+  /**
+   * Filter users by role
+   * @param {string} role - User role to filter by
+   * @returns {Promise} Response with filtered users
+   */
+  filterUsersByRole: async (role) => {
+    try {
+      const response = await apiClient.get(`/users?role=${encodeURIComponent(role)}`);
+
+      if (response.data.success) {
+        return {
+          success: true,
+          users: response.data.data,
+          meta: response.data.meta,
+        };
+      }
+
+      return {
+        success: false,
+        message: response.data.message || 'Failed to filter users',
+      };
+    } catch (error) {
+      console.error('Filter users error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to filter users',
+        error: error,
+      };
+    }
+  },
+
+  /**
+   * Update user by ID
+   * @param {string} userId - User ID to update
+   * @param {Object} userData - Updated user data
+   * @returns {Promise} Response with updated user data
+   */
+  updateUser: async (userId, userData) => {
+    try {
+      const response = await apiClient.put(`/users/${userId}`, userData);
+
+      if (response.data.success) {
+        return {
+          success: true,
+          message: response.data.message || 'User updated successfully',
+          user: response.data.data,
+        };
+      }
+
+      return {
+        success: false,
+        message: response.data.message || 'Failed to update user',
+      };
+    } catch (error) {
+      console.error('Update user error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to update user. Please try again.',
+        error: error,
+      };
+    }
+  },
+
+  /**
+   * Delete user by ID
+   * @param {string} userId - User ID to delete
+   * @returns {Promise} Response with success status
+   */
+  deleteUser: async (userId) => {
+    try {
+      const response = await apiClient.delete(`/users/${userId}`);
+
+      if (response.data.success) {
+        return {
+          success: true,
+          message: response.data.message || 'User deleted successfully',
+          data: response.data.data,
+        };
+      }
+
+      return {
+        success: false,
+        message: response.data.message || 'Failed to delete user',
+      };
+    } catch (error) {
+      console.error('Delete user error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to delete user. Please try again.',
         error: error,
       };
     }

@@ -328,7 +328,7 @@ export class UserController {
     }
   };
 
-  // Get all users (with role-based filtering)
+  // Get all users (with role-based filtering, search, and filter)
   public getUsers = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       await this.initConnection();
@@ -336,6 +336,11 @@ export class UserController {
       const creatorRole = req.user?.role;
       const creatorUserId = req.user?.user_id;
       const creatorBranchId = req.user?.branch_id;
+
+      // Get query parameters for search and filter
+      const searchQuery = req.query.search as string;
+      const roleFilter = req.query.role as string;
+      const branchFilter = req.query.branch_id as string;
 
       let query = `
         SELECT u.user_id, u.name, u.email, u.username, u.is_guest, u.phone, u.nic_no, u.created_at,
@@ -347,11 +352,12 @@ export class UserController {
       `;
 
       const queryParams: any[] = [];
+      const conditions: string[] = [];
 
       // Apply role-based filtering
       if (creatorRole === UserRole.MANAGER && creatorBranchId) {
         // Managers can only see users in their branch
-        query += ` WHERE s.branch_id = ? OR u.is_guest = 1`;
+        conditions.push(`(s.branch_id = ? OR u.is_guest = 1)`);
         queryParams.push(creatorBranchId);
       } else if (creatorRole !== UserRole.ADMIN) {
         // Non-admins and non-managers can't see user list
@@ -360,6 +366,39 @@ export class UserController {
           message: 'Insufficient permissions to view users'
         } as ApiResponse);
         return;
+      }
+
+      // Apply search filter (search by name, email, username, or nic_no)
+      if (searchQuery && searchQuery.trim()) {
+        conditions.push(`(
+          u.name LIKE ? OR 
+          u.email LIKE ? OR 
+          u.username LIKE ? OR 
+          u.nic_no LIKE ?
+        )`);
+        const searchPattern = `%${searchQuery.trim()}%`;
+        queryParams.push(searchPattern, searchPattern, searchPattern, searchPattern);
+      }
+
+      // Apply role filter
+      if (roleFilter && Object.values(UserRole).includes(roleFilter as UserRole)) {
+        if (roleFilter === UserRole.GUEST) {
+          conditions.push(`u.is_guest = 1`);
+        } else {
+          conditions.push(`s.role = ?`);
+          queryParams.push(roleFilter);
+        }
+      }
+
+      // Apply branch filter (for admins)
+      if (branchFilter && creatorRole === UserRole.ADMIN) {
+        conditions.push(`s.branch_id = ?`);
+        queryParams.push(branchFilter);
+      }
+
+      // Add WHERE clause if there are conditions
+      if (conditions.length > 0) {
+        query += ` WHERE ${conditions.join(' AND ')}`;
       }
 
       query += ` ORDER BY u.created_at DESC`;
@@ -386,7 +425,15 @@ export class UserController {
       res.status(200).json({
         success: true,
         message: 'Users retrieved successfully',
-        data: users
+        data: users,
+        meta: {
+          total: users.length,
+          filters: {
+            search: searchQuery || null,
+            role: roleFilter || null,
+            branch_id: branchFilter || null
+          }
+        }
       } as ApiResponse);
 
     } catch (error) {
@@ -836,6 +883,361 @@ export class UserController {
       res.status(500).json({
         success: false,
         message: 'Internal server error while changing password'
+      } as ApiResponse);
+    }
+  };
+
+  // Update user by ID (Admin/Manager only)
+  public updateUser = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { userId } = req.params;
+      const creatorRole = req.user?.role;
+      const creatorBranchId = req.user?.branch_id;
+
+      if (!userId) {
+        res.status(400).json({
+          success: false,
+          message: 'User ID is required'
+        } as ApiResponse);
+        return;
+      }
+
+      // Check permissions
+      if (creatorRole !== UserRole.ADMIN && creatorRole !== UserRole.MANAGER) {
+        res.status(403).json({
+          success: false,
+          message: 'Insufficient permissions to update users'
+        } as ApiResponse);
+        return;
+      }
+
+      await this.initConnection();
+
+      // Get existing user data
+      const [existingUserRows] = await this.connection!.execute<DatabaseUserRow[]>(
+        `SELECT u.*, s.role, s.branch_id
+         FROM users u
+         LEFT JOIN staff s ON u.user_id = s.staff_id
+         WHERE u.user_id = ?`,
+        [userId]
+      );
+
+      if (existingUserRows.length === 0) {
+        res.status(404).json({
+          success: false,
+          message: 'User not found'
+        } as ApiResponse);
+        return;
+      }
+
+      const existingUser = existingUserRows[0];
+
+      if (!existingUser) {
+        res.status(404).json({
+          success: false,
+          message: 'User data incomplete'
+        } as ApiResponse);
+        return;
+      }
+
+      // Managers can only update users in their branch
+      if (creatorRole === UserRole.MANAGER) {
+        if (existingUser.branch_id !== creatorBranchId && existingUser.is_guest !== 1) {
+          res.status(403).json({
+            success: false,
+            message: 'Cannot update users outside your branch'
+          } as ApiResponse);
+          return;
+        }
+      }
+
+      const {
+        name,
+        email,
+        phone,
+        nic_no,
+        username,
+        role,
+        branch_id,
+        hire_date,
+        salary
+      } = req.body;
+
+      // Validate required fields
+      if (!name || !email || !username) {
+        res.status(400).json({
+          success: false,
+          message: 'Missing required fields: name, email, username'
+        } as ApiResponse);
+        return;
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        res.status(400).json({
+          success: false,
+          message: 'Please provide a valid email address'
+        } as ApiResponse);
+        return;
+      }
+
+      // Check if email/username is taken by another user
+      const [duplicateCheck] = await this.connection!.execute<RowDataPacket[]>(
+        `SELECT user_id FROM users WHERE (email = ? OR username = ?) AND user_id != ?`,
+        [email, username, userId]
+      );
+
+      if (duplicateCheck.length > 0) {
+        res.status(409).json({
+          success: false,
+          message: 'Email or username is already taken by another user'
+        } as ApiResponse);
+        return;
+      }
+
+      // Check if NIC is taken by another user (if provided)
+      if (nic_no) {
+        const [nicCheck] = await this.connection!.execute<RowDataPacket[]>(
+          `SELECT user_id FROM users WHERE nic_no = ? AND user_id != ?`,
+          [nic_no, userId]
+        );
+
+        if (nicCheck.length > 0) {
+          res.status(409).json({
+            success: false,
+            message: 'NIC number is already registered to another user'
+          } as ApiResponse);
+          return;
+        }
+      }
+
+      // Validate role change permissions
+      if (role && role !== existingUser.role) {
+        if (!this.canCreateUserRole(creatorRole!, role)) {
+          res.status(403).json({
+            success: false,
+            message: 'Insufficient permissions to assign this role'
+          } as ApiResponse);
+          return;
+        }
+      }
+
+      // Start transaction
+      await this.connection!.beginTransaction();
+
+      try {
+        // Update user table
+        await this.connection!.execute(
+          `UPDATE users 
+           SET name = ?, email = ?, phone = ?, username = ?, nic_no = ?
+           WHERE user_id = ?`,
+          [name, email, phone || null, username, nic_no || existingUser.nic_no, userId]
+        );
+
+        // Update staff table if not a guest
+        if (!existingUser.is_guest) {
+          const updateRole = role || existingUser.role;
+          const updateBranchId = branch_id || existingUser.branch_id;
+
+          await this.connection!.execute(
+            `UPDATE staff 
+             SET role = ?, branch_id = ?, hire_date = ?, salary = ?
+             WHERE staff_id = ?`,
+            [updateRole, updateBranchId, hire_date || existingUser.hire_date, salary || existingUser.salary, userId]
+          );
+
+          // If role changed to MANAGER, update branch manager
+          if (role === UserRole.MANAGER && role !== existingUser.role && branch_id) {
+            await this.connection!.execute(
+              `UPDATE hotel_branches SET manager_id = ? WHERE branch_id = ?`,
+              [userId, branch_id]
+            );
+          }
+        }
+
+        // Commit transaction
+        await this.connection!.commit();
+
+        // Fetch updated user details
+        const [updatedUserRows] = await this.connection!.execute<DatabaseUserRow[]>(
+          `SELECT u.user_id, u.name, u.email, u.username, u.is_guest, u.phone, u.nic_no, u.created_at,
+                  s.role, s.branch_id, s.hire_date, s.salary,
+                  hb.branch_name
+           FROM users u
+           LEFT JOIN staff s ON u.user_id = s.staff_id
+           LEFT JOIN hotel_branches hb ON s.branch_id = hb.branch_id
+           WHERE u.user_id = ?`,
+          [userId]
+        );
+
+        const updatedUser = updatedUserRows[0];
+
+        if (!updatedUser) {
+          throw new Error('Failed to retrieve updated user');
+        }
+
+        res.status(200).json({
+          success: true,
+          message: 'User updated successfully',
+          data: {
+            user_id: updatedUser.user_id,
+            name: updatedUser.name,
+            email: updatedUser.email,
+            username: updatedUser.username,
+            role: updatedUser.role || UserRole.GUEST,
+            branch_id: updatedUser.branch_id,
+            branch_name: updatedUser.branch_name,
+            is_guest: updatedUser.is_guest === 1,
+            phone: updatedUser.phone,
+            nic_no: updatedUser.nic_no,
+            hire_date: updatedUser.hire_date,
+            salary: updatedUser.salary,
+            created_at: updatedUser.created_at
+          }
+        } as ApiResponse);
+
+      } catch (error) {
+        // Rollback transaction
+        await this.connection!.rollback();
+        throw error;
+      }
+
+    } catch (error) {
+      console.error('Error updating user:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error while updating user'
+      } as ApiResponse);
+    }
+  };
+
+  // Delete user by ID (Admin only - soft delete)
+  public deleteUser = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { userId } = req.params;
+      const creatorRole = req.user?.role;
+      const currentUserId = req.user?.user_id;
+
+      if (!userId) {
+        res.status(400).json({
+          success: false,
+          message: 'User ID is required'
+        } as ApiResponse);
+        return;
+      }
+
+      // Only admins can delete users
+      if (creatorRole !== UserRole.ADMIN) {
+        res.status(403).json({
+          success: false,
+          message: 'Only administrators can delete users'
+        } as ApiResponse);
+        return;
+      }
+
+      // Prevent self-deletion
+      if (userId === currentUserId) {
+        res.status(400).json({
+          success: false,
+          message: 'Cannot delete your own account'
+        } as ApiResponse);
+        return;
+      }
+
+      await this.initConnection();
+
+      // Check if user exists
+      const [userRows] = await this.connection!.execute<DatabaseUserRow[]>(
+        `SELECT u.*, s.role, s.branch_id
+         FROM users u
+         LEFT JOIN staff s ON u.user_id = s.staff_id
+         WHERE u.user_id = ?`,
+        [userId]
+      );
+
+      if (userRows.length === 0) {
+        res.status(404).json({
+          success: false,
+          message: 'User not found'
+        } as ApiResponse);
+        return;
+      }
+
+      const userToDelete = userRows[0];
+
+      if (!userToDelete) {
+        res.status(404).json({
+          success: false,
+          message: 'User data incomplete'
+        } as ApiResponse);
+        return;
+      }
+
+      // Start transaction
+      await this.connection!.beginTransaction();
+
+      try {
+        // If user is a manager, remove them from branch manager assignment
+        if (userToDelete.role === UserRole.MANAGER && userToDelete.branch_id) {
+          await this.connection!.execute(
+            `UPDATE hotel_branches SET manager_id = NULL WHERE manager_id = ?`,
+            [userId]
+          );
+        }
+
+        // Soft delete: mark as retired in staff table
+        if (!userToDelete.is_guest) {
+          await this.connection!.execute(
+            `UPDATE staff SET retired_date = CURRENT_DATE WHERE staff_id = ?`,
+            [userId]
+          );
+        }
+
+        // Option 1: Soft delete - Add a deleted_at column and set it
+        // await this.connection!.execute(
+        //   `UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE user_id = ?`,
+        //   [userId]
+        // );
+
+        // Option 2: Hard delete (if you prefer complete removal)
+        // Delete from staff table first (foreign key constraint)
+        if (!userToDelete.is_guest) {
+          await this.connection!.execute(
+            `DELETE FROM staff WHERE staff_id = ?`,
+            [userId]
+          );
+        }
+
+        // Delete from users table
+        await this.connection!.execute(
+          `DELETE FROM users WHERE user_id = ?`,
+          [userId]
+        );
+
+        // Commit transaction
+        await this.connection!.commit();
+
+        res.status(200).json({
+          success: true,
+          message: 'User deleted successfully',
+          data: {
+            deleted_user_id: userId,
+            deleted_user_name: userToDelete.name
+          }
+        } as ApiResponse);
+
+      } catch (error) {
+        // Rollback transaction
+        await this.connection!.rollback();
+        throw error;
+      }
+
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error while deleting user'
       } as ApiResponse);
     }
   };

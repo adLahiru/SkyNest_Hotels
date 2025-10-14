@@ -67,4 +67,24 @@ router.put(
   userController.changePassword
 );
 
+// Update user by ID (Admin/Manager only)
+// PUT /api/users/:userId
+// Accessible by: ADMIN (any user), MANAGER (users in their branch)
+router.put(
+  '/:userId',
+  authenticateToken,
+  canManageUsers,
+  userController.updateUser
+);
+
+// Delete user by ID (Admin only)
+// DELETE /api/users/:userId
+// Accessible by: ADMIN only
+router.delete(
+  '/:userId',
+  authenticateToken,
+  canManageUsers,
+  userController.deleteUser
+);
+
 export default router;

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2, Save, X, Upload, AlertCircle, CheckCircle } from 'lucide-react';
+import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2, Search, Filter, X, Eye, EyeOff } from 'lucide-react';
 import dashboardService from '../services/dashboardService';
+import userService from '../services/userService';
 import branchService from '../services/branchService';
 
 const AdminDashboard = ({ user }) => {
@@ -8,31 +9,44 @@ const AdminDashboard = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   
-  // Branch Management States
-  const [showAddBranchModal, setShowAddBranchModal] = useState(false);
-  const [showEditBranchModal, setShowEditBranchModal] = useState(false);
-  const [showDeleteBranchModal, setShowDeleteBranchModal] = useState(false);
-  const [selectedBranch, setSelectedBranch] = useState(null);
-  const [successMessage, setSuccessMessage] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
-  const [imagePreview, setImagePreview] = useState(null);
-  const [imageFile, setImageFile] = useState(null);
-  
-  const [branchFormData, setBranchFormData] = useState({
-    branch_name: '',
-    address: '',
+  // User management states
+  const [users, setUsers] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [showEditUserModal, setShowEditUserModal] = useState(false);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [userFormData, setUserFormData] = useState({
+    name: '',
     email: '',
     phone: '',
-    manager_id: ''
+    nic_no: '',
+    username: '',
+    password: '',
+    role: '',
+    branch_id: '',
+    hire_date: '',
+    salary: ''
   });
-  
-  const [branchFormErrors, setBranchFormErrors] = useState({});
+  const [formErrors, setFormErrors] = useState({});
+  const [submitMessage, setSubmitMessage] = useState({ type: '', text: '' });
+
+  const USER_ROLES = ['ADMIN', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPING', 'GUEST'];
 
   useEffect(() => {
     fetchDashboardStats();
+    fetchBranches();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'users') {
+      fetchUsers();
+    }
+  }, [activeTab, searchQuery, roleFilter]);
 
   const fetchDashboardStats = async () => {
     setLoading(true);
@@ -43,190 +57,256 @@ const AdminDashboard = ({ user }) => {
     setLoading(false);
   };
 
-  // Branch Management Functions
-  const validateBranchForm = () => {
+  const fetchUsers = async () => {
+    setLoadingUsers(true);
+    const filters = {};
+    if (searchQuery) filters.search = searchQuery;
+    if (roleFilter) filters.role = roleFilter;
+    
+    const result = await userService.getAllUsers(filters);
+    if (result.success) {
+      setUsers(result.users);
+    } else {
+      console.error('Failed to fetch users:', result.message);
+    }
+    setLoadingUsers(false);
+  };
+
+  const fetchBranches = async () => {
+    const result = await branchService.getAllBranches();
+    if (result.success) {
+      setBranches(result.branches);
+    }
+  };
+
+  const handleSearchChange = (e) => {
+    setSearchQuery(e.target.value);
+  };
+
+  const handleRoleFilterChange = (e) => {
+    setRoleFilter(e.target.value);
+  };
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setRoleFilter('');
+  };
+
+  const handleAddUserClick = () => {
+    setShowAddUserModal(true);
+    setUserFormData({
+      name: '',
+      email: '',
+      phone: '',
+      nic_no: '',
+      username: '',
+      password: '',
+      role: '',
+      branch_id: '',
+      hire_date: '',
+      salary: ''
+    });
+    setFormErrors({});
+    setSubmitMessage({ type: '', text: '' });
+  };
+
+  const handleFormChange = (e) => {
+    const { name, value } = e.target;
+    setUserFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    // Clear error for this field
+    if (formErrors[name]) {
+      setFormErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+  };
+
+  const validateForm = () => {
     const errors = {};
-    if (!branchFormData.branch_name.trim()) errors.branch_name = 'Branch name is required';
-    if (!branchFormData.address.trim()) errors.address = 'Address is required';
-    if (branchFormData.email && !/\S+@\S+\.\S+/.test(branchFormData.email)) {
-      errors.email = 'Email is invalid';
+    
+    if (!userFormData.name.trim()) errors.name = 'Name is required';
+    if (!userFormData.email.trim()) errors.email = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userFormData.email)) {
+      errors.email = 'Invalid email format';
     }
-    if (branchFormData.phone && !/^[\+]?[\d\s\-\(\)]+$/.test(branchFormData.phone)) {
-      errors.phone = 'Phone number is invalid';
+    if (!userFormData.nic_no.trim()) errors.nic_no = 'NIC number is required';
+    if (!userFormData.username.trim()) errors.username = 'Username is required';
+    if (!userFormData.password.trim()) errors.password = 'Password is required';
+    else if (userFormData.password.length < 8) {
+      errors.password = 'Password must be at least 8 characters';
     }
-    setBranchFormErrors(errors);
+    if (!userFormData.role) errors.role = 'Role is required';
+    if (userFormData.role && userFormData.role !== 'GUEST' && !userFormData.branch_id) {
+      errors.branch_id = 'Branch is required for staff roles';
+    }
+    
+    setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleDrag = (e) => {
+  const handleSubmitUser = async (e) => {
     e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleImageFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleImageFile = (file) => {
-    if (!file.type.startsWith('image/')) {
-      setErrorMessage('Please upload an image file');
+    
+    if (!validateForm()) {
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMessage('Image size should be less than 5MB');
+
+    setLoadingUsers(true);
+    setSubmitMessage({ type: '', text: '' });
+
+    // Prepare data
+    const userData = {
+      name: userFormData.name,
+      email: userFormData.email,
+      phone: userFormData.phone || undefined,
+      nic_no: userFormData.nic_no,
+      username: userFormData.username,
+      password: userFormData.password,
+      role: userFormData.role,
+      branch_id: userFormData.role !== 'GUEST' ? userFormData.branch_id : undefined,
+      hire_date: userFormData.hire_date || undefined,
+      salary: userFormData.salary ? parseFloat(userFormData.salary) : undefined
+    };
+
+    const result = await userService.createUser(userData);
+    
+    if (result.success) {
+      setSubmitMessage({ type: 'success', text: result.message });
+      setTimeout(() => {
+        setShowAddUserModal(false);
+        fetchUsers();
+        fetchDashboardStats(); // Refresh stats
+      }, 1500);
+    } else {
+      setSubmitMessage({ type: 'error', text: result.message });
+    }
+    
+    setLoadingUsers(false);
+  };
+
+  const handleEditUserClick = (userItem) => {
+    setSelectedUser(userItem);
+    setShowEditUserModal(true);
+    setUserFormData({
+      name: userItem.name || '',
+      email: userItem.email || '',
+      phone: userItem.phone || '',
+      nic_no: userItem.nic_no || '',
+      username: userItem.username || '',
+      password: '', // Don't pre-fill password
+      role: userItem.role || '',
+      branch_id: userItem.branch_id || '',
+      hire_date: userItem.hire_date ? new Date(userItem.hire_date).toISOString().split('T')[0] : '',
+      salary: userItem.salary || ''
+    });
+    setFormErrors({});
+    setSubmitMessage({ type: '', text: '' });
+  };
+
+  const validateEditForm = () => {
+    const errors = {};
+    
+    if (!userFormData.name.trim()) errors.name = 'Name is required';
+    if (!userFormData.email.trim()) errors.email = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userFormData.email)) {
+      errors.email = 'Invalid email format';
+    }
+    if (!userFormData.username.trim()) errors.username = 'Username is required';
+    if (!userFormData.role) errors.role = 'Role is required';
+    if (userFormData.role && userFormData.role !== 'GUEST' && !userFormData.branch_id) {
+      errors.branch_id = 'Branch is required for staff roles';
+    }
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmitEditUser = async (e) => {
+    e.preventDefault();
+    
+    if (!validateEditForm()) {
       return;
     }
-    setImageFile(file);
-    const reader = new FileReader();
-    reader.onloadend = () => setImagePreview(reader.result);
-    reader.readAsDataURL(file);
-  };
 
-  const removeImage = () => {
-    setImageFile(null);
-    setImagePreview(null);
-  };
+    setLoadingUsers(true);
+    setSubmitMessage({ type: '', text: '' });
 
-  const openAddBranchModal = () => {
-    setBranchFormData({
-      branch_name: '',
-      address: '',
-      email: '',
-      phone: '',
-      manager_id: ''
-    });
-    setBranchFormErrors({});
-    setImagePreview(null);
-    setImageFile(null);
-    setShowAddBranchModal(true);
-  };
+    // Prepare data (password is optional for updates)
+    const userData = {
+      name: userFormData.name,
+      email: userFormData.email,
+      phone: userFormData.phone || undefined,
+      nic_no: userFormData.nic_no,
+      username: userFormData.username,
+      role: userFormData.role,
+      branch_id: userFormData.role !== 'GUEST' ? userFormData.branch_id : undefined,
+      hire_date: userFormData.hire_date || undefined,
+      salary: userFormData.salary ? parseFloat(userFormData.salary) : undefined
+    };
 
-  const openEditBranchModal = (branch) => {
-    setSelectedBranch(branch);
-    setBranchFormData({
-      branch_name: branch.branch_name || '',
-      address: branch.location || branch.address || '',
-      email: branch.email || '',
-      phone: branch.phone || '',
-      manager_id: branch.manager_id || ''
-    });
-    setShowEditBranchModal(true);
-  };
-
-  const openDeleteBranchModal = (branch) => {
-    setSelectedBranch(branch);
-    setShowDeleteBranchModal(true);
-  };
-
-  const closeModals = () => {
-    setShowAddBranchModal(false);
-    setShowEditBranchModal(false);
-    setShowDeleteBranchModal(false);
-    setSelectedBranch(null);
-    setBranchFormData({
-      branch_name: '',
-      address: '',
-      email: '',
-      phone: '',
-      manager_id: ''
-    });
-    setBranchFormErrors({});
-    setImagePreview(null);
-    setImageFile(null);
-  };
-
-  const handleAddBranch = async () => {
-    if (!validateBranchForm()) return;
+    const result = await userService.updateUser(selectedUser.user_id, userData);
     
-    setIsSaving(true);
-    setErrorMessage('');
-    
-    try {
-      const result = await branchService.createBranch({
-        branch_name: branchFormData.branch_name,
-        address: branchFormData.address,
-        email: branchFormData.email || undefined,
-        phone: branchFormData.phone || undefined,
-        manager_id: branchFormData.manager_id || undefined
-      });
-
-      if (result.success) {
-        setSuccessMessage('Branch added successfully!');
-        setTimeout(() => setSuccessMessage(''), 3000);
-        closeModals();
+    if (result.success) {
+      setSubmitMessage({ type: 'success', text: result.message });
+      setTimeout(() => {
+        setShowEditUserModal(false);
+        setSelectedUser(null);
+        fetchUsers();
         fetchDashboardStats(); // Refresh stats
-      } else {
-        setErrorMessage(result.message || 'Failed to add branch');
-      }
-    } catch (error) {
-      console.error('Add branch error:', error);
-      setErrorMessage('Failed to add branch. Please try again.');
-    } finally {
-      setIsSaving(false);
+      }, 1500);
+    } else {
+      setSubmitMessage({ type: 'error', text: result.message });
     }
+    
+    setLoadingUsers(false);
   };
 
-  const handleEditBranch = async () => {
-    if (!validateBranchForm()) return;
-    
-    setIsSaving(true);
-    setErrorMessage('');
-    
-    try {
-      const result = await branchService.updateBranch(selectedBranch.branch_id, {
-        branch_name: branchFormData.branch_name,
-        address: branchFormData.address,
-        email: branchFormData.email || undefined,
-        phone: branchFormData.phone || undefined,
-        manager_id: branchFormData.manager_id || undefined
-      });
+  const handleDeleteUserClick = (userItem) => {
+    setSelectedUser(userItem);
+    setShowDeleteConfirmModal(true);
+  };
 
-      if (result.success) {
-        setSuccessMessage('Branch updated successfully!');
-        setTimeout(() => setSuccessMessage(''), 3000);
-        closeModals();
-        fetchDashboardStats(); // Refresh stats
-      } else {
-        setErrorMessage(result.message || 'Failed to update branch');
-      }
-    } catch (error) {
-      console.error('Update branch error:', error);
-      setErrorMessage('Failed to update branch. Please try again.');
-    } finally {
-      setIsSaving(false);
+  const handleConfirmDelete = async () => {
+    if (!selectedUser) return;
+
+    setLoadingUsers(true);
+    const result = await userService.deleteUser(selectedUser.user_id);
+    
+    if (result.success) {
+      setShowDeleteConfirmModal(false);
+      setSelectedUser(null);
+      fetchUsers();
+      fetchDashboardStats(); // Refresh stats
+      
+      // Show success message briefly
+      setSubmitMessage({ type: 'success', text: result.message });
+      setTimeout(() => {
+        setSubmitMessage({ type: '', text: '' });
+      }, 3000);
+    } else {
+      setSubmitMessage({ type: 'error', text: result.message });
     }
+    
+    setLoadingUsers(false);
   };
 
-  const handleDeleteBranch = async () => {
-    setIsSaving(true);
-    setErrorMessage('');
-    
-    try {
-      const result = await branchService.deleteBranch(selectedBranch.branch_id);
+  const handleCancelDelete = () => {
+    setShowDeleteConfirmModal(false);
+    setSelectedUser(null);
+  };
 
-      if (result.success) {
-        setSuccessMessage('Branch deleted successfully!');
-        setTimeout(() => setSuccessMessage(''), 3000);
-        closeModals();
-        fetchDashboardStats(); // Refresh stats
-      } else {
-        setErrorMessage(result.message || 'Failed to delete branch');
-      }
-    } catch (error) {
-      console.error('Delete branch error:', error);
-      setErrorMessage('Failed to delete branch. Please try again.');
-    } finally {
-      setIsSaving(false);
+  const getRoleBadgeColor = (role) => {
+    switch(role) {
+      case 'ADMIN': return 'bg-purple-100 text-purple-800';
+      case 'MANAGER': return 'bg-blue-100 text-blue-800';
+      case 'RECEPTIONIST': return 'bg-green-100 text-green-800';
+      case 'HOUSEKEEPING': return 'bg-yellow-100 text-yellow-800';
+      case 'GUEST': return 'bg-gray-100 text-gray-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -453,10 +533,7 @@ const AdminDashboard = ({ user }) => {
               <div>
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">Branch Performance</h3>
-                  <button 
-                    onClick={openAddBranchModal}
-                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
+                  <button className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                     <Plus className="w-4 h-4 mr-2" />
                     Add Branch
                   </button>
@@ -484,16 +561,10 @@ const AdminDashboard = ({ user }) => {
                             ${Number(branch.revenue || 0).toLocaleString()}
                           </td>
                           <td className="px-4 py-3 text-sm">
-                            <button 
-                              onClick={() => openEditBranchModal(branch)}
-                              className="text-blue-600 hover:text-blue-800 mr-3"
-                            >
+                            <button className="text-blue-600 hover:text-blue-800 mr-3">
                               <Edit className="w-4 h-4 inline" />
                             </button>
-                            <button 
-                              onClick={() => openDeleteBranchModal(branch)}
-                              className="text-red-600 hover:text-red-800"
-                            >
+                            <button className="text-red-600 hover:text-red-800">
                               <Trash2 className="w-4 h-4 inline" />
                             </button>
                           </td>
@@ -508,17 +579,147 @@ const AdminDashboard = ({ user }) => {
             {/* Users Tab */}
             {activeTab === 'users' && (
               <div>
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                   <h3 className="text-lg font-semibold text-gray-900">User Management</h3>
-                  <button className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                  <button 
+                    onClick={handleAddUserClick}
+                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
                     <Plus className="w-4 h-4 mr-2" />
                     Add User
                   </button>
                 </div>
-                <div className="text-center py-8 text-gray-500">
-                  <Users className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                  <p>User management interface coming soon...</p>
+
+                {/* Search and Filter Section */}
+                <div className="mb-6 bg-gray-50 p-4 rounded-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Search Input */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <Search className="w-4 h-4 inline mr-2" />
+                        Search Users
+                      </label>
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={handleSearchChange}
+                        placeholder="Search by name, email, username, or NIC..."
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    {/* Role Filter */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <Filter className="w-4 h-4 inline mr-2" />
+                        Filter by Role
+                      </label>
+                      <select
+                        value={roleFilter}
+                        onChange={handleRoleFilterChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">All Roles</option>
+                        {USER_ROLES.map(role => (
+                          <option key={role} value={role}>{role}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Active Filters Display */}
+                  {(searchQuery || roleFilter) && (
+                    <div className="mt-4 flex items-center gap-2 flex-wrap">
+                      <span className="text-sm text-gray-600">Active filters:</span>
+                      {searchQuery && (
+                        <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                          Search: "{searchQuery}"
+                        </span>
+                      )}
+                      {roleFilter && (
+                        <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">
+                          Role: {roleFilter}
+                        </span>
+                      )}
+                      <button
+                        onClick={clearFilters}
+                        className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm hover:bg-red-200 transition-colors"
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                  )}
                 </div>
+
+                {/* Users Table */}
+                {loadingUsers ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
+                    <p className="text-gray-500 mt-2">Loading users...</p>
+                  </div>
+                ) : users.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Users className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                    <p>No users found matching your criteria.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Username</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Branch</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {users.map((userItem) => (
+                          <tr key={userItem.user_id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 text-sm font-medium text-gray-900">{userItem.name}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{userItem.email}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{userItem.username}</td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-1 text-xs rounded-full ${getRoleBadgeColor(userItem.role)}`}>
+                                {userItem.role}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600">
+                              {userItem.branch_name || '-'}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{userItem.phone || '-'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">
+                              {new Date(userItem.created_at).toLocaleDateString()}
+                            </td>
+                            <td className="px-4 py-3 text-sm">
+                              <button 
+                                onClick={() => handleEditUserClick(userItem)}
+                                className="text-blue-600 hover:text-blue-800 mr-3" 
+                                title="Edit"
+                              >
+                                <Edit className="w-4 h-4 inline" />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteUserClick(userItem)}
+                                className="text-red-600 hover:text-red-800" 
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4 inline" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="mt-4 text-sm text-gray-600 text-center">
+                      Showing {users.length} user{users.length !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -572,333 +773,568 @@ const AdminDashboard = ({ user }) => {
             )}
           </div>
         </div>
-      </div>
 
-      {/* Success/Error Messages */}
-      {successMessage && (
-        <div className="fixed top-4 right-4 bg-green-50 border border-green-200 text-green-800 px-6 py-3 rounded-lg shadow-lg flex items-center z-50">
-          <CheckCircle className="w-5 h-5 mr-2" />
-          {successMessage}
-        </div>
-      )}
-      {errorMessage && (
-        <div className="fixed top-4 right-4 bg-red-50 border border-red-200 text-red-800 px-6 py-3 rounded-lg shadow-lg flex items-center z-50">
-          <AlertCircle className="w-5 h-5 mr-2" />
-          {errorMessage}
-        </div>
-      )}
-
-      {/* Add Branch Modal */}
-      {showAddBranchModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Add New Branch</h2>
-                <button onClick={closeModals} className="text-gray-400 hover:text-gray-600">
+        {/* Add User Modal */}
+        {showAddUserModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-gray-900">Add New User</h2>
+                <button
+                  onClick={() => setShowAddUserModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
                   <X className="w-6 h-6" />
                 </button>
               </div>
 
-              <form onSubmit={(e) => { e.preventDefault(); handleAddBranch(); }} className="space-y-6">
-                {/* Branch Name */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Branch Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={branchFormData.branch_name}
-                    onChange={(e) => setBranchFormData({ ...branchFormData, branch_name: e.target.value })}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      branchFormErrors.branch_name ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="Enter branch name"
-                  />
-                  {branchFormErrors.branch_name && (
-                    <p className="mt-1 text-sm text-red-600">{branchFormErrors.branch_name}</p>
+              <form onSubmit={handleSubmitUser} className="p-6">
+                {submitMessage.text && (
+                  <div className={`mb-4 p-4 rounded-lg ${
+                    submitMessage.type === 'success' 
+                      ? 'bg-green-100 text-green-800 border border-green-200' 
+                      : 'bg-red-100 text-red-800 border border-red-200'
+                  }`}>
+                    {submitMessage.text}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Name */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Full Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={userFormData.name}
+                      onChange={handleFormChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.name ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="John Doe"
+                    />
+                    {formErrors.name && <p className="text-red-500 text-xs mt-1">{formErrors.name}</p>}
+                  </div>
+
+                  {/* Email */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Email <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={userFormData.email}
+                      onChange={handleFormChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.email ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="john@example.com"
+                    />
+                    {formErrors.email && <p className="text-red-500 text-xs mt-1">{formErrors.email}</p>}
+                  </div>
+
+                  {/* Phone */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Phone Number
+                    </label>
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={userFormData.phone}
+                      onChange={handleFormChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="+1234567890"
+                    />
+                  </div>
+
+                  {/* NIC */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      NIC Number <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="nic_no"
+                      value={userFormData.nic_no}
+                      onChange={handleFormChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.nic_no ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="123456789V"
+                    />
+                    {formErrors.nic_no && <p className="text-red-500 text-xs mt-1">{formErrors.nic_no}</p>}
+                  </div>
+
+                  {/* Username */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Username <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="username"
+                      value={userFormData.username}
+                      onChange={handleFormChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.username ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="johndoe"
+                    />
+                    {formErrors.username && <p className="text-red-500 text-xs mt-1">{formErrors.username}</p>}
+                  </div>
+
+                  {/* Password */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Password <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        name="password"
+                        value={userFormData.password}
+                        onChange={handleFormChange}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          formErrors.password ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="Min. 8 characters"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      >
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                    {formErrors.password && <p className="text-red-500 text-xs mt-1">{formErrors.password}</p>}
+                  </div>
+
+                  {/* Role */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Role <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      name="role"
+                      value={userFormData.role}
+                      onChange={handleFormChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.role ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                    >
+                      <option value="">Select Role</option>
+                      {USER_ROLES.map(role => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </select>
+                    {formErrors.role && <p className="text-red-500 text-xs mt-1">{formErrors.role}</p>}
+                  </div>
+
+                  {/* Branch (only for non-guest roles) */}
+                  {userFormData.role && userFormData.role !== 'GUEST' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Branch <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="branch_id"
+                        value={userFormData.branch_id}
+                        onChange={handleFormChange}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          formErrors.branch_id ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                      >
+                        <option value="">Select Branch</option>
+                        {branches.map(branch => (
+                          <option key={branch.branch_id} value={branch.branch_id}>
+                            {branch.branch_name}
+                          </option>
+                        ))}
+                      </select>
+                      {formErrors.branch_id && <p className="text-red-500 text-xs mt-1">{formErrors.branch_id}</p>}
+                    </div>
+                  )}
+
+                  {/* Hire Date (optional for staff) */}
+                  {userFormData.role && userFormData.role !== 'GUEST' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Hire Date
+                      </label>
+                      <input
+                        type="date"
+                        name="hire_date"
+                        value={userFormData.hire_date}
+                        onChange={handleFormChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  )}
+
+                  {/* Salary (optional for staff) */}
+                  {userFormData.role && userFormData.role !== 'GUEST' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Salary
+                      </label>
+                      <input
+                        type="number"
+                        name="salary"
+                        value={userFormData.salary}
+                        onChange={handleFormChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="50000"
+                        step="0.01"
+                      />
+                    </div>
                   )}
                 </div>
 
-                {/* Address */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Address <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    value={branchFormData.address}
-                    onChange={(e) => setBranchFormData({ ...branchFormData, address: e.target.value })}
-                    rows="3"
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      branchFormErrors.address ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="Enter complete address"
-                  />
-                  {branchFormErrors.address && (
-                    <p className="mt-1 text-sm text-red-600">{branchFormErrors.address}</p>
-                  )}
-                </div>
-
-                {/* Email */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                  <input
-                    type="email"
-                    value={branchFormData.email}
-                    onChange={(e) => setBranchFormData({ ...branchFormData, email: e.target.value })}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      branchFormErrors.email ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="branch@example.com"
-                  />
-                  {branchFormErrors.email && (
-                    <p className="mt-1 text-sm text-red-600">{branchFormErrors.email}</p>
-                  )}
-                </div>
-
-                {/* Phone */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
-                  <input
-                    type="tel"
-                    value={branchFormData.phone}
-                    onChange={(e) => setBranchFormData({ ...branchFormData, phone: e.target.value })}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      branchFormErrors.phone ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="+1 234 567 8900"
-                  />
-                  {branchFormErrors.phone && (
-                    <p className="mt-1 text-sm text-red-600">{branchFormErrors.phone}</p>
-                  )}
-                </div>
-
-                {/* Image Upload */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Branch Image</label>
-                  <div
-                    onDragEnter={handleDrag}
-                    onDragLeave={handleDrag}
-                    onDragOver={handleDrag}
-                    onDrop={handleDrop}
-                    className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                      dragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
-                    }`}
+                {/* Form Actions */}
+                <div className="mt-6 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddUserModal(false)}
+                    className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                   >
-                    {imagePreview ? (
-                      <div className="relative">
-                        <img src={imagePreview} alt="Preview" className="max-h-64 mx-auto rounded-lg" />
-                        <button
-                          type="button"
-                          onClick={removeImage}
-                          className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loadingUsers}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center"
+                  >
+                    {loadingUsers ? (
+                      <>
+                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                        Creating...
+                      </>
                     ) : (
-                      <div>
-                        <Upload className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-                        <p className="text-sm text-gray-600 mb-2">
-                          Drag and drop your image here, or
-                        </p>
-                        <label className="inline-block px-4 py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700">
-                          Browse Files
-                          <input
-                            type="file"
-                            className="hidden"
-                            accept="image/*"
-                            onChange={(e) => e.target.files[0] && handleImageFile(e.target.files[0])}
-                          />
-                        </label>
-                        <p className="text-xs text-gray-500 mt-2">Max file size: 5MB</p>
-                      </div>
+                      <>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create User
+                      </>
                     )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Edit User Modal */}
+        {showEditUserModal && selectedUser && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-gray-900">Edit User</h2>
+                <button
+                  onClick={() => {
+                    setShowEditUserModal(false);
+                    setSelectedUser(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmitEditUser} className="p-6">
+                {submitMessage.text && (
+                  <div className={`mb-4 p-4 rounded-lg ${
+                    submitMessage.type === 'success' 
+                      ? 'bg-green-100 text-green-800 border border-green-200' 
+                      : 'bg-red-100 text-red-800 border border-red-200'
+                  }`}>
+                    {submitMessage.text}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Name */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Full Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={userFormData.name}
+                      onChange={handleFormChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.name ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                    />
+                    {formErrors.name && <p className="text-red-500 text-xs mt-1">{formErrors.name}</p>}
+                  </div>
+
+                  {/* Email */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Email <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={userFormData.email}
+                      onChange={handleFormChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.email ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                    />
+                    {formErrors.email && <p className="text-red-500 text-xs mt-1">{formErrors.email}</p>}
+                  </div>
+
+                  {/* Phone */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Phone Number
+                    </label>
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={userFormData.phone}
+                      onChange={handleFormChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  {/* NIC */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      NIC Number
+                    </label>
+                    <input
+                      type="text"
+                      name="nic_no"
+                      value={userFormData.nic_no}
+                      onChange={handleFormChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      disabled
+                      title="NIC cannot be changed"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">NIC cannot be modified</p>
+                  </div>
+
+                  {/* Username */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Username <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="username"
+                      value={userFormData.username}
+                      onChange={handleFormChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.username ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                    />
+                    {formErrors.username && <p className="text-red-500 text-xs mt-1">{formErrors.username}</p>}
+                  </div>
+
+                  {/* Password Note */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Password
+                    </label>
+                    <div className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 text-sm">
+                      Password cannot be changed here
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Use password reset feature</p>
+                  </div>
+
+                  {/* Role */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Role <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      name="role"
+                      value={userFormData.role}
+                      onChange={handleFormChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.role ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                    >
+                      <option value="">Select Role</option>
+                      {USER_ROLES.map(role => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </select>
+                    {formErrors.role && <p className="text-red-500 text-xs mt-1">{formErrors.role}</p>}
+                  </div>
+
+                  {/* Branch (only for non-guest roles) */}
+                  {userFormData.role && userFormData.role !== 'GUEST' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Branch <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="branch_id"
+                        value={userFormData.branch_id}
+                        onChange={handleFormChange}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          formErrors.branch_id ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                      >
+                        <option value="">Select Branch</option>
+                        {branches.map(branch => (
+                          <option key={branch.branch_id} value={branch.branch_id}>
+                            {branch.branch_name}
+                          </option>
+                        ))}
+                      </select>
+                      {formErrors.branch_id && <p className="text-red-500 text-xs mt-1">{formErrors.branch_id}</p>}
+                    </div>
+                  )}
+
+                  {/* Hire Date (optional for staff) */}
+                  {userFormData.role && userFormData.role !== 'GUEST' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Hire Date
+                      </label>
+                      <input
+                        type="date"
+                        name="hire_date"
+                        value={userFormData.hire_date}
+                        onChange={handleFormChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  )}
+
+                  {/* Salary (optional for staff) */}
+                  {userFormData.role && userFormData.role !== 'GUEST' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Salary
+                      </label>
+                      <input
+                        type="number"
+                        name="salary"
+                        value={userFormData.salary}
+                        onChange={handleFormChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        step="0.01"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Form Actions */}
+                <div className="mt-6 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditUserModal(false);
+                      setSelectedUser(null);
+                    }}
+                    className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loadingUsers}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center"
+                  >
+                    {loadingUsers ? (
+                      <>
+                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                        Updating...
+                      </>
+                    ) : (
+                      <>
+                        <Edit className="w-4 h-4 mr-2" />
+                        Update User
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirmModal && selectedUser && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+              <div className="p-6">
+                <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-red-100 rounded-full">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                
+                <h2 className="text-xl font-bold text-gray-900 text-center mb-2">
+                  Delete User
+                </h2>
+                
+                <p className="text-gray-600 text-center mb-4">
+                  Are you sure you want to delete this user? This action cannot be undone.
+                </p>
+
+                <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-600">Name:</span>
+                    <span className="text-sm font-medium text-gray-900">{selectedUser.name}</span>
+                  </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-600">Email:</span>
+                    <span className="text-sm font-medium text-gray-900">{selectedUser.email}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Role:</span>
+                    <span className={`px-2 py-1 text-xs rounded-full ${getRoleBadgeColor(selectedUser.role)}`}>
+                      {selectedUser.role}
+                    </span>
                   </div>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex justify-end space-x-3 pt-4">
+                {submitMessage.text && submitMessage.type === 'error' && (
+                  <div className="mb-4 p-3 rounded-lg bg-red-100 text-red-800 border border-red-200 text-sm">
+                    {submitMessage.text}
+                  </div>
+                )}
+
+                <div className="flex gap-3">
                   <button
-                    type="button"
-                    onClick={closeModals}
-                    className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                    onClick={handleCancelDelete}
+                    disabled={loadingUsers}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
-                    type="submit"
-                    disabled={isSaving}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 flex items-center"
+                    onClick={handleConfirmDelete}
+                    disabled={loadingUsers}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 disabled:cursor-not-allowed flex items-center justify-center"
                   >
-                    {isSaving ? (
-                      <>Processing...</>
+                    {loadingUsers ? (
+                      <>
+                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                        Deleting...
+                      </>
                     ) : (
                       <>
-                        <Save className="w-4 h-4 mr-2" />
-                        Add Branch
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete
                       </>
                     )}
                   </button>
                 </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Branch Modal */}
-      {showEditBranchModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Edit Branch</h2>
-                <button onClick={closeModals} className="text-gray-400 hover:text-gray-600">
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-
-              <form onSubmit={(e) => { e.preventDefault(); handleEditBranch(); }} className="space-y-6">
-                {/* Branch Name */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Branch Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={branchFormData.branch_name}
-                    onChange={(e) => setBranchFormData({ ...branchFormData, branch_name: e.target.value })}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      branchFormErrors.branch_name ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="Enter branch name"
-                  />
-                  {branchFormErrors.branch_name && (
-                    <p className="mt-1 text-sm text-red-600">{branchFormErrors.branch_name}</p>
-                  )}
-                </div>
-
-                {/* Address */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Address <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    value={branchFormData.address}
-                    onChange={(e) => setBranchFormData({ ...branchFormData, address: e.target.value })}
-                    rows="3"
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      branchFormErrors.address ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="Enter complete address"
-                  />
-                  {branchFormErrors.address && (
-                    <p className="mt-1 text-sm text-red-600">{branchFormErrors.address}</p>
-                  )}
-                </div>
-
-                {/* Email */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                  <input
-                    type="email"
-                    value={branchFormData.email}
-                    onChange={(e) => setBranchFormData({ ...branchFormData, email: e.target.value })}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      branchFormErrors.email ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="branch@example.com"
-                  />
-                  {branchFormErrors.email && (
-                    <p className="mt-1 text-sm text-red-600">{branchFormErrors.email}</p>
-                  )}
-                </div>
-
-                {/* Phone */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
-                  <input
-                    type="tel"
-                    value={branchFormData.phone}
-                    onChange={(e) => setBranchFormData({ ...branchFormData, phone: e.target.value })}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      branchFormErrors.phone ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="+1 234 567 8900"
-                  />
-                  {branchFormErrors.phone && (
-                    <p className="mt-1 text-sm text-red-600">{branchFormErrors.phone}</p>
-                  )}
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex justify-end space-x-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={closeModals}
-                    className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSaving}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 flex items-center"
-                  >
-                    {isSaving ? (
-                      <>Processing...</>
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4 mr-2" />
-                        Update Branch
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Branch Modal */}
-      {showDeleteBranchModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex items-center mb-4">
-              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
-                <AlertCircle className="w-6 h-6 text-red-600" />
-              </div>
-              <div className="ml-4">
-                <h3 className="text-lg font-semibold text-gray-900">Delete Branch</h3>
-                <p className="text-sm text-gray-600">This action cannot be undone</p>
               </div>
             </div>
-
-            <p className="text-gray-700 mb-6">
-              Are you sure you want to delete <span className="font-semibold">{selectedBranch?.branch_name}</span>? 
-              All associated data will be permanently removed.
-            </p>
-
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={closeModals}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteBranch}
-                disabled={isSaving}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400"
-              >
-                {isSaving ? 'Deleting...' : 'Delete Branch'}
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

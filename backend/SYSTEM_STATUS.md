@@ -24,17 +24,21 @@ Complete hotel management system with role-based access control and branch-level
 
 ---
 
-### 2. User Management (/api/users)
+### 2. User Management (/api/users) ⭐ ENHANCED
 - [x] Create users with role hierarchy
 - [x] Admin: Can create all roles
 - [x] Manager: Can create RECEPTIONIST and HOUSEKEEPING
 - [x] Branch-based access control
 - [x] View user profiles
-- [x] Update user information
-- [x] Delete users
+- [x] **Update user information (Full CRUD)** ⭐ NEW
+- [x] **Delete users (Admin-only, with safety)** ⭐ NEW
+- [x] **Search users (name, email, username, NIC)** ⭐ NEW
+- [x] **Filter users by role** ⭐ NEW
 - [x] Guest self-registration
 
-**Documentation**: `API_COMPLETE_GUIDE.md`
+**Documentation**: 
+- Full API: `API_COMPLETE_GUIDE.md`
+- Update/Delete guide: `USER_UPDATE_DELETE_IMPLEMENTATION.md` ⭐ NEW
 
 **Access Matrix**:
 | Role | Can Create | Branch Access |
