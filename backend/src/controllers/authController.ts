@@ -253,9 +253,13 @@ class AuthController {
           name: user.name,
           email: user.email,
           username: user.username,
+          phone: user.phone,
+          nic_no: user.nic_no,
           role: user.role,
           branch_id: user.branch_id,
-          is_guest: user.is_guest
+          is_guest: user.is_guest,
+          created_at: user.created_at,
+          updated_at: user.updated_at
         }
       } as ApiResponse);
 

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { User, Mail, Phone, MapPin, Calendar, Edit, Save, X, Key, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, Mail, Phone, MapPin, Calendar, Edit, Save, X, Key, Eye, EyeOff, CheckCircle, AlertCircle, CreditCard, Hash, Shield, Briefcase, Award, Clock } from 'lucide-react';
+import userService from '../services/userService';
 
 const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -9,20 +10,17 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [fullUserData, setFullUserData] = useState(null);
 
   const [profileData, setProfileData] = useState({
-    name: user?.name || '',
-    email: user?.email || '',
-    phone: user?.phone || '',
-    address: user?.address || '',
-    dateOfBirth: user?.dateOfBirth || '',
-    nationality: user?.nationality || '',
-    preferences: user?.preferences || {
-      newsletter: true,
-      promotions: true,
-      roomType: 'standard',
-      smokingPreference: 'non-smoking'
-    }
+    name: '',
+    email: '',
+    phone: '',
+    username: '',
+    nic_no: ''
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -34,12 +32,44 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
   const [formErrors, setFormErrors] = useState({});
   const [passwordErrors, setPasswordErrors] = useState({});
 
+  // Fetch user profile data on component mount
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      setIsLoading(true);
+      try {
+        const result = await userService.getCurrentUserProfile();
+        
+        if (result.success && result.user) {
+          setFullUserData(result.user);
+          setProfileData({
+            name: result.user.name || '',
+            email: result.user.email || '',
+            phone: result.user.phone || '',
+            username: result.user.username || '',
+            nic_no: result.user.nic_no || ''
+          });
+        } else {
+          setErrorMessage(result.message || 'Failed to load profile');
+        }
+      } catch (error) {
+        console.error('Error fetching profile:', error);
+        setErrorMessage('Failed to load profile data');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchUserProfile();
+  }, []);
+
   const validateProfile = () => {
     const errors = {};
     
     if (!profileData.name.trim()) errors.name = 'Name is required';
     if (!profileData.email.trim()) errors.email = 'Email is required';
     else if (!/\S+@\S+\.\S+/.test(profileData.email)) errors.email = 'Email is invalid';
+    if (!profileData.username.trim()) errors.username = 'Username is required';
+    else if (profileData.username.length < 3) errors.username = 'Username must be at least 3 characters';
     if (profileData.phone && !/^[\+]?[\d\s\-\(\)]+$/.test(profileData.phone)) {
       errors.phone = 'Phone number is invalid';
     }
@@ -65,54 +95,67 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
   const handleSaveProfile = async () => {
     if (!validateProfile()) return;
 
+    setIsSaving(true);
+    setErrorMessage('');
+    
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const result = await userService.updateProfile(profileData);
       
-      onUpdateUser(profileData);
-      setIsEditing(false);
-      setSuccessMessage('Profile updated successfully!');
-      setTimeout(() => setSuccessMessage(''), 3000);
+      if (result.success) {
+        setFullUserData(result.user);
+        onUpdateUser(result.user);
+        setIsEditing(false);
+        setSuccessMessage('Profile updated successfully!');
+        setTimeout(() => setSuccessMessage(''), 3000);
+      } else {
+        setErrorMessage(result.message || 'Failed to update profile');
+      }
     } catch (error) {
+      console.error('Update profile error:', error);
       setErrorMessage('Failed to update profile. Please try again.');
-      setTimeout(() => setErrorMessage(''), 3000);
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleChangePassword = async () => {
     if (!validatePassword()) return;
 
+    setIsChangingPassword(true);
+    setErrorMessage('');
+    
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const result = await userService.changePassword(passwordData);
       
-      setShowPasswordForm(false);
-      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      setSuccessMessage('Password changed successfully!');
-      setTimeout(() => setSuccessMessage(''), 3000);
+      if (result.success) {
+        setShowPasswordForm(false);
+        setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        setSuccessMessage(result.message || 'Password changed successfully!');
+        setTimeout(() => setSuccessMessage(''), 3000);
+      } else {
+        setErrorMessage(result.message || 'Failed to change password');
+      }
     } catch (error) {
+      console.error('Change password error:', error);
       setErrorMessage('Failed to change password. Please try again.');
-      setTimeout(() => setErrorMessage(''), 3000);
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
   const handleCancelEdit = () => {
-    setProfileData({
-      name: user?.name || '',
-      email: user?.email || '',
-      phone: user?.phone || '',
-      address: user?.address || '',
-      dateOfBirth: user?.dateOfBirth || '',
-      nationality: user?.nationality || '',
-      preferences: user?.preferences || {
-        newsletter: true,
-        promotions: true,
-        roomType: 'standard',
-        smokingPreference: 'non-smoking'
-      }
-    });
+    if (fullUserData) {
+      setProfileData({
+        name: fullUserData.name || '',
+        email: fullUserData.email || '',
+        phone: fullUserData.phone || '',
+        username: fullUserData.username || '',
+        nic_no: fullUserData.nic_no || ''
+      });
+    }
     setIsEditing(false);
     setFormErrors({});
+    setErrorMessage('');
   };
 
   const handleCancelPasswordChange = () => {
@@ -147,6 +190,18 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
       amount: '$200'
     }
   ];
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-20 pt-32 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600 mb-4"></div>
+          <p className="text-gray-600">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-20 pt-32">
@@ -201,13 +256,28 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
                   <div className="flex space-x-2">
                     <button 
                       onClick={handleSaveProfile}
-                      className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+                      disabled={isSaving}
+                      className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                        isSaving 
+                          ? 'bg-gray-400 cursor-not-allowed text-white' 
+                          : 'bg-green-600 text-white hover:bg-green-700'
+                      }`}
                     >
-                      <Save className="w-4 h-4" />
-                      <span>Save</span>
+                      {isSaving ? (
+                        <>
+                          <div className="spinner-small mr-2"></div>
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-4 h-4" />
+                          <span>Save</span>
+                        </>
+                      )}
                     </button>
                     <button 
                       onClick={handleCancelEdit}
+                      disabled={isSaving}
                       className="flex items-center space-x-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
                     >
                       <X className="w-4 h-4" />
@@ -230,7 +300,29 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
                     className={`form-input ${!isEditing ? 'bg-gray-50' : ''} ${formErrors.name ? 'border-red-500' : ''}`}
                   />
                   {formErrors.name && (
-                    <p className="text-red-500 text-sm mt-1">{formErrors.name}</p>
+                    <p className="text-red-500 text-sm mt-1 flex items-center">
+                      <AlertCircle className="w-4 h-4 mr-1" />
+                      {formErrors.name}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Username *
+                  </label>
+                  <input
+                    type="text"
+                    value={profileData.username}
+                    onChange={(e) => setProfileData({...profileData, username: e.target.value})}
+                    disabled={!isEditing}
+                    className={`form-input ${!isEditing ? 'bg-gray-50' : ''} ${formErrors.username ? 'border-red-500' : ''}`}
+                  />
+                  {formErrors.username && (
+                    <p className="text-red-500 text-sm mt-1 flex items-center">
+                      <AlertCircle className="w-4 h-4 mr-1" />
+                      {formErrors.username}
+                    </p>
                   )}
                 </div>
 
@@ -246,7 +338,10 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
                     className={`form-input ${!isEditing ? 'bg-gray-50' : ''} ${formErrors.email ? 'border-red-500' : ''}`}
                   />
                   {formErrors.email && (
-                    <p className="text-red-500 text-sm mt-1">{formErrors.email}</p>
+                    <p className="text-red-500 text-sm mt-1 flex items-center">
+                      <AlertCircle className="w-4 h-4 mr-1" />
+                      {formErrors.email}
+                    </p>
                   )}
                 </div>
 
@@ -260,125 +355,34 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
                     onChange={(e) => setProfileData({...profileData, phone: e.target.value})}
                     disabled={!isEditing}
                     className={`form-input ${!isEditing ? 'bg-gray-50' : ''} ${formErrors.phone ? 'border-red-500' : ''}`}
+                    placeholder="+94 XX XXX XXXX"
                   />
                   {formErrors.phone && (
-                    <p className="text-red-500 text-sm mt-1">{formErrors.phone}</p>
+                    <p className="text-red-500 text-sm mt-1 flex items-center">
+                      <AlertCircle className="w-4 h-4 mr-1" />
+                      {formErrors.phone}
+                    </p>
                   )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Date of Birth
-                  </label>
-                  <input
-                    type="date"
-                    value={profileData.dateOfBirth}
-                    onChange={(e) => setProfileData({...profileData, dateOfBirth: e.target.value})}
-                    disabled={!isEditing}
-                    className={`form-input ${!isEditing ? 'bg-gray-50' : ''}`}
-                  />
                 </div>
 
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Address
-                  </label>
-                  <textarea
-                    value={profileData.address}
-                    onChange={(e) => setProfileData({...profileData, address: e.target.value})}
-                    disabled={!isEditing}
-                    rows="3"
-                    className={`form-input ${!isEditing ? 'bg-gray-50' : ''}`}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Nationality
+                    NIC / Passport Number
                   </label>
                   <input
                     type="text"
-                    value={profileData.nationality}
-                    onChange={(e) => setProfileData({...profileData, nationality: e.target.value})}
+                    value={profileData.nic_no}
+                    onChange={(e) => setProfileData({...profileData, nic_no: e.target.value})}
                     disabled={!isEditing}
-                    className={`form-input ${!isEditing ? 'bg-gray-50' : ''}`}
+                    className={`form-input ${!isEditing ? 'bg-gray-50' : ''} ${formErrors.nic_no ? 'border-red-500' : ''}`}
+                    placeholder="Enter your NIC or Passport number"
                   />
-                </div>
-              </div>
-
-              {/* Preferences */}
-              <div className="mt-8 pt-8 border-t border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Preferences</h3>
-                
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Preferred Room Type
-                    </label>
-                    <select
-                      value={profileData.preferences.roomType}
-                      onChange={(e) => setProfileData({
-                        ...profileData, 
-                        preferences: {...profileData.preferences, roomType: e.target.value}
-                      })}
-                      disabled={!isEditing}
-                      className={`form-input ${!isEditing ? 'bg-gray-50' : ''}`}
-                    >
-                      <option value="standard">Standard</option>
-                      <option value="deluxe">Deluxe</option>
-                      <option value="suite">Suite</option>
-                      <option value="presidential">Presidential</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Smoking Preference
-                    </label>
-                    <select
-                      value={profileData.preferences.smokingPreference}
-                      onChange={(e) => setProfileData({
-                        ...profileData, 
-                        preferences: {...profileData.preferences, smokingPreference: e.target.value}
-                      })}
-                      disabled={!isEditing}
-                      className={`form-input ${!isEditing ? 'bg-gray-50' : ''}`}
-                    >
-                      <option value="non-smoking">Non-Smoking</option>
-                      <option value="smoking">Smoking</option>
-                      <option value="no-preference">No Preference</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="mt-4 space-y-3">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={profileData.preferences.newsletter}
-                      onChange={(e) => setProfileData({
-                        ...profileData, 
-                        preferences: {...profileData.preferences, newsletter: e.target.checked}
-                      })}
-                      disabled={!isEditing}
-                      className="rounded text-amber-600 mr-3"
-                    />
-                    <span className="text-sm text-gray-700">Subscribe to newsletter</span>
-                  </label>
-
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={profileData.preferences.promotions}
-                      onChange={(e) => setProfileData({
-                        ...profileData, 
-                        preferences: {...profileData.preferences, promotions: e.target.checked}
-                      })}
-                      disabled={!isEditing}
-                      className="rounded text-amber-600 mr-3"
-                    />
-                    <span className="text-sm text-gray-700">Receive promotional offers</span>
-                  </label>
+                  {formErrors.nic_no && (
+                    <p className="text-red-500 text-sm mt-1 flex items-center">
+                      <AlertCircle className="w-4 h-4 mr-1" />
+                      {formErrors.nic_no}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -392,8 +396,11 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
                 <User className="w-12 h-12 text-white" />
               </div>
               
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">{user?.name}</h3>
-              <p className="text-gray-600 text-sm mb-6">{user?.email}</p>
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">{fullUserData?.name || user?.name}</h3>
+              <p className="text-gray-600 text-sm mb-2">{fullUserData?.email || user?.email}</p>
+              {fullUserData?.username && (
+                <p className="text-gray-500 text-xs mb-6">@{fullUserData.username}</p>
+              )}
               
               <div className="space-y-3">
                 <button 
@@ -525,12 +532,25 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
               <div className="flex space-x-4 mt-6">
                 <button 
                   onClick={handleChangePassword}
-                  className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  disabled={isChangingPassword}
+                  className={`flex-1 py-2 rounded-lg transition-colors flex items-center justify-center ${
+                    isChangingPassword 
+                      ? 'bg-gray-400 cursor-not-allowed text-white' 
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
                 >
-                  Change Password
+                  {isChangingPassword ? (
+                    <>
+                      <div className="spinner-small mr-2"></div>
+                      <span>Changing...</span>
+                    </>
+                  ) : (
+                    'Change Password'
+                  )}
                 </button>
                 <button 
                   onClick={handleCancelPasswordChange}
+                  disabled={isChangingPassword}
                   className="flex-1 bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700 transition-colors"
                 >
                   Cancel

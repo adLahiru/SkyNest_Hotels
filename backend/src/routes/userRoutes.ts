@@ -49,4 +49,22 @@ router.get(
   userController.getUserById
 );
 
+// Update user profile (for logged-in users to update their own profile)
+// PUT /api/users/profile
+// Accessible by: Any authenticated user (can only update their own profile)
+router.put(
+  '/profile',
+  authenticateToken,
+  userController.updateProfile
+);
+
+// Change user password
+// PUT /api/users/password
+// Accessible by: Any authenticated user (can only change their own password)
+router.put(
+  '/password',
+  authenticateToken,
+  userController.changePassword
+);
+
 export default router;

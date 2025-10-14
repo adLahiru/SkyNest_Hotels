@@ -611,6 +611,234 @@ export class UserController {
       } as ApiResponse);
     }
   };
+
+  // Update user profile (for logged-in users to update their own profile)
+  public updateProfile = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const userId = req.user?.user_id;
+      
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          message: 'Unauthorized'
+        } as ApiResponse);
+        return;
+      }
+
+      const {
+        name,
+        email,
+        phone,
+        nic_no,
+        username
+      } = req.body;
+
+      // Validate required fields
+      if (!name || !email || !username) {
+        res.status(400).json({
+          success: false,
+          message: 'Missing required fields: name, email, username'
+        } as ApiResponse);
+        return;
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        res.status(400).json({
+          success: false,
+          message: 'Please provide a valid email address'
+        } as ApiResponse);
+        return;
+      }
+
+      await this.initConnection();
+
+      // Check if email or username is already taken by another user
+      const [existingUsers] = await this.connection!.execute<RowDataPacket[]>(
+        `SELECT user_id FROM users WHERE (email = ? OR username = ?) AND user_id != ?`,
+        [email, username, userId]
+      );
+
+      if (existingUsers.length > 0) {
+        res.status(409).json({
+          success: false,
+          message: 'Email or username is already taken by another user'
+        } as ApiResponse);
+        return;
+      }
+
+      // Check if NIC is already taken by another user (if provided)
+      if (nic_no) {
+        const [existingNic] = await this.connection!.execute<RowDataPacket[]>(
+          `SELECT user_id FROM users WHERE nic_no = ? AND user_id != ?`,
+          [nic_no, userId]
+        );
+
+        if (existingNic.length > 0) {
+          res.status(409).json({
+            success: false,
+            message: 'NIC number is already registered to another user'
+          } as ApiResponse);
+          return;
+        }
+      }
+
+      // Update user profile
+      await this.connection!.execute(
+        `UPDATE users 
+         SET name = ?, email = ?, phone = ?, username = ?, nic_no = ?
+         WHERE user_id = ?`,
+        [name, email, phone || null, username, nic_no || null, userId]
+      );
+
+      // Fetch updated user data
+      const [userRows] = await this.connection!.execute<DatabaseUserRow[]>(
+        `SELECT u.user_id, u.name, u.email, u.username, u.phone, u.nic_no, u.is_guest, u.created_at,
+                s.role, s.branch_id
+         FROM users u
+         LEFT JOIN staff s ON u.user_id = s.staff_id
+         WHERE u.user_id = ?`,
+        [userId]
+      );
+
+      const updatedUser = userRows[0];
+
+      if (!updatedUser) {
+        throw new Error('Failed to retrieve updated user');
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Profile updated successfully',
+        data: {
+          user_id: updatedUser.user_id,
+          name: updatedUser.name,
+          email: updatedUser.email,
+          username: updatedUser.username,
+          phone: updatedUser.phone,
+          nic_no: updatedUser.nic_no,
+          role: updatedUser.role || UserRole.GUEST,
+          branch_id: updatedUser.branch_id,
+          is_guest: updatedUser.is_guest === 1,
+          created_at: updatedUser.created_at
+        }
+      } as ApiResponse);
+
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error while updating profile'
+      } as ApiResponse);
+    }
+  };
+
+  // Change user password (for logged-in users to change their own password)
+  public changePassword = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const userId = req.user?.user_id;
+      
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          message: 'Unauthorized'
+        } as ApiResponse);
+        return;
+      }
+
+      const {
+        currentPassword,
+        newPassword,
+        confirmPassword
+      } = req.body;
+
+      // Validate required fields
+      if (!currentPassword || !newPassword || !confirmPassword) {
+        res.status(400).json({
+          success: false,
+          message: 'Missing required fields: currentPassword, newPassword, confirmPassword'
+        } as ApiResponse);
+        return;
+      }
+
+      // Validate password match
+      if (newPassword !== confirmPassword) {
+        res.status(400).json({
+          success: false,
+          message: 'New password and confirmation do not match'
+        } as ApiResponse);
+        return;
+      }
+
+      // Validate password strength
+      if (newPassword.length < 8) {
+        res.status(400).json({
+          success: false,
+          message: 'New password must be at least 8 characters long'
+        } as ApiResponse);
+        return;
+      }
+
+      await this.initConnection();
+
+      // Get current user password
+      const [userRows] = await this.connection!.execute<RowDataPacket[]>(
+        `SELECT password FROM users WHERE user_id = ?`,
+        [userId]
+      );
+
+      if (userRows.length === 0) {
+        res.status(404).json({
+          success: false,
+          message: 'User not found'
+        } as ApiResponse);
+        return;
+      }
+
+      const user = userRows[0];
+      const currentHashedPassword = user?.password;
+
+      if (!currentHashedPassword) {
+        res.status(500).json({
+          success: false,
+          message: 'User password not found'
+        } as ApiResponse);
+        return;
+      }
+
+      // Verify current password
+      const isPasswordValid = await bcrypt.compare(currentPassword, currentHashedPassword);
+      if (!isPasswordValid) {
+        res.status(401).json({
+          success: false,
+          message: 'Current password is incorrect'
+        } as ApiResponse);
+        return;
+      }
+
+      // Hash new password
+      const newHashedPassword = await bcrypt.hash(newPassword, 12);
+
+      // Update password
+      await this.connection!.execute(
+        `UPDATE users SET password = ? WHERE user_id = ?`,
+        [newHashedPassword, userId]
+      );
+
+      res.status(200).json({
+        success: true,
+        message: 'Password changed successfully'
+      } as ApiResponse);
+
+    } catch (error) {
+      console.error('Error changing password:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error while changing password'
+      } as ApiResponse);
+    }
+  };
 }
 
 export default new UserController();
