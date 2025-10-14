@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2, Search, Filter, X, Eye, EyeOff, Home } from 'lucide-react';
+import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2, Search, Filter, X, Eye, EyeOff, Home, Bed } from 'lucide-react';
 import dashboardService from '../services/dashboardService';
 import userService from '../services/userService';
 import branchService from '../services/branchService';
@@ -64,6 +64,27 @@ const AdminDashboard = ({ user }) => {
 
   const ROOM_STATES = ['available', 'occupied', 'maintenance'];
 
+  // Room Type management states
+  const [loadingRoomTypes, setLoadingRoomTypes] = useState(false);
+  const [roomTypeSearchQuery, setRoomTypeSearchQuery] = useState('');
+  const [minCapacityFilter, setMinCapacityFilter] = useState('');
+  const [maxCapacityFilter, setMaxCapacityFilter] = useState('');
+  const [minPriceFilter, setMinPriceFilter] = useState('');
+  const [maxPriceFilter, setMaxPriceFilter] = useState('');
+  const [showAddRoomTypeModal, setShowAddRoomTypeModal] = useState(false);
+  const [showEditRoomTypeModal, setShowEditRoomTypeModal] = useState(false);
+  const [showDeleteRoomTypeConfirmModal, setShowDeleteRoomTypeConfirmModal] = useState(false);
+  const [selectedRoomType, setSelectedRoomType] = useState(null);
+  const [roomTypeFormData, setRoomTypeFormData] = useState({
+    type: '',
+    capacity: '',
+    daily_rate: '',
+    amenities: '',
+    description: ''
+  });
+  const [roomTypeFormErrors, setRoomTypeFormErrors] = useState({});
+  const [roomTypeSubmitMessage, setRoomTypeSubmitMessage] = useState({ type: '', text: '' });
+
   useEffect(() => {
     fetchDashboardStats();
     fetchBranches();
@@ -75,8 +96,10 @@ const AdminDashboard = ({ user }) => {
       fetchUsers();
     } else if (activeTab === 'rooms') {
       fetchRooms();
+    } else if (activeTab === 'roomTypes') {
+      fetchRoomTypes();
     }
-  }, [activeTab, searchQuery, roleFilter, roomSearchQuery, roomStateFilter, roomTypeFilter, roomBranchFilter, roomFloorFilter]);
+  }, [activeTab, searchQuery, roleFilter, roomSearchQuery, roomStateFilter, roomTypeFilter, roomBranchFilter, roomFloorFilter, roomTypeSearchQuery, minCapacityFilter, maxCapacityFilter, minPriceFilter, maxPriceFilter]);
 
   const fetchDashboardStats = async () => {
     setLoading(true);
@@ -110,10 +133,39 @@ const AdminDashboard = ({ user }) => {
   };
 
   const fetchRoomTypes = async () => {
+    setLoadingRoomTypes(true);
     const result = await roomTypeService.getAllRoomTypes();
     if (result.success) {
-      setRoomTypes(result.roomTypes);
+      let filteredTypes = result.roomTypes || [];
+      
+      // Apply search filter
+      if (roomTypeSearchQuery) {
+        filteredTypes = filteredTypes.filter(type =>
+          type.type.toLowerCase().includes(roomTypeSearchQuery.toLowerCase())
+        );
+      }
+      
+      // Apply capacity filters
+      if (minCapacityFilter) {
+        filteredTypes = filteredTypes.filter(type => type.capacity >= parseInt(minCapacityFilter));
+      }
+      if (maxCapacityFilter) {
+        filteredTypes = filteredTypes.filter(type => type.capacity <= parseInt(maxCapacityFilter));
+      }
+      
+      // Apply price filters
+      if (minPriceFilter) {
+        filteredTypes = filteredTypes.filter(type => type.daily_rate >= parseFloat(minPriceFilter));
+      }
+      if (maxPriceFilter) {
+        filteredTypes = filteredTypes.filter(type => type.daily_rate <= parseFloat(maxPriceFilter));
+      }
+      
+      setRoomTypes(filteredTypes);
+    } else {
+      console.error('Failed to fetch room types:', result.message);
     }
+    setLoadingRoomTypes(false);
   };
 
   const fetchRooms = async () => {
@@ -545,6 +597,182 @@ const AdminDashboard = ({ user }) => {
     }
   };
 
+  // Room Type Management Functions
+  const handleRoomTypeSearchChange = (e) => {
+    setRoomTypeSearchQuery(e.target.value);
+  };
+
+  const handleMinCapacityFilterChange = (e) => {
+    setMinCapacityFilter(e.target.value);
+  };
+
+  const handleMaxCapacityFilterChange = (e) => {
+    setMaxCapacityFilter(e.target.value);
+  };
+
+  const handleMinPriceFilterChange = (e) => {
+    setMinPriceFilter(e.target.value);
+  };
+
+  const handleMaxPriceFilterChange = (e) => {
+    setMaxPriceFilter(e.target.value);
+  };
+
+  const clearRoomTypeFilters = () => {
+    setRoomTypeSearchQuery('');
+    setMinCapacityFilter('');
+    setMaxCapacityFilter('');
+    setMinPriceFilter('');
+    setMaxPriceFilter('');
+  };
+
+  const handleAddRoomTypeClick = () => {
+    setShowAddRoomTypeModal(true);
+    setRoomTypeFormData({
+      type: '',
+      capacity: '',
+      daily_rate: '',
+      amenities: '',
+      description: ''
+    });
+    setRoomTypeFormErrors({});
+    setRoomTypeSubmitMessage({ type: '', text: '' });
+  };
+
+  const handleRoomTypeFormChange = (e) => {
+    const { name, value } = e.target;
+    setRoomTypeFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    // Clear error for this field
+    if (roomTypeFormErrors[name]) {
+      setRoomTypeFormErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+  };
+
+  const validateRoomTypeForm = () => {
+    const errors = {};
+    
+    if (!roomTypeFormData.type.trim()) errors.type = 'Room type name is required';
+    if (!roomTypeFormData.capacity || roomTypeFormData.capacity < 1 || roomTypeFormData.capacity > 20) {
+      errors.capacity = 'Capacity must be between 1 and 20';
+    }
+    if (!roomTypeFormData.daily_rate || roomTypeFormData.daily_rate < 0) {
+      errors.daily_rate = 'Daily rate must be a positive number';
+    }
+    
+    setRoomTypeFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmitRoomType = async (e) => {
+    e.preventDefault();
+    
+    if (!validateRoomTypeForm()) {
+      return;
+    }
+
+    setLoadingRoomTypes(true);
+    
+    const result = await roomTypeService.createRoomType({
+      ...roomTypeFormData,
+      capacity: parseInt(roomTypeFormData.capacity),
+      daily_rate: parseFloat(roomTypeFormData.daily_rate)
+    });
+    
+    if (result.success) {
+      setRoomTypeSubmitMessage({ type: 'success', text: result.message || 'Room type created successfully!' });
+      setTimeout(() => {
+        setShowAddRoomTypeModal(false);
+        fetchRoomTypes();
+        fetchDashboardStats();
+      }, 1500);
+    } else {
+      setRoomTypeSubmitMessage({ type: 'error', text: result.message || 'Failed to create room type' });
+    }
+    
+    setLoadingRoomTypes(false);
+  };
+
+  const handleEditRoomTypeClick = (roomType) => {
+    setSelectedRoomType(roomType);
+    setRoomTypeFormData({
+      type: roomType.type,
+      capacity: roomType.capacity.toString(),
+      daily_rate: roomType.daily_rate.toString(),
+      amenities: roomType.amenities || '',
+      description: roomType.description || ''
+    });
+    setRoomTypeFormErrors({});
+    setRoomTypeSubmitMessage({ type: '', text: '' });
+    setShowEditRoomTypeModal(true);
+  };
+
+  const handleSubmitEditRoomType = async (e) => {
+    e.preventDefault();
+    
+    if (!validateRoomTypeForm()) {
+      return;
+    }
+
+    setLoadingRoomTypes(true);
+    
+    const result = await roomTypeService.updateRoomType(selectedRoomType.room_type_id, {
+      ...roomTypeFormData,
+      capacity: parseInt(roomTypeFormData.capacity),
+      daily_rate: parseFloat(roomTypeFormData.daily_rate)
+    });
+    
+    if (result.success) {
+      setRoomTypeSubmitMessage({ type: 'success', text: result.message || 'Room type updated successfully!' });
+      setTimeout(() => {
+        setShowEditRoomTypeModal(false);
+        setSelectedRoomType(null);
+        fetchRoomTypes();
+        fetchDashboardStats();
+      }, 1500);
+    } else {
+      setRoomTypeSubmitMessage({ type: 'error', text: result.message || 'Failed to update room type' });
+    }
+    
+    setLoadingRoomTypes(false);
+  };
+
+  const handleDeleteRoomTypeClick = (roomType) => {
+    setSelectedRoomType(roomType);
+    setShowDeleteRoomTypeConfirmModal(true);
+  };
+
+  const handleConfirmDeleteRoomType = async () => {
+    if (!selectedRoomType) return;
+
+    setLoadingRoomTypes(true);
+    
+    const result = await roomTypeService.deleteRoomType(selectedRoomType.room_type_id);
+    
+    if (result.success) {
+      setShowDeleteRoomTypeConfirmModal(false);
+      setSelectedRoomType(null);
+      setTimeout(() => {
+        fetchRoomTypes();
+        fetchDashboardStats();
+      }, 500);
+    } else {
+      setRoomTypeSubmitMessage({ type: 'error', text: result.message || 'Failed to delete room type' });
+    }
+    
+    setLoadingRoomTypes(false);
+  };
+
+  const handleCancelDeleteRoomType = () => {
+    setShowDeleteRoomTypeConfirmModal(false);
+    setSelectedRoomType(null);
+  };
+
   const getRoleBadgeColor = (role) => {
     switch(role) {
       case 'ADMIN': return 'bg-purple-100 text-purple-800';
@@ -675,6 +903,17 @@ const AdminDashboard = ({ user }) => {
               >
                 <Building2 className="w-5 h-5 inline-block mr-2" />
                 Branches
+              </button>
+              <button
+                onClick={() => setActiveTab('roomTypes')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'roomTypes'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <Bed className="w-5 h-5 inline-block mr-2" />
+                Room Types
               </button>
               <button
                 onClick={() => setActiveTab('rooms')}
@@ -829,6 +1068,229 @@ const AdminDashboard = ({ user }) => {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+            {/* Room Types Tab */}
+            {activeTab === 'roomTypes' && (
+              <div>
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Room Type Management</h3>
+                  <button 
+                    onClick={handleAddRoomTypeClick}
+                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Room Type
+                  </button>
+                </div>
+
+                {/* Search and Filter Section */}
+                <div className="mb-6 bg-gray-50 p-4 rounded-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* Search Input */}
+                    <div className="lg:col-span-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <Search className="w-4 h-4 inline mr-2" />
+                        Search Room Types
+                      </label>
+                      <input
+                        type="text"
+                        value={roomTypeSearchQuery}
+                        onChange={handleRoomTypeSearchChange}
+                        placeholder="Search by type name..."
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    {/* Capacity Filters */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <Filter className="w-4 h-4 inline mr-2" />
+                        Min Capacity
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={minCapacityFilter}
+                        onChange={handleMinCapacityFilterChange}
+                        placeholder="Min guests"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Max Capacity
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={maxCapacityFilter}
+                        onChange={handleMaxCapacityFilterChange}
+                        placeholder="Max guests"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    {/* Price Filters */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <DollarSign className="w-4 h-4 inline mr-2" />
+                        Min Price
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={minPriceFilter}
+                        onChange={handleMinPriceFilterChange}
+                        placeholder="Min price"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Max Price
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={maxPriceFilter}
+                        onChange={handleMaxPriceFilterChange}
+                        placeholder="Max price"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Active Filters Display */}
+                  {(roomTypeSearchQuery || minCapacityFilter || maxCapacityFilter || minPriceFilter || maxPriceFilter) && (
+                    <div className="mt-4 flex flex-wrap gap-2 items-center">
+                      <span className="text-sm font-medium text-gray-700">Active Filters:</span>
+                      {roomTypeSearchQuery && (
+                        <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                          Search: {roomTypeSearchQuery}
+                        </span>
+                      )}
+                      {minCapacityFilter && (
+                        <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">
+                          Min Capacity: {minCapacityFilter}
+                        </span>
+                      )}
+                      {maxCapacityFilter && (
+                        <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">
+                          Max Capacity: {maxCapacityFilter}
+                        </span>
+                      )}
+                      {minPriceFilter && (
+                        <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">
+                          Min Price: ${minPriceFilter}
+                        </span>
+                      )}
+                      {maxPriceFilter && (
+                        <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">
+                          Max Price: ${maxPriceFilter}
+                        </span>
+                      )}
+                      <button
+                        onClick={clearRoomTypeFilters}
+                        className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm hover:bg-red-200 transition-colors flex items-center"
+                      >
+                        <X className="w-3 h-3 mr-1" />
+                        Clear All
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Room Types Table */}
+                <div className="bg-white rounded-lg shadow overflow-hidden">
+                  {loadingRoomTypes ? (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+                    </div>
+                  ) : roomTypes.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Bed className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500 text-lg mb-2">No room types found</p>
+                      <p className="text-gray-400 text-sm">
+                        {roomTypeSearchQuery || minCapacityFilter || maxCapacityFilter || minPriceFilter || maxPriceFilter
+                          ? 'Try adjusting your filters'
+                          : 'Add your first room type to get started'}
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="bg-gray-50 border-b border-gray-200">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Capacity</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Daily Rate</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rooms</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amenities</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {roomTypes.map((roomType) => (
+                              <tr key={roomType.room_type_id} className="hover:bg-gray-50 transition-colors">
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm font-medium text-gray-900">{roomType.type}</div>
+                                  {roomType.description && (
+                                    <div className="text-xs text-gray-500 mt-1">{roomType.description.substring(0, 50)}{roomType.description.length > 50 ? '...' : ''}</div>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900">
+                                    <Users className="w-4 h-4 inline mr-1" />
+                                    {roomType.capacity} {roomType.capacity === 1 ? 'guest' : 'guests'}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm font-semibold text-green-600">
+                                    ${typeof roomType.daily_rate === 'number' ? roomType.daily_rate.toFixed(2) : roomType.daily_rate}/night
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900">{roomType.room_count || 0} rooms</div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="text-sm text-gray-500 max-w-xs truncate">
+                                    {roomType.amenities || 'N/A'}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                  <button
+                                    onClick={() => handleEditRoomTypeClick(roomType)}
+                                    className="text-blue-600 hover:text-blue-900 mr-4"
+                                  >
+                                    <Edit className="w-4 h-4 inline" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteRoomTypeClick(roomType)}
+                                    className="text-red-600 hover:text-red-900"
+                                  >
+                                    <Trash2 className="w-4 h-4 inline" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
+                        <p className="text-sm text-gray-700">
+                          Showing <span className="font-medium">{roomTypes.length}</span> room type{roomTypes.length !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -2220,6 +2682,393 @@ const AdminDashboard = ({ user }) => {
                     className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 disabled:cursor-not-allowed flex items-center justify-center"
                   >
                     {loadingRooms ? (
+                      <>
+                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Room Type Modal */}
+        {showAddRoomTypeModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full my-8">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">Add New Room Type</h2>
+                  <button
+                    onClick={() => setShowAddRoomTypeModal(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {roomTypeSubmitMessage.text && (
+                  <div className={`mb-4 p-3 rounded-lg ${
+                    roomTypeSubmitMessage.type === 'success' 
+                      ? 'bg-green-100 text-green-800 border border-green-200' 
+                      : 'bg-red-100 text-red-800 border border-red-200'
+                  } text-sm`}>
+                    {roomTypeSubmitMessage.text}
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmitRoomType} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Type Name */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Room Type Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="type"
+                        value={roomTypeFormData.type}
+                        onChange={handleRoomTypeFormChange}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          roomTypeFormErrors.type ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="e.g., Deluxe Suite, Standard Room"
+                      />
+                      {roomTypeFormErrors.type && <p className="text-red-500 text-xs mt-1">{roomTypeFormErrors.type}</p>}
+                    </div>
+
+                    {/* Capacity */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Capacity <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        name="capacity"
+                        min="1"
+                        max="20"
+                        value={roomTypeFormData.capacity}
+                        onChange={handleRoomTypeFormChange}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          roomTypeFormErrors.capacity ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="Number of guests (1-20)"
+                      />
+                      {roomTypeFormErrors.capacity && <p className="text-red-500 text-xs mt-1">{roomTypeFormErrors.capacity}</p>}
+                    </div>
+
+                    {/* Daily Rate */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Daily Rate ($) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        name="daily_rate"
+                        min="0"
+                        step="0.01"
+                        value={roomTypeFormData.daily_rate}
+                        onChange={handleRoomTypeFormChange}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          roomTypeFormErrors.daily_rate ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="Price per night"
+                      />
+                      {roomTypeFormErrors.daily_rate && <p className="text-red-500 text-xs mt-1">{roomTypeFormErrors.daily_rate}</p>}
+                    </div>
+
+                    {/* Amenities */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Amenities
+                      </label>
+                      <input
+                        type="text"
+                        name="amenities"
+                        value={roomTypeFormData.amenities}
+                        onChange={handleRoomTypeFormChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="e.g., WiFi, TV, Mini Bar, Air Conditioning"
+                      />
+                    </div>
+
+                    {/* Description */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Description
+                      </label>
+                      <textarea
+                        name="description"
+                        value={roomTypeFormData.description}
+                        onChange={handleRoomTypeFormChange}
+                        rows="3"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Describe this room type..."
+                      />
+                    </div>
+                  </div>
+
+                  {/* Form Actions */}
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddRoomTypeModal(false)}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                      disabled={loadingRoomTypes}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loadingRoomTypes}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center"
+                    >
+                      {loadingRoomTypes ? (
+                        <>
+                          <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                          Creating...
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create Room Type
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Room Type Modal */}
+        {showEditRoomTypeModal && selectedRoomType && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full my-8">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">Edit Room Type</h2>
+                  <button
+                    onClick={() => {
+                      setShowEditRoomTypeModal(false);
+                      setSelectedRoomType(null);
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {roomTypeSubmitMessage.text && (
+                  <div className={`mb-4 p-3 rounded-lg ${
+                    roomTypeSubmitMessage.type === 'success' 
+                      ? 'bg-green-100 text-green-800 border border-green-200' 
+                      : 'bg-red-100 text-red-800 border border-red-200'
+                  } text-sm`}>
+                    {roomTypeSubmitMessage.text}
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmitEditRoomType} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Type Name */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Room Type Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="type"
+                        value={roomTypeFormData.type}
+                        onChange={handleRoomTypeFormChange}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          roomTypeFormErrors.type ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="e.g., Deluxe Suite, Standard Room"
+                      />
+                      {roomTypeFormErrors.type && <p className="text-red-500 text-xs mt-1">{roomTypeFormErrors.type}</p>}
+                    </div>
+
+                    {/* Capacity */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Capacity <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        name="capacity"
+                        min="1"
+                        max="20"
+                        value={roomTypeFormData.capacity}
+                        onChange={handleRoomTypeFormChange}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          roomTypeFormErrors.capacity ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="Number of guests (1-20)"
+                      />
+                      {roomTypeFormErrors.capacity && <p className="text-red-500 text-xs mt-1">{roomTypeFormErrors.capacity}</p>}
+                    </div>
+
+                    {/* Daily Rate */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Daily Rate ($) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        name="daily_rate"
+                        min="0"
+                        step="0.01"
+                        value={roomTypeFormData.daily_rate}
+                        onChange={handleRoomTypeFormChange}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          roomTypeFormErrors.daily_rate ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="Price per night"
+                      />
+                      {roomTypeFormErrors.daily_rate && <p className="text-red-500 text-xs mt-1">{roomTypeFormErrors.daily_rate}</p>}
+                    </div>
+
+                    {/* Amenities */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Amenities
+                      </label>
+                      <input
+                        type="text"
+                        name="amenities"
+                        value={roomTypeFormData.amenities}
+                        onChange={handleRoomTypeFormChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="e.g., WiFi, TV, Mini Bar, Air Conditioning"
+                      />
+                    </div>
+
+                    {/* Description */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Description
+                      </label>
+                      <textarea
+                        name="description"
+                        value={roomTypeFormData.description}
+                        onChange={handleRoomTypeFormChange}
+                        rows="3"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Describe this room type..."
+                      />
+                    </div>
+                  </div>
+
+                  {/* Form Actions */}
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowEditRoomTypeModal(false);
+                        setSelectedRoomType(null);
+                      }}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                      disabled={loadingRoomTypes}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loadingRoomTypes}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center"
+                    >
+                      {loadingRoomTypes ? (
+                        <>
+                          <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <Edit className="w-4 h-4 mr-2" />
+                          Update Room Type
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Room Type Confirmation Modal */}
+        {showDeleteRoomTypeConfirmModal && selectedRoomType && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+              <div className="p-6">
+                <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-red-100 rounded-full">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                
+                <h2 className="text-xl font-bold text-gray-900 text-center mb-2">
+                  Delete Room Type
+                </h2>
+                
+                <p className="text-gray-600 text-center mb-4">
+                  Are you sure you want to delete this room type? This action cannot be undone.
+                </p>
+
+                <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-600">Type:</span>
+                    <span className="text-sm font-medium text-gray-900">{selectedRoomType.type}</span>
+                  </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-600">Capacity:</span>
+                    <span className="text-sm font-medium text-gray-900">{selectedRoomType.capacity} guests</span>
+                  </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-600">Daily Rate:</span>
+                    <span className="text-sm font-medium text-green-600">${selectedRoomType.daily_rate}/night</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Associated Rooms:</span>
+                    <span className={`text-sm font-medium ${selectedRoomType.room_count > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                      {selectedRoomType.room_count || 0} rooms
+                    </span>
+                  </div>
+                </div>
+
+                {selectedRoomType.room_count > 0 && (
+                  <div className="mb-4 p-3 rounded-lg bg-yellow-100 text-yellow-800 border border-yellow-200 text-sm">
+                    ⚠️ Warning: This room type has {selectedRoomType.room_count} associated room{selectedRoomType.room_count !== 1 ? 's' : ''}. You cannot delete it until all rooms are removed or reassigned.
+                  </div>
+                )}
+
+                {roomTypeSubmitMessage.text && roomTypeSubmitMessage.type === 'error' && (
+                  <div className="mb-4 p-3 rounded-lg bg-red-100 text-red-800 border border-red-200 text-sm">
+                    {roomTypeSubmitMessage.text}
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleCancelDeleteRoomType}
+                    disabled={loadingRoomTypes}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleConfirmDeleteRoomType}
+                    disabled={loadingRoomTypes || selectedRoomType.room_count > 0}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    {loadingRoomTypes ? (
                       <>
                         <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
                         Deleting...
