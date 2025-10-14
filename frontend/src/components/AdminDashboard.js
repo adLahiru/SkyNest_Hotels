@@ -88,6 +88,25 @@ const AdminDashboard = ({ user }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [photoPreview, setPhotoPreview] = useState(null);
 
+  // Branch management states
+  const [loadingBranches, setLoadingBranches] = useState(false);
+  const [branchSearchQuery, setBranchSearchQuery] = useState('');
+  const [showAddBranchModal, setShowAddBranchModal] = useState(false);
+  const [showEditBranchModal, setShowEditBranchModal] = useState(false);
+  const [showDeleteBranchConfirmModal, setShowDeleteBranchConfirmModal] = useState(false);
+  const [selectedBranch, setSelectedBranch] = useState(null);
+  const [branchFormData, setBranchFormData] = useState({
+    branch_name: '',
+    address: '',
+    email: '',
+    phone: '',
+    photo: ''
+  });
+  const [branchFormErrors, setBranchFormErrors] = useState({});
+  const [branchSubmitMessage, setBranchSubmitMessage] = useState({ type: '', text: '' });
+  const [branchIsDragging, setBranchIsDragging] = useState(false);
+  const [branchPhotoPreview, setBranchPhotoPreview] = useState(null);
+
   useEffect(() => {
     fetchDashboardStats();
     fetchBranches();
@@ -101,8 +120,10 @@ const AdminDashboard = ({ user }) => {
       fetchRooms();
     } else if (activeTab === 'roomTypes') {
       fetchRoomTypes();
+    } else if (activeTab === 'branches') {
+      fetchBranches();
     }
-  }, [activeTab, searchQuery, roleFilter, roomSearchQuery, roomStateFilter, roomTypeFilter, roomBranchFilter, roomFloorFilter, roomTypeSearchQuery, minCapacityFilter, maxCapacityFilter, minPriceFilter, maxPriceFilter]);
+  }, [activeTab, searchQuery, roleFilter, roomSearchQuery, roomStateFilter, roomTypeFilter, roomBranchFilter, roomFloorFilter, roomTypeSearchQuery, minCapacityFilter, maxCapacityFilter, minPriceFilter, maxPriceFilter, branchSearchQuery]);
 
   const fetchDashboardStats = async () => {
     setLoading(true);
@@ -129,10 +150,12 @@ const AdminDashboard = ({ user }) => {
   };
 
   const fetchBranches = async () => {
+    setLoadingBranches(true);
     const result = await branchService.getAllBranches();
     if (result.success) {
       setBranches(result.branches);
     }
+    setLoadingBranches(false);
   };
 
   const fetchRoomTypes = async () => {
@@ -854,6 +877,229 @@ const AdminDashboard = ({ user }) => {
     setSelectedRoomType(null);
   };
 
+  // Branch management handlers
+  const handleBranchPhotoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      processBranchImageFile(file);
+    }
+  };
+
+  const processBranchImageFile = (file) => {
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setBranchFormErrors(prev => ({
+        ...prev,
+        photo: 'Please upload an image file'
+      }));
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setBranchFormErrors(prev => ({
+        ...prev,
+        photo: 'Image size must be less than 5MB'
+      }));
+      return;
+    }
+
+    // Clear any previous photo errors
+    setBranchFormErrors(prev => ({
+      ...prev,
+      photo: ''
+    }));
+
+    // Convert to base64
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result;
+      setBranchPhotoPreview(base64String);
+      setBranchFormData(prev => ({
+        ...prev,
+        photo: base64String
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleBranchDragOver = (e) => {
+    e.preventDefault();
+    setBranchIsDragging(true);
+  };
+
+  const handleBranchDragLeave = (e) => {
+    e.preventDefault();
+    setBranchIsDragging(false);
+  };
+
+  const handleBranchDrop = (e) => {
+    e.preventDefault();
+    setBranchIsDragging(false);
+    
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      processBranchImageFile(file);
+    }
+  };
+
+  const handleRemoveBranchPhoto = () => {
+    setBranchPhotoPreview(null);
+    setBranchFormData(prev => ({
+      ...prev,
+      photo: ''
+    }));
+  };
+
+  const handleAddBranchClick = () => {
+    setShowAddBranchModal(true);
+    setBranchFormData({
+      branch_name: '',
+      address: '',
+      email: '',
+      phone: '',
+      photo: ''
+    });
+    setBranchPhotoPreview(null);
+    setBranchFormErrors({});
+    setBranchSubmitMessage({ type: '', text: '' });
+  };
+
+  const validateBranchForm = () => {
+    const errors = {};
+    
+    if (!branchFormData.branch_name?.trim()) {
+      errors.branch_name = 'Branch name is required';
+    }
+    
+    if (!branchFormData.address?.trim()) {
+      errors.address = 'Address is required';
+    }
+    
+    if (!branchFormData.email?.trim()) {
+      errors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(branchFormData.email)) {
+      errors.email = 'Invalid email format';
+    }
+    
+    if (!branchFormData.phone?.trim()) {
+      errors.phone = 'Phone is required';
+    } else if (!/^\+?[\d\s-()]+$/.test(branchFormData.phone)) {
+      errors.phone = 'Invalid phone format';
+    }
+    
+    setBranchFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmitBranch = async (e) => {
+    e.preventDefault();
+    
+    if (!validateBranchForm()) {
+      return;
+    }
+
+    setLoadingBranches(true);
+    setBranchSubmitMessage({ type: '', text: '' });
+    
+    const result = await branchService.createBranch(branchFormData);
+    
+    if (result.success) {
+      setBranchSubmitMessage({ type: 'success', text: 'Branch created successfully!' });
+      setTimeout(() => {
+        setShowAddBranchModal(false);
+        fetchBranches();
+        fetchDashboardStats();
+      }, 1500);
+    } else {
+      setBranchSubmitMessage({ type: 'error', text: result.message || 'Failed to create branch' });
+    }
+    
+    setLoadingBranches(false);
+  };
+
+  const handleEditBranchClick = (branch) => {
+    setSelectedBranch(branch);
+    setBranchFormData({
+      branch_name: branch.branch_name || '',
+      address: branch.address || '',
+      email: branch.email || '',
+      phone: branch.phone || '',
+      photo: branch.photo || ''
+    });
+    
+    // Set photo preview if photo exists
+    if (branch.photo) {
+      setBranchPhotoPreview(branch.photo);
+    } else {
+      setBranchPhotoPreview(null);
+    }
+    
+    setBranchFormErrors({});
+    setBranchSubmitMessage({ type: '', text: '' });
+    setShowEditBranchModal(true);
+  };
+
+  const handleSubmitEditBranch = async (e) => {
+    e.preventDefault();
+    
+    if (!validateBranchForm()) {
+      return;
+    }
+
+    if (!selectedBranch) return;
+
+    setLoadingBranches(true);
+    setBranchSubmitMessage({ type: '', text: '' });
+    
+    const result = await branchService.updateBranch(selectedBranch.branch_id, branchFormData);
+    
+    if (result.success) {
+      setBranchSubmitMessage({ type: 'success', text: 'Branch updated successfully!' });
+      setTimeout(() => {
+        setShowEditBranchModal(false);
+        setSelectedBranch(null);
+        fetchBranches();
+        fetchDashboardStats();
+      }, 1500);
+    } else {
+      setBranchSubmitMessage({ type: 'error', text: result.message || 'Failed to update branch' });
+    }
+    
+    setLoadingBranches(false);
+  };
+
+  const handleDeleteBranchClick = (branch) => {
+    setSelectedBranch(branch);
+    setShowDeleteBranchConfirmModal(true);
+  };
+
+  const handleConfirmDeleteBranch = async () => {
+    if (!selectedBranch) return;
+
+    setLoadingBranches(true);
+    
+    const result = await branchService.deleteBranch(selectedBranch.branch_id);
+    
+    if (result.success) {
+      setShowDeleteBranchConfirmModal(false);
+      setSelectedBranch(null);
+      setTimeout(() => {
+        fetchBranches();
+        fetchDashboardStats();
+      }, 500);
+    } else {
+      setBranchSubmitMessage({ type: 'error', text: result.message || 'Failed to delete branch' });
+    }
+    
+    setLoadingBranches(false);
+  };
+
+  const handleCancelDeleteBranch = () => {
+    setShowDeleteBranchConfirmModal(false);
+    setSelectedBranch(null);
+  };
+
   const getRoleBadgeColor = (role) => {
     switch(role) {
       case 'ADMIN': return 'bg-purple-100 text-purple-800';
@@ -1108,48 +1354,103 @@ const AdminDashboard = ({ user }) => {
             {/* Branches Tab */}
             {activeTab === 'branches' && (
               <div>
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Branch Performance</h3>
-                  <button className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Branch
-                  </button>
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Branch Management</h3>
+                  <div className="flex items-center gap-4 w-full md:w-auto">
+                    <div className="relative flex-1 md:flex-initial">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="text"
+                        placeholder="Search branches..."
+                        value={branchSearchQuery}
+                        onChange={(e) => setBranchSearchQuery(e.target.value)}
+                        className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full"
+                      />
+                    </div>
+                    <button 
+                      onClick={handleAddBranchClick}
+                      className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Branch
+                    </button>
+                  </div>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Branch</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rooms</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Bookings</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Revenue</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {stats?.branchWiseStats?.map((branch) => (
-                        <tr key={branch.branch_id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{branch.branch_name}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{branch.location}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{branch.total_rooms || 0}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{branch.total_bookings || 0}</td>
-                          <td className="px-4 py-3 text-sm font-medium text-green-600">
-                            ${Number(branch.revenue || 0).toLocaleString()}
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                            <button className="text-blue-600 hover:text-blue-800 mr-3">
-                              <Edit className="w-4 h-4 inline" />
-                            </button>
-                            <button className="text-red-600 hover:text-red-800">
-                              <Trash2 className="w-4 h-4 inline" />
-                            </button>
-                          </td>
+
+                {loadingBranches ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto bg-white rounded-lg shadow">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Photo</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Branch Name</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Address</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {branches
+                          .filter(branch => 
+                            branch.branch_name?.toLowerCase().includes(branchSearchQuery.toLowerCase()) ||
+                            branch.address?.toLowerCase().includes(branchSearchQuery.toLowerCase()) ||
+                            branch.email?.toLowerCase().includes(branchSearchQuery.toLowerCase())
+                          )
+                          .map((branch) => (
+                            <tr key={branch.branch_id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3">
+                                {branch.photo ? (
+                                  <img 
+                                    src={branch.photo} 
+                                    alt={branch.branch_name}
+                                    className="w-16 h-16 object-cover rounded-lg"
+                                  />
+                                ) : (
+                                  <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center">
+                                    <Building2 className="w-8 h-8 text-gray-400" />
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-sm font-medium text-gray-900">{branch.branch_name}</td>
+                              <td className="px-4 py-3 text-sm text-gray-600">{branch.address}</td>
+                              <td className="px-4 py-3 text-sm text-gray-600">{branch.email}</td>
+                              <td className="px-4 py-3 text-sm text-gray-600">{branch.phone}</td>
+                              <td className="px-4 py-3 text-sm">
+                                <button 
+                                  onClick={() => handleEditBranchClick(branch)}
+                                  className="text-blue-600 hover:text-blue-800 mr-3"
+                                  title="Edit Branch"
+                                >
+                                  <Edit className="w-4 h-4 inline" />
+                                </button>
+                                <button 
+                                  onClick={() => handleDeleteBranchClick(branch)}
+                                  className="text-red-600 hover:text-red-800"
+                                  title="Delete Branch"
+                                >
+                                  <Trash2 className="w-4 h-4 inline" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                    {branches.filter(branch => 
+                      branch.branch_name?.toLowerCase().includes(branchSearchQuery.toLowerCase()) ||
+                      branch.address?.toLowerCase().includes(branchSearchQuery.toLowerCase()) ||
+                      branch.email?.toLowerCase().includes(branchSearchQuery.toLowerCase())
+                    ).length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        No branches found matching your search.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -3280,6 +3581,465 @@ const AdminDashboard = ({ user }) => {
                     className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 disabled:cursor-not-allowed flex items-center justify-center"
                   >
                     {loadingRoomTypes ? (
+                      <>
+                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Branch Modal */}
+        {showAddBranchModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full my-8">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">Add New Branch</h2>
+                  <button
+                    onClick={() => setShowAddBranchModal(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {branchSubmitMessage.text && (
+                  <div className={`mb-4 p-3 rounded-lg ${
+                    branchSubmitMessage.type === 'success' 
+                      ? 'bg-green-100 text-green-800 border border-green-200' 
+                      : 'bg-red-100 text-red-800 border border-red-200'
+                  } text-sm`}>
+                    {branchSubmitMessage.text}
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmitBranch} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Branch Name */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Branch Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="branch_name"
+                        value={branchFormData.branch_name}
+                        onChange={(e) => setBranchFormData({ ...branchFormData, branch_name: e.target.value })}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          branchFormErrors.branch_name ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="e.g., Downtown Branch, Airport Branch"
+                      />
+                      {branchFormErrors.branch_name && <p className="text-red-500 text-xs mt-1">{branchFormErrors.branch_name}</p>}
+                    </div>
+
+                    {/* Address */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Address <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="address"
+                        value={branchFormData.address}
+                        onChange={(e) => setBranchFormData({ ...branchFormData, address: e.target.value })}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          branchFormErrors.address ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="Full address"
+                      />
+                      {branchFormErrors.address && <p className="text-red-500 text-xs mt-1">{branchFormErrors.address}</p>}
+                    </div>
+
+                    {/* Email */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Email <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="email"
+                        name="email"
+                        value={branchFormData.email}
+                        onChange={(e) => setBranchFormData({ ...branchFormData, email: e.target.value })}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          branchFormErrors.email ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="branch@hotel.com"
+                      />
+                      {branchFormErrors.email && <p className="text-red-500 text-xs mt-1">{branchFormErrors.email}</p>}
+                    </div>
+
+                    {/* Phone */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Phone <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        name="phone"
+                        value={branchFormData.phone}
+                        onChange={(e) => setBranchFormData({ ...branchFormData, phone: e.target.value })}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          branchFormErrors.phone ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="+1 234 567 8900"
+                      />
+                      {branchFormErrors.phone && <p className="text-red-500 text-xs mt-1">{branchFormErrors.phone}</p>}
+                    </div>
+
+                    {/* Photo Upload */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Branch Photo
+                      </label>
+                      
+                      {!branchPhotoPreview ? (
+                        <div
+                          onDragOver={handleBranchDragOver}
+                          onDragLeave={handleBranchDragLeave}
+                          onDrop={handleBranchDrop}
+                          className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                            branchIsDragging 
+                              ? 'border-blue-500 bg-blue-50' 
+                              : 'border-gray-300 hover:border-gray-400'
+                          }`}
+                        >
+                          <input
+                            type="file"
+                            id="branchPhotoUpload"
+                            accept="image/*"
+                            onChange={handleBranchPhotoChange}
+                            className="hidden"
+                          />
+                          <label htmlFor="branchPhotoUpload" className="cursor-pointer">
+                            <div className="flex flex-col items-center space-y-2">
+                              <Upload className="w-12 h-12 text-gray-400" />
+                              <p className="text-gray-600 font-medium">
+                                Drag and drop an image here, or click to select
+                              </p>
+                              <p className="text-gray-400 text-sm">
+                                Supports: JPG, PNG, GIF (max 5MB)
+                              </p>
+                            </div>
+                          </label>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <img
+                            src={branchPhotoPreview}
+                            alt="Branch preview"
+                            className="w-full h-64 object-cover rounded-lg"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleRemoveBranchPhoto}
+                            className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
+                      )}
+                      
+                      {branchFormErrors.photo && (
+                        <p className="text-red-500 text-xs mt-1">{branchFormErrors.photo}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Form Actions */}
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddBranchModal(false)}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                      disabled={loadingBranches}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loadingBranches}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center"
+                    >
+                      {loadingBranches ? (
+                        <>
+                          <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                          Creating...
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create Branch
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Branch Modal */}
+        {showEditBranchModal && selectedBranch && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full my-8">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">Edit Branch</h2>
+                  <button
+                    onClick={() => {
+                      setShowEditBranchModal(false);
+                      setSelectedBranch(null);
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {branchSubmitMessage.text && (
+                  <div className={`mb-4 p-3 rounded-lg ${
+                    branchSubmitMessage.type === 'success' 
+                      ? 'bg-green-100 text-green-800 border border-green-200' 
+                      : 'bg-red-100 text-red-800 border border-red-200'
+                  } text-sm`}>
+                    {branchSubmitMessage.text}
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmitEditBranch} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Branch Name */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Branch Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="branch_name"
+                        value={branchFormData.branch_name}
+                        onChange={(e) => setBranchFormData({ ...branchFormData, branch_name: e.target.value })}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          branchFormErrors.branch_name ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="e.g., Downtown Branch, Airport Branch"
+                      />
+                      {branchFormErrors.branch_name && <p className="text-red-500 text-xs mt-1">{branchFormErrors.branch_name}</p>}
+                    </div>
+
+                    {/* Address */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Address <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="address"
+                        value={branchFormData.address}
+                        onChange={(e) => setBranchFormData({ ...branchFormData, address: e.target.value })}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          branchFormErrors.address ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="Full address"
+                      />
+                      {branchFormErrors.address && <p className="text-red-500 text-xs mt-1">{branchFormErrors.address}</p>}
+                    </div>
+
+                    {/* Email */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Email <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="email"
+                        name="email"
+                        value={branchFormData.email}
+                        onChange={(e) => setBranchFormData({ ...branchFormData, email: e.target.value })}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          branchFormErrors.email ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="branch@hotel.com"
+                      />
+                      {branchFormErrors.email && <p className="text-red-500 text-xs mt-1">{branchFormErrors.email}</p>}
+                    </div>
+
+                    {/* Phone */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Phone <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        name="phone"
+                        value={branchFormData.phone}
+                        onChange={(e) => setBranchFormData({ ...branchFormData, phone: e.target.value })}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          branchFormErrors.phone ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="+1 234 567 8900"
+                      />
+                      {branchFormErrors.phone && <p className="text-red-500 text-xs mt-1">{branchFormErrors.phone}</p>}
+                    </div>
+
+                    {/* Photo Upload */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Branch Photo
+                      </label>
+                      
+                      {!branchPhotoPreview ? (
+                        <div
+                          onDragOver={handleBranchDragOver}
+                          onDragLeave={handleBranchDragLeave}
+                          onDrop={handleBranchDrop}
+                          className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                            branchIsDragging 
+                              ? 'border-blue-500 bg-blue-50' 
+                              : 'border-gray-300 hover:border-gray-400'
+                          }`}
+                        >
+                          <input
+                            type="file"
+                            id="branchPhotoUploadEdit"
+                            accept="image/*"
+                            onChange={handleBranchPhotoChange}
+                            className="hidden"
+                          />
+                          <label htmlFor="branchPhotoUploadEdit" className="cursor-pointer">
+                            <div className="flex flex-col items-center space-y-2">
+                              <Upload className="w-12 h-12 text-gray-400" />
+                              <p className="text-gray-600 font-medium">
+                                Drag and drop an image here, or click to select
+                              </p>
+                              <p className="text-gray-400 text-sm">
+                                Supports: JPG, PNG, GIF (max 5MB)
+                              </p>
+                            </div>
+                          </label>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <img
+                            src={branchPhotoPreview}
+                            alt="Branch preview"
+                            className="w-full h-64 object-cover rounded-lg"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleRemoveBranchPhoto}
+                            className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
+                      )}
+                      
+                      {branchFormErrors.photo && (
+                        <p className="text-red-500 text-xs mt-1">{branchFormErrors.photo}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Form Actions */}
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowEditBranchModal(false);
+                        setSelectedBranch(null);
+                      }}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                      disabled={loadingBranches}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loadingBranches}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center"
+                    >
+                      {loadingBranches ? (
+                        <>
+                          <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <Edit className="w-4 h-4 mr-2" />
+                          Update Branch
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Branch Confirmation Modal */}
+        {showDeleteBranchConfirmModal && selectedBranch && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+              <div className="p-6">
+                <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-red-100 rounded-full">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                
+                <h2 className="text-xl font-bold text-gray-900 text-center mb-2">
+                  Delete Branch
+                </h2>
+                
+                <p className="text-gray-600 text-center mb-4">
+                  Are you sure you want to delete this branch? This action cannot be undone.
+                </p>
+
+                <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-600">Branch:</span>
+                    <span className="text-sm font-medium text-gray-900">{selectedBranch.branch_name}</span>
+                  </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-600">Address:</span>
+                    <span className="text-sm font-medium text-gray-900">{selectedBranch.address}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Contact:</span>
+                    <span className="text-sm font-medium text-gray-900">{selectedBranch.phone}</span>
+                  </div>
+                </div>
+
+                {branchSubmitMessage.text && branchSubmitMessage.type === 'error' && (
+                  <div className="mb-4 p-3 rounded-lg bg-red-100 text-red-800 border border-red-200 text-sm">
+                    {branchSubmitMessage.text}
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleCancelDeleteBranch}
+                    disabled={loadingBranches}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleConfirmDeleteBranch}
+                    disabled={loadingBranches}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    {loadingBranches ? (
                       <>
                         <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
                         Deleting...

@@ -11,6 +11,7 @@ interface CreateBranchRequest {
   email?: string;
   phone?: string;
   manager_id?: string;
+  photo?: string; // Base64 encoded image string
 }
 
 // Interface for branch update request
@@ -20,6 +21,7 @@ interface UpdateBranchRequest {
   email?: string;
   phone?: string;
   manager_id?: string;
+  photo?: string; // Base64 encoded image string
 }
 
 // Interface for database branch row
@@ -30,6 +32,7 @@ interface DatabaseBranchRow extends RowDataPacket {
   email?: string;
   phone?: string;
   manager_id?: string;
+  photo?: Buffer; // BLOB data from database
   created_at: Date;
   updated_at: Date;
   manager_name?: string;
@@ -83,7 +86,8 @@ export class BranchController {
         address,
         email,
         phone,
-        manager_id
+        manager_id,
+        photo
       } = req.body as CreateBranchRequest;
 
       // Validate required fields
@@ -93,6 +97,22 @@ export class BranchController {
           message: 'Missing required fields: branch_name, address'
         } as ApiResponse);
         return;
+      }
+
+      // Convert Base64 photo to Buffer if provided
+      let photoBuffer: Buffer | null = null;
+      if (photo && photo.trim() !== '') {
+        try {
+          // Remove data:image/...;base64, prefix if present
+          const base64Data = photo.replace(/^data:image\/\w+;base64,/, '');
+          photoBuffer = Buffer.from(base64Data, 'base64');
+        } catch (error) {
+          res.status(400).json({
+            success: false,
+            message: 'Invalid photo format'
+          } as ApiResponse);
+          return;
+        }
       }
 
       // Validate manager if provided
@@ -127,9 +147,9 @@ export class BranchController {
         // Create branch
         const branchId = uuidv4();
         await connection.execute(
-          `INSERT INTO hotel_branches (branch_id, branch_name, address, email, phone, manager_id)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [branchId, branch_name, address, email || null, phone || null, manager_id || null]
+          `INSERT INTO hotel_branches (branch_id, branch_name, address, email, phone, manager_id, photo)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [branchId, branch_name, address, email || null, phone || null, manager_id || null, photoBuffer]
         );
 
         // If manager is assigned, update staff table branch_id
@@ -143,7 +163,7 @@ export class BranchController {
         // Fetch created branch with manager details
         const [branchRows] = await connection.execute<DatabaseBranchRow[]>(
           `SELECT hb.branch_id, hb.branch_name, hb.address, hb.email, hb.phone, 
-                  hb.manager_id, hb.created_at, hb.updated_at,
+                  hb.manager_id, hb.photo, hb.created_at, hb.updated_at,
                   u.name as manager_name, u.username as manager_username
            FROM hotel_branches hb
            LEFT JOIN users u ON hb.manager_id = u.user_id
@@ -157,6 +177,11 @@ export class BranchController {
           throw new Error('Failed to retrieve created branch');
         }
 
+        // Convert photo Buffer to Base64 for response
+        const photoBase64 = newBranch.photo 
+          ? `data:image/jpeg;base64,${newBranch.photo.toString('base64')}`
+          : null;
+
         res.status(201).json({
           success: true,
           message: 'Branch created successfully',
@@ -169,6 +194,7 @@ export class BranchController {
             manager_id: newBranch.manager_id,
             manager_name: newBranch.manager_name,
             manager_username: newBranch.manager_username,
+            photo: photoBase64,
             created_at: newBranch.created_at,
             updated_at: newBranch.updated_at
           }
@@ -195,7 +221,7 @@ export class BranchController {
       try {
         const [rows] = await connection.execute<DatabaseBranchRow[]>(
           `SELECT hb.branch_id, hb.branch_name, hb.address, hb.email, hb.phone, 
-                  hb.manager_id, hb.created_at, hb.updated_at,
+                  hb.manager_id, hb.photo, hb.created_at, hb.updated_at,
                   u.name as manager_name, u.username as manager_username
            FROM hotel_branches hb
            LEFT JOIN users u ON hb.manager_id = u.user_id
@@ -211,6 +237,9 @@ export class BranchController {
           manager_id: branch.manager_id,
           manager_name: branch.manager_name,
           manager_username: branch.manager_username,
+          photo: branch.photo 
+            ? `data:image/jpeg;base64,${branch.photo.toString('base64')}`
+            : null,
           created_at: branch.created_at,
           updated_at: branch.updated_at
         }));
@@ -252,7 +281,7 @@ export class BranchController {
       try {
         const [rows] = await connection.execute<DatabaseBranchRow[]>(
           `SELECT hb.branch_id, hb.branch_name, hb.address, hb.email, hb.phone, 
-                  hb.manager_id, hb.created_at, hb.updated_at,
+                  hb.manager_id, hb.photo, hb.created_at, hb.updated_at,
                   u.name as manager_name, u.username as manager_username
            FROM hotel_branches hb
            LEFT JOIN users u ON hb.manager_id = u.user_id
@@ -282,6 +311,9 @@ export class BranchController {
             manager_id: branch.manager_id,
             manager_name: branch.manager_name,
             manager_username: branch.manager_username,
+            photo: branch.photo 
+              ? `data:image/jpeg;base64,${branch.photo.toString('base64')}`
+              : null,
             created_at: branch.created_at,
             updated_at: branch.updated_at
           }
@@ -314,7 +346,8 @@ export class BranchController {
         address,
         email,
         phone,
-        manager_id
+        manager_id,
+        photo
       } = req.body as UpdateBranchRequest;
 
       if (!branchId) {
@@ -323,6 +356,24 @@ export class BranchController {
           message: 'Branch ID is required'
         } as ApiResponse);
         return;
+      }
+
+      // Convert Base64 photo to Buffer if provided
+      let photoBuffer: Buffer | null = null;
+      if (photo !== undefined) {
+        if (photo && photo.trim() !== '') {
+          try {
+            // Remove data:image/...;base64, prefix if present
+            const base64Data = photo.replace(/^data:image\/\w+;base64,/, '');
+            photoBuffer = Buffer.from(base64Data, 'base64');
+          } catch (error) {
+            res.status(400).json({
+              success: false,
+              message: 'Invalid photo format'
+            } as ApiResponse);
+            return;
+          }
+        }
       }
 
       // Validate manager if provided
@@ -380,6 +431,10 @@ export class BranchController {
           updateFields.push('manager_id = ?');
           updateValues.push(manager_id);
         }
+        if (photo !== undefined) {
+          updateFields.push('photo = ?');
+          updateValues.push(photoBuffer);
+        }
 
         if (updateFields.length === 0) {
           res.status(400).json({
@@ -421,7 +476,7 @@ export class BranchController {
         // Fetch updated branch with manager details
         const [branchRows] = await connection.execute<DatabaseBranchRow[]>(
           `SELECT hb.branch_id, hb.branch_name, hb.address, hb.email, hb.phone, 
-                  hb.manager_id, hb.created_at, hb.updated_at,
+                  hb.manager_id, hb.photo, hb.created_at, hb.updated_at,
                   u.name as manager_name, u.username as manager_username
            FROM hotel_branches hb
            LEFT JOIN users u ON hb.manager_id = u.user_id
@@ -447,6 +502,9 @@ export class BranchController {
             manager_id: updatedBranch.manager_id,
             manager_name: updatedBranch.manager_name,
             manager_username: updatedBranch.manager_username,
+            photo: updatedBranch.photo 
+              ? `data:image/jpeg;base64,${updatedBranch.photo.toString('base64')}`
+              : null,
             created_at: updatedBranch.created_at,
             updated_at: updatedBranch.updated_at
           }
