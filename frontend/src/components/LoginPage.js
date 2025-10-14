@@ -20,6 +20,8 @@ const LoginPage = ({ onLogin, setCurrentPage }) => {
     name: '',
     email: '',
     phone: '',
+    username: '',
+    nic_no: '',
     password: '',
     confirmPassword: '',
     agreeToTerms: false
@@ -42,8 +44,11 @@ const LoginPage = ({ onLogin, setCurrentPage }) => {
     if (!registerForm.email.trim()) errors.email = 'Email is required';
     else if (!/\S+@\S+\.\S+/.test(registerForm.email)) errors.email = 'Email is invalid';
     if (!registerForm.phone.trim()) errors.phone = 'Phone number is required';
+    if (!registerForm.username.trim()) errors.username = 'Username is required';
+    else if (registerForm.username.length < 3) errors.username = 'Username must be at least 3 characters';
+    if (!registerForm.nic_no.trim()) errors.nic_no = 'NIC/Passport number is required';
     if (!registerForm.password) errors.password = 'Password is required';
-    else if (registerForm.password.length < 6) errors.password = 'Password must be at least 6 characters';
+    else if (registerForm.password.length < 8) errors.password = 'Password must be at least 8 characters';
     if (!registerForm.confirmPassword) errors.confirmPassword = 'Please confirm your password';
     else if (registerForm.password !== registerForm.confirmPassword) errors.confirmPassword = 'Passwords do not match';
     if (!registerForm.agreeToTerms) errors.agreeToTerms = 'You must agree to the terms and conditions';
@@ -93,9 +98,10 @@ const LoginPage = ({ onLogin, setCurrentPage }) => {
         name: registerForm.name,
         email: registerForm.email,
         phone: registerForm.phone,
+        username: registerForm.username,
+        nic_no: registerForm.nic_no,
         password: registerForm.password,
         confirmPassword: registerForm.confirmPassword,
-        nic_no: '', // Optional field, can be added to form if needed
       });
       
       if (result.success) {
@@ -110,6 +116,8 @@ const LoginPage = ({ onLogin, setCurrentPage }) => {
             name: '',
             email: '',
             phone: '',
+            username: '',
+            nic_no: '',
             password: '',
             confirmPassword: '',
             agreeToTerms: false
@@ -371,6 +379,25 @@ const LoginPage = ({ onLogin, setCurrentPage }) => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  value={registerForm.username}
+                  onChange={(e) => setRegisterForm({...registerForm, username: e.target.value})}
+                  className={`form-input ${formErrors.username ? 'border-red-500' : ''}`}
+                  placeholder="Choose a username"
+                />
+                {formErrors.username && (
+                  <p className="text-red-500 text-sm mt-1 flex items-center">
+                    <AlertCircle className="w-4 h-4 mr-1" />
+                    {formErrors.username}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Phone Number
                 </label>
                 <input
@@ -384,6 +411,25 @@ const LoginPage = ({ onLogin, setCurrentPage }) => {
                   <p className="text-red-500 text-sm mt-1 flex items-center">
                     <AlertCircle className="w-4 h-4 mr-1" />
                     {formErrors.phone}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  NIC / Passport Number
+                </label>
+                <input
+                  type="text"
+                  value={registerForm.nic_no}
+                  onChange={(e) => setRegisterForm({...registerForm, nic_no: e.target.value})}
+                  className={`form-input ${formErrors.nic_no ? 'border-red-500' : ''}`}
+                  placeholder="Enter your NIC or Passport number"
+                />
+                {formErrors.nic_no && (
+                  <p className="text-red-500 text-sm mt-1 flex items-center">
+                    <AlertCircle className="w-4 h-4 mr-1" />
+                    {formErrors.nic_no}
                   </p>
                 )}
               </div>

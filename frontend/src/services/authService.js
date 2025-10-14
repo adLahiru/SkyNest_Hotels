@@ -55,24 +55,21 @@ const authService = {
    */
   register: async (userData) => {
     try {
-      // Generate username from email if not provided
-      const username = userData.username || userData.email.split('@')[0];
-      
       const response = await apiClient.post('/users/register', {
         name: userData.name,
         email: userData.email,
         phone: userData.phone || '',
+        username: userData.username,
+        nic_no: userData.nic_no || '',
         password: userData.password,
         confirmPassword: userData.confirmPassword || userData.password,
-        username: username,
-        nic_no: userData.nic_no || '',
       });
 
       if (response.data.success) {
         return {
           success: true,
           message: response.data.message || 'Registration successful',
-          user: response.data.data?.user,
+          user: response.data.data,
         };
       }
 
