@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "NODE_ENV=development nodemon",
+    "dev": "cross-env NODE_ENV=development nodemon",
     "test": "NODE_ENV=test nodemon",
     "prod": "NODE_ENV=production nodemon",
     "start": "NODE_ENV=production node dist/index.js",
@@ -35,6 +35,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.5.2",
     "@types/uuid": "^11.0.0",
+    "cross-env": "^10.1.0",
     "db-migrate": "^0.11.14",
     "db-migrate-mysql": "^3.0.0",
     "dotenv-cli": "^10.0.0",
