@@ -5,6 +5,7 @@ CREATE TABLE `room_types` (
   `daily_rate` DECIMAL(10,2) NOT NULL,
   `amenities` TEXT,
   `description` TEXT,
+  `photo` LONGBLOB,
   `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`room_type_id`)

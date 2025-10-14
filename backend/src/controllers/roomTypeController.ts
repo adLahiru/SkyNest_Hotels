@@ -11,6 +11,7 @@ interface CreateRoomTypeRequest {
   daily_rate: number;
   amenities?: string;
   description?: string;
+  photo?: string; // Base64 encoded image string
 }
 
 // Interface for room type update request
@@ -20,6 +21,7 @@ interface UpdateRoomTypeRequest {
   daily_rate?: number;
   amenities?: string;
   description?: string;
+  photo?: string; // Base64 encoded image string
 }
 
 // Interface for database room type row
@@ -30,6 +32,7 @@ interface DatabaseRoomTypeRow extends RowDataPacket {
   daily_rate: number;
   amenities?: string;
   description?: string;
+  photo?: Buffer; // BLOB data from database
   created_at: Date;
   updated_at: Date;
   room_count?: number;
@@ -61,7 +64,8 @@ export class RoomTypeController {
         capacity,
         daily_rate,
         amenities,
-        description
+        description,
+        photo
       } = req.body as CreateRoomTypeRequest;
 
       // Validate required fields
@@ -91,6 +95,22 @@ export class RoomTypeController {
         return;
       }
 
+      // Convert Base64 photo to Buffer if provided
+      let photoBuffer: Buffer | null = null;
+      if (photo && photo.trim() !== '') {
+        try {
+          // Remove data:image/...;base64, prefix if present
+          const base64Data = photo.replace(/^data:image\/\w+;base64,/, '');
+          photoBuffer = Buffer.from(base64Data, 'base64');
+        } catch (error) {
+          res.status(400).json({
+            success: false,
+            message: 'Invalid photo format'
+          } as ApiResponse);
+          return;
+        }
+      }
+
       const connection = await db.getConnection();
 
       try {
@@ -111,14 +131,14 @@ export class RoomTypeController {
         // Create room type
         const roomTypeId = uuidv4();
         await connection.execute(
-          `INSERT INTO room_types (room_type_id, type, capacity, daily_rate, amenities, description)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [roomTypeId, type, capacity, daily_rate, amenities || null, description || null]
+          `INSERT INTO room_types (room_type_id, type, capacity, daily_rate, amenities, description, photo)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [roomTypeId, type, capacity, daily_rate, amenities || null, description || null, photoBuffer]
         );
 
         // Fetch created room type
         const [roomTypeRows] = await connection.execute<DatabaseRoomTypeRow[]>(
-          `SELECT room_type_id, type, capacity, daily_rate, amenities, description, created_at, updated_at
+          `SELECT room_type_id, type, capacity, daily_rate, amenities, description, photo, created_at, updated_at
            FROM room_types
            WHERE room_type_id = ?`,
           [roomTypeId]
@@ -130,6 +150,11 @@ export class RoomTypeController {
           throw new Error('Failed to retrieve created room type');
         }
 
+        // Convert photo Buffer to Base64 for response
+        const photoBase64 = newRoomType.photo 
+          ? `data:image/jpeg;base64,${newRoomType.photo.toString('base64')}`
+          : null;
+
         res.status(201).json({
           success: true,
           message: 'Room type created successfully',
@@ -140,6 +165,7 @@ export class RoomTypeController {
             daily_rate: parseFloat(newRoomType.daily_rate.toString()),
             amenities: newRoomType.amenities,
             description: newRoomType.description,
+            photo: photoBase64,
             created_at: newRoomType.created_at,
             updated_at: newRoomType.updated_at
           }
@@ -166,7 +192,7 @@ export class RoomTypeController {
       try {
         const [rows] = await connection.execute<DatabaseRoomTypeRow[]>(
           `SELECT rt.room_type_id, rt.type, rt.capacity, rt.daily_rate, rt.amenities, 
-                  rt.description, rt.created_at, rt.updated_at,
+                  rt.description, rt.photo, rt.created_at, rt.updated_at,
                   COUNT(r.room_id) as room_count
            FROM room_types rt
            LEFT JOIN rooms r ON rt.room_type_id = r.room_type_id
@@ -181,6 +207,9 @@ export class RoomTypeController {
           daily_rate: parseFloat(roomType.daily_rate.toString()),
           amenities: roomType.amenities,
           description: roomType.description,
+          photo: roomType.photo 
+            ? `data:image/jpeg;base64,${roomType.photo.toString('base64')}`
+            : null,
           room_count: roomType.room_count || 0,
           created_at: roomType.created_at,
           updated_at: roomType.updated_at
@@ -223,7 +252,7 @@ export class RoomTypeController {
       try {
         const [rows] = await connection.execute<DatabaseRoomTypeRow[]>(
           `SELECT rt.room_type_id, rt.type, rt.capacity, rt.daily_rate, rt.amenities, 
-                  rt.description, rt.created_at, rt.updated_at,
+                  rt.description, rt.photo, rt.created_at, rt.updated_at,
                   COUNT(r.room_id) as room_count
            FROM room_types rt
            LEFT JOIN rooms r ON rt.room_type_id = r.room_type_id
@@ -252,6 +281,9 @@ export class RoomTypeController {
             daily_rate: parseFloat(roomType.daily_rate.toString()),
             amenities: roomType.amenities,
             description: roomType.description,
+            photo: roomType.photo 
+              ? `data:image/jpeg;base64,${roomType.photo.toString('base64')}`
+              : null,
             room_count: roomType.room_count || 0,
             created_at: roomType.created_at,
             updated_at: roomType.updated_at
@@ -285,7 +317,8 @@ export class RoomTypeController {
         capacity,
         daily_rate,
         amenities,
-        description
+        description,
+        photo
       } = req.body as UpdateRoomTypeRequest;
 
       if (!roomTypeId) {
@@ -312,6 +345,24 @@ export class RoomTypeController {
           message: 'Daily rate must be a positive number'
         } as ApiResponse);
         return;
+      }
+
+      // Convert Base64 photo to Buffer if provided
+      let photoBuffer: Buffer | null = null;
+      if (photo !== undefined) {
+        if (photo && photo.trim() !== '') {
+          try {
+            // Remove data:image/...;base64, prefix if present
+            const base64Data = photo.replace(/^data:image\/\w+;base64,/, '');
+            photoBuffer = Buffer.from(base64Data, 'base64');
+          } catch (error) {
+            res.status(400).json({
+              success: false,
+              message: 'Invalid photo format'
+            } as ApiResponse);
+            return;
+          }
+        }
       }
 
       const connection = await db.getConnection();
@@ -369,6 +420,10 @@ export class RoomTypeController {
           updateFields.push('description = ?');
           updateValues.push(description);
         }
+        if (photo !== undefined) {
+          updateFields.push('photo = ?');
+          updateValues.push(photoBuffer);
+        }
 
         if (updateFields.length === 0) {
           res.status(400).json({
@@ -391,7 +446,7 @@ export class RoomTypeController {
         // Fetch updated room type
         const [roomTypeRows] = await connection.execute<DatabaseRoomTypeRow[]>(
           `SELECT rt.room_type_id, rt.type, rt.capacity, rt.daily_rate, rt.amenities, 
-                  rt.description, rt.created_at, rt.updated_at,
+                  rt.description, rt.photo, rt.created_at, rt.updated_at,
                   COUNT(r.room_id) as room_count
            FROM room_types rt
            LEFT JOIN rooms r ON rt.room_type_id = r.room_type_id
@@ -416,6 +471,9 @@ export class RoomTypeController {
             daily_rate: parseFloat(updatedRoomType.daily_rate.toString()),
             amenities: updatedRoomType.amenities,
             description: updatedRoomType.description,
+            photo: updatedRoomType.photo 
+              ? `data:image/jpeg;base64,${updatedRoomType.photo.toString('base64')}`
+              : null,
             room_count: updatedRoomType.room_count || 0,
             created_at: updatedRoomType.created_at,
             updated_at: updatedRoomType.updated_at

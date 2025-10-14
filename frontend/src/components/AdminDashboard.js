@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2, Search, Filter, X, Eye, EyeOff, Home, Bed } from 'lucide-react';
+import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2, Search, Filter, X, Eye, EyeOff, Home, Bed, Upload } from 'lucide-react';
 import dashboardService from '../services/dashboardService';
 import userService from '../services/userService';
 import branchService from '../services/branchService';
@@ -80,10 +80,13 @@ const AdminDashboard = ({ user }) => {
     capacity: '',
     daily_rate: '',
     amenities: '',
-    description: ''
+    description: '',
+    photo: ''
   });
   const [roomTypeFormErrors, setRoomTypeFormErrors] = useState({});
   const [roomTypeSubmitMessage, setRoomTypeSubmitMessage] = useState({ type: '', text: '' });
+  const [isDragging, setIsDragging] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState(null);
 
   useEffect(() => {
     fetchDashboardStats();
@@ -626,6 +629,157 @@ const AdminDashboard = ({ user }) => {
     setMaxPriceFilter('');
   };
 
+  // Photo handling functions
+  const handlePhotoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      processImageFile(file);
+    }
+  };
+
+  const compressImage = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.85) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        const img = new Image();
+        
+        img.onload = () => {
+          // Create canvas
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          
+          // Calculate new dimensions while maintaining aspect ratio
+          if (width > height) {
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          // Draw and compress
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Convert to blob with compression
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                resolve(blob);
+              } else {
+                reject(new Error('Failed to compress image'));
+              }
+            },
+            'image/jpeg',
+            quality
+          );
+        };
+        
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = e.target.result;
+      };
+      
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const processImageFile = async (file) => {
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setRoomTypeFormErrors(prev => ({
+        ...prev,
+        photo: 'Please upload an image file'
+      }));
+      return;
+    }
+
+    // Validate file size (max 10MB for original file)
+    if (file.size > 10 * 1024 * 1024) {
+      setRoomTypeFormErrors(prev => ({
+        ...prev,
+        photo: 'Image size must be less than 10MB'
+      }));
+      return;
+    }
+
+    // Clear any previous photo errors
+    setRoomTypeFormErrors(prev => ({
+      ...prev,
+      photo: ''
+    }));
+
+    try {
+      // Compress image if larger than 500KB
+      let processedFile = file;
+      if (file.size > 500 * 1024) {
+        const compressedBlob = await compressImage(file);
+        processedFile = new File([compressedBlob], file.name, {
+          type: 'image/jpeg',
+          lastModified: Date.now(),
+        });
+        
+        // Show compression info
+        console.log(`Image compressed: ${(file.size / 1024).toFixed(2)}KB → ${(processedFile.size / 1024).toFixed(2)}KB`);
+      }
+
+      // Convert to base64
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result;
+        setPhotoPreview(base64String);
+        setRoomTypeFormData(prev => ({
+          ...prev,
+          photo: base64String
+        }));
+      };
+      reader.readAsDataURL(processedFile);
+    } catch (error) {
+      console.error('Error processing image:', error);
+      setRoomTypeFormErrors(prev => ({
+        ...prev,
+        photo: 'Failed to process image. Please try another file.'
+      }));
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      processImageFile(file);
+    }
+  };
+
+  const handleRemovePhoto = () => {
+    setPhotoPreview(null);
+    setRoomTypeFormData(prev => ({
+      ...prev,
+      photo: ''
+    }));
+  };
+
   const handleAddRoomTypeClick = () => {
     setShowAddRoomTypeModal(true);
     setRoomTypeFormData({
@@ -633,8 +787,10 @@ const AdminDashboard = ({ user }) => {
       capacity: '',
       daily_rate: '',
       amenities: '',
-      description: ''
+      description: '',
+      photo: ''
     });
+    setPhotoPreview(null);
     setRoomTypeFormErrors({});
     setRoomTypeSubmitMessage({ type: '', text: '' });
   };
@@ -705,8 +861,10 @@ const AdminDashboard = ({ user }) => {
       capacity: roomType.capacity.toString(),
       daily_rate: roomType.daily_rate.toString(),
       amenities: roomType.amenities || '',
-      description: roomType.description || ''
+      description: roomType.description || '',
+      photo: roomType.photo || ''
     });
+    setPhotoPreview(roomType.photo || null);
     setRoomTypeFormErrors({});
     setRoomTypeSubmitMessage({ type: '', text: '' });
     setShowEditRoomTypeModal(true);
@@ -1229,6 +1387,7 @@ const AdminDashboard = ({ user }) => {
                         <table className="w-full">
                           <thead className="bg-gray-50 border-b border-gray-200">
                             <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Photo</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Capacity</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Daily Rate</th>
@@ -1240,6 +1399,19 @@ const AdminDashboard = ({ user }) => {
                           <tbody className="bg-white divide-y divide-gray-200">
                             {roomTypes.map((roomType) => (
                               <tr key={roomType.room_type_id} className="hover:bg-gray-50 transition-colors">
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  {roomType.photo ? (
+                                    <img 
+                                      src={roomType.photo} 
+                                      alt={roomType.type}
+                                      className="w-16 h-16 object-cover rounded-lg"
+                                    />
+                                  ) : (
+                                    <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center">
+                                      <Bed className="w-8 h-8 text-gray-400" />
+                                    </div>
+                                  )}
+                                </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="text-sm font-medium text-gray-900">{roomType.type}</div>
                                   {roomType.description && (
@@ -2813,6 +2985,64 @@ const AdminDashboard = ({ user }) => {
                         placeholder="Describe this room type..."
                       />
                     </div>
+
+                    {/* Photo Upload */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Room Type Photo
+                      </label>
+                      
+                      {!photoPreview ? (
+                        <div
+                          onDragOver={handleDragOver}
+                          onDragLeave={handleDragLeave}
+                          onDrop={handleDrop}
+                          className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                            isDragging 
+                              ? 'border-blue-500 bg-blue-50' 
+                              : 'border-gray-300 hover:border-gray-400'
+                          }`}
+                        >
+                          <input
+                            type="file"
+                            id="photoUpload"
+                            accept="image/*"
+                            onChange={handlePhotoChange}
+                            className="hidden"
+                          />
+                          <label htmlFor="photoUpload" className="cursor-pointer">
+                            <div className="flex flex-col items-center space-y-2">
+                              <Upload className="w-12 h-12 text-gray-400" />
+                              <p className="text-gray-600 font-medium">
+                                Drag and drop an image here, or click to select
+                              </p>
+                              <p className="text-gray-400 text-sm">
+                                Supports: JPG, PNG, GIF (max 10MB - auto-compressed)
+                              </p>
+                            </div>
+                          </label>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <img
+                            src={photoPreview}
+                            alt="Room type preview"
+                            className="w-full h-64 object-cover rounded-lg"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleRemovePhoto}
+                            className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
+                      )}
+                      
+                      {roomTypeFormErrors.photo && (
+                        <p className="text-red-500 text-xs mt-1">{roomTypeFormErrors.photo}</p>
+                      )}
+                    </div>
                   </div>
 
                   {/* Form Actions */}
@@ -2965,6 +3195,64 @@ const AdminDashboard = ({ user }) => {
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         placeholder="Describe this room type..."
                       />
+                    </div>
+
+                    {/* Photo Upload */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Room Type Photo
+                      </label>
+                      
+                      {!photoPreview ? (
+                        <div
+                          onDragOver={handleDragOver}
+                          onDragLeave={handleDragLeave}
+                          onDrop={handleDrop}
+                          className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                            isDragging 
+                              ? 'border-blue-500 bg-blue-50' 
+                              : 'border-gray-300 hover:border-gray-400'
+                          }`}
+                        >
+                          <input
+                            type="file"
+                            id="photoUploadEdit"
+                            accept="image/*"
+                            onChange={handlePhotoChange}
+                            className="hidden"
+                          />
+                          <label htmlFor="photoUploadEdit" className="cursor-pointer">
+                            <div className="flex flex-col items-center space-y-2">
+                              <Upload className="w-12 h-12 text-gray-400" />
+                              <p className="text-gray-600 font-medium">
+                                Drag and drop an image here, or click to select
+                              </p>
+                              <p className="text-gray-400 text-sm">
+                                Supports: JPG, PNG, GIF (max 10MB - auto-compressed)
+                              </p>
+                            </div>
+                          </label>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <img
+                            src={photoPreview}
+                            alt="Room type preview"
+                            className="w-full h-64 object-cover rounded-lg"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleRemovePhoto}
+                            className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
+                      )}
+                      
+                      {roomTypeFormErrors.photo && (
+                        <p className="text-red-500 text-xs mt-1">{roomTypeFormErrors.photo}</p>
+                      )}
                     </div>
                   </div>
 
