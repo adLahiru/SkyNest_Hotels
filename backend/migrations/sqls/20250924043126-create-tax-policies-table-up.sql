@@ -1,0 +1,10 @@
+CREATE TABLE `tax_policies` (
+  `tax_id` CHAR(36) NOT NULL DEFAULT (uuid()),
+  `tax_name` VARCHAR(100),
+  `tax_rate` DECIMAL(5,2),
+  `applies_to` VARCHAR(100),
+  `is_active` TINYINT(1) DEFAULT '1',
+  `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`tax_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

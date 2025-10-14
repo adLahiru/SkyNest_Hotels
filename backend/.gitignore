@@ -52,7 +52,7 @@ config/.env.production.local
 # migrations/
 
 # Database dumps and backups
-*.sql
+# *.sql
 *.dump
 backup/
 dumps/
