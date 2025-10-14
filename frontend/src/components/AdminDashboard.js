@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2, Search, Filter, X, Eye, EyeOff } from 'lucide-react';
+import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2, Search, Filter, X, Eye, EyeOff, Home } from 'lucide-react';
 import dashboardService from '../services/dashboardService';
 import userService from '../services/userService';
 import branchService from '../services/branchService';
+import roomService from '../services/roomService';
+import roomTypeService from '../services/roomTypeService';
 
 const AdminDashboard = ({ user }) => {
   const [stats, setStats] = useState(null);
@@ -37,16 +39,44 @@ const AdminDashboard = ({ user }) => {
 
   const USER_ROLES = ['ADMIN', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPING', 'GUEST'];
 
+  // Room management states
+  const [rooms, setRooms] = useState([]);
+  const [roomTypes, setRoomTypes] = useState([]);
+  const [loadingRooms, setLoadingRooms] = useState(false);
+  const [roomSearchQuery, setRoomSearchQuery] = useState('');
+  const [roomStateFilter, setRoomStateFilter] = useState('');
+  const [roomTypeFilter, setRoomTypeFilter] = useState('');
+  const [roomBranchFilter, setRoomBranchFilter] = useState('');
+  const [roomFloorFilter, setRoomFloorFilter] = useState('');
+  const [showAddRoomModal, setShowAddRoomModal] = useState(false);
+  const [showEditRoomModal, setShowEditRoomModal] = useState(false);
+  const [showDeleteRoomConfirmModal, setShowDeleteRoomConfirmModal] = useState(false);
+  const [selectedRoom, setSelectedRoom] = useState(null);
+  const [roomFormData, setRoomFormData] = useState({
+    room_no: '',
+    floor_no: '',
+    room_type_id: '',
+    branch_id: '',
+    state: 'available'
+  });
+  const [roomFormErrors, setRoomFormErrors] = useState({});
+  const [roomSubmitMessage, setRoomSubmitMessage] = useState({ type: '', text: '' });
+
+  const ROOM_STATES = ['available', 'occupied', 'maintenance'];
+
   useEffect(() => {
     fetchDashboardStats();
     fetchBranches();
+    fetchRoomTypes();
   }, []);
 
   useEffect(() => {
     if (activeTab === 'users') {
       fetchUsers();
+    } else if (activeTab === 'rooms') {
+      fetchRooms();
     }
-  }, [activeTab, searchQuery, roleFilter]);
+  }, [activeTab, searchQuery, roleFilter, roomSearchQuery, roomStateFilter, roomTypeFilter, roomBranchFilter, roomFloorFilter]);
 
   const fetchDashboardStats = async () => {
     setLoading(true);
@@ -77,6 +107,39 @@ const AdminDashboard = ({ user }) => {
     if (result.success) {
       setBranches(result.branches);
     }
+  };
+
+  const fetchRoomTypes = async () => {
+    const result = await roomTypeService.getAllRoomTypes();
+    if (result.success) {
+      setRoomTypes(result.roomTypes);
+    }
+  };
+
+  const fetchRooms = async () => {
+    setLoadingRooms(true);
+    const filters = {};
+    if (roomStateFilter) filters.state = roomStateFilter;
+    if (roomTypeFilter) filters.room_type_id = roomTypeFilter;
+    if (roomBranchFilter) filters.branch_id = roomBranchFilter;
+    if (roomFloorFilter) filters.floor_no = roomFloorFilter;
+    
+    const result = await roomService.getAllRooms(filters);
+    if (result.success) {
+      let filteredRooms = result.rooms.rooms || [];
+      
+      // Apply search filter on room number
+      if (roomSearchQuery) {
+        filteredRooms = filteredRooms.filter(room =>
+          room.room_no.toLowerCase().includes(roomSearchQuery.toLowerCase())
+        );
+      }
+      
+      setRooms(filteredRooms);
+    } else {
+      console.error('Failed to fetch rooms:', result.message);
+    }
+    setLoadingRooms(false);
   };
 
   const handleSearchChange = (e) => {
@@ -299,6 +362,189 @@ const AdminDashboard = ({ user }) => {
     setSelectedUser(null);
   };
 
+  // Room Management Functions
+  const handleRoomSearchChange = (e) => {
+    setRoomSearchQuery(e.target.value);
+  };
+
+  const handleRoomStateFilterChange = (e) => {
+    setRoomStateFilter(e.target.value);
+  };
+
+  const handleRoomTypeFilterChange = (e) => {
+    setRoomTypeFilter(e.target.value);
+  };
+
+  const handleRoomBranchFilterChange = (e) => {
+    setRoomBranchFilter(e.target.value);
+  };
+
+  const handleRoomFloorFilterChange = (e) => {
+    setRoomFloorFilter(e.target.value);
+  };
+
+  const clearRoomFilters = () => {
+    setRoomSearchQuery('');
+    setRoomStateFilter('');
+    setRoomTypeFilter('');
+    setRoomBranchFilter('');
+    setRoomFloorFilter('');
+  };
+
+  const handleAddRoomClick = () => {
+    setShowAddRoomModal(true);
+    setRoomFormData({
+      room_no: '',
+      floor_no: '',
+      room_type_id: '',
+      branch_id: '',
+      state: 'available'
+    });
+    setRoomFormErrors({});
+    setRoomSubmitMessage({ type: '', text: '' });
+  };
+
+  const handleRoomFormChange = (e) => {
+    const { name, value } = e.target;
+    setRoomFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    // Clear error for this field
+    if (roomFormErrors[name]) {
+      setRoomFormErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+  };
+
+  const validateRoomForm = () => {
+    const errors = {};
+    
+    if (!roomFormData.room_no.trim()) errors.room_no = 'Room number is required';
+    if (roomFormData.floor_no === '' || roomFormData.floor_no < 0) {
+      errors.floor_no = 'Floor number must be 0 or greater';
+    }
+    if (!roomFormData.room_type_id) errors.room_type_id = 'Room type is required';
+    if (!roomFormData.branch_id) errors.branch_id = 'Branch is required';
+    if (!roomFormData.state) errors.state = 'State is required';
+    
+    setRoomFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmitRoom = async (e) => {
+    e.preventDefault();
+    
+    if (!validateRoomForm()) {
+      return;
+    }
+
+    setLoadingRooms(true);
+    
+    const result = await roomService.createRoom({
+      ...roomFormData,
+      floor_no: parseInt(roomFormData.floor_no)
+    });
+    
+    if (result.success) {
+      setRoomSubmitMessage({ type: 'success', text: result.message || 'Room created successfully!' });
+      setTimeout(() => {
+        setShowAddRoomModal(false);
+        fetchRooms();
+        fetchDashboardStats();
+      }, 1500);
+    } else {
+      setRoomSubmitMessage({ type: 'error', text: result.message || 'Failed to create room' });
+    }
+    
+    setLoadingRooms(false);
+  };
+
+  const handleEditRoomClick = (room) => {
+    setSelectedRoom(room);
+    setRoomFormData({
+      room_no: room.room_no,
+      floor_no: room.floor_no.toString(),
+      room_type_id: room.room_type_id,
+      branch_id: room.branch_id,
+      state: room.state
+    });
+    setRoomFormErrors({});
+    setRoomSubmitMessage({ type: '', text: '' });
+    setShowEditRoomModal(true);
+  };
+
+  const handleSubmitEditRoom = async (e) => {
+    e.preventDefault();
+    
+    if (!validateRoomForm()) {
+      return;
+    }
+
+    setLoadingRooms(true);
+    
+    const result = await roomService.updateRoom(selectedRoom.room_id, {
+      ...roomFormData,
+      floor_no: parseInt(roomFormData.floor_no)
+    });
+    
+    if (result.success) {
+      setRoomSubmitMessage({ type: 'success', text: result.message || 'Room updated successfully!' });
+      setTimeout(() => {
+        setShowEditRoomModal(false);
+        setSelectedRoom(null);
+        fetchRooms();
+        fetchDashboardStats();
+      }, 1500);
+    } else {
+      setRoomSubmitMessage({ type: 'error', text: result.message || 'Failed to update room' });
+    }
+    
+    setLoadingRooms(false);
+  };
+
+  const handleDeleteRoomClick = (room) => {
+    setSelectedRoom(room);
+    setShowDeleteRoomConfirmModal(true);
+  };
+
+  const handleConfirmDeleteRoom = async () => {
+    if (!selectedRoom) return;
+
+    setLoadingRooms(true);
+    
+    const result = await roomService.deleteRoom(selectedRoom.room_id);
+    
+    if (result.success) {
+      setShowDeleteRoomConfirmModal(false);
+      setSelectedRoom(null);
+      setTimeout(() => {
+        fetchRooms();
+        fetchDashboardStats();
+      }, 500);
+    } else {
+      setRoomSubmitMessage({ type: 'error', text: result.message || 'Failed to delete room' });
+    }
+    
+    setLoadingRooms(false);
+  };
+
+  const handleCancelDeleteRoom = () => {
+    setShowDeleteRoomConfirmModal(false);
+    setSelectedRoom(null);
+  };
+
+  const getRoomStateBadgeColor = (state) => {
+    switch(state) {
+      case 'available': return 'bg-green-100 text-green-800';
+      case 'occupied': return 'bg-red-100 text-red-800';
+      case 'maintenance': return 'bg-yellow-100 text-yellow-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
   const getRoleBadgeColor = (role) => {
     switch(role) {
       case 'ADMIN': return 'bg-purple-100 text-purple-800';
@@ -429,6 +675,17 @@ const AdminDashboard = ({ user }) => {
               >
                 <Building2 className="w-5 h-5 inline-block mr-2" />
                 Branches
+              </button>
+              <button
+                onClick={() => setActiveTab('rooms')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'rooms'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <Home className="w-5 h-5 inline-block mr-2" />
+                Rooms
               </button>
               <button
                 onClick={() => setActiveTab('users')}
@@ -573,6 +830,236 @@ const AdminDashboard = ({ user }) => {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            )}
+
+            {/* Rooms Tab */}
+            {activeTab === 'rooms' && (
+              <div>
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Room Management</h3>
+                  <button 
+                    onClick={handleAddRoomClick}
+                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Room
+                  </button>
+                </div>
+
+                {/* Search and Filter Section */}
+                <div className="mb-6 bg-gray-50 p-4 rounded-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    {/* Search by Room Number */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <Search className="w-4 h-4 inline mr-2" />
+                        Search Room Number
+                      </label>
+                      <input
+                        type="text"
+                        value={roomSearchQuery}
+                        onChange={handleRoomSearchChange}
+                        placeholder="Search by room number..."
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    {/* Filter by State */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <Filter className="w-4 h-4 inline mr-2" />
+                        Filter by State
+                      </label>
+                      <select
+                        value={roomStateFilter}
+                        onChange={handleRoomStateFilterChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">All States</option>
+                        {ROOM_STATES.map(state => (
+                          <option key={state} value={state}>
+                            {state.charAt(0).toUpperCase() + state.slice(1)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Filter by Room Type */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Filter by Type
+                      </label>
+                      <select
+                        value={roomTypeFilter}
+                        onChange={handleRoomTypeFilterChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">All Types</option>
+                        {roomTypes.map(type => (
+                          <option key={type.room_type_id} value={type.room_type_id}>
+                            {type.type}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Filter by Branch */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Filter by Branch
+                      </label>
+                      <select
+                        value={roomBranchFilter}
+                        onChange={handleRoomBranchFilterChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">All Branches</option>
+                        {branches.map(branch => (
+                          <option key={branch.branch_id} value={branch.branch_id}>
+                            {branch.branch_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Active Filters Display */}
+                  {(roomSearchQuery || roomStateFilter || roomTypeFilter || roomBranchFilter || roomFloorFilter) && (
+                    <div className="mt-4 flex flex-wrap gap-2 items-center">
+                      <span className="text-sm text-gray-600">Active Filters:</span>
+                      {roomSearchQuery && (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+                          Search: {roomSearchQuery}
+                        </span>
+                      )}
+                      {roomStateFilter && (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+                          State: {roomStateFilter}
+                        </span>
+                      )}
+                      {roomTypeFilter && (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+                          Type: {roomTypes.find(t => t.room_type_id === roomTypeFilter)?.type}
+                        </span>
+                      )}
+                      {roomBranchFilter && (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+                          Branch: {branches.find(b => b.branch_id === roomBranchFilter)?.branch_name}
+                        </span>
+                      )}
+                      <button
+                        onClick={clearRoomFilters}
+                        className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-red-100 text-red-800 hover:bg-red-200"
+                      >
+                        <X className="w-3 h-3 mr-1" />
+                        Clear All
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Rooms Table */}
+                {loadingRooms ? (
+                  <div className="flex justify-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : rooms.length === 0 ? (
+                  <div className="text-center py-12 bg-gray-50 rounded-lg">
+                    <Home className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600 text-lg">No rooms found</p>
+                    <p className="text-gray-500 text-sm mt-2">
+                      {roomSearchQuery || roomStateFilter || roomTypeFilter || roomBranchFilter
+                        ? 'Try adjusting your search filters'
+                        : 'Get started by adding your first room'}
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="mb-4 text-sm text-gray-600">
+                      Showing {rooms.length} room{rooms.length !== 1 ? 's' : ''}
+                    </div>
+                    <div className="overflow-x-auto bg-white rounded-lg shadow">
+                      <table className="w-full">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Room No
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Floor
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Type
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Branch
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Capacity
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Daily Rate
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              State
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {rooms.map((room) => (
+                            <tr key={room.room_id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">{room.room_no}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-600">{room.floor_no}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">{room.room_type || 'N/A'}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-600">{room.branch_name || 'N/A'}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-600">{room.capacity || 'N/A'}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">
+                                  ${room.daily_rate ? Number(room.daily_rate).toFixed(2) : 'N/A'}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoomStateBadgeColor(room.state)}`}>
+                                  {room.state}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                <button
+                                  onClick={() => handleEditRoomClick(room)}
+                                  className="text-blue-600 hover:text-blue-800 mr-4"
+                                  title="Edit room"
+                                >
+                                  <Edit className="w-4 h-4 inline" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteRoomClick(room)}
+                                  className="text-red-600 hover:text-red-800"
+                                  title="Delete room"
+                                >
+                                  <Trash2 className="w-4 h-4 inline" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1318,6 +1805,421 @@ const AdminDashboard = ({ user }) => {
                     className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 disabled:cursor-not-allowed flex items-center justify-center"
                   >
                     {loadingUsers ? (
+                      <>
+                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Room Modal */}
+        {showAddRoomModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full my-8">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">Add New Room</h2>
+                  <button
+                    onClick={() => setShowAddRoomModal(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {roomSubmitMessage.text && (
+                  <div className={`mb-4 p-3 rounded-lg ${
+                    roomSubmitMessage.type === 'success' 
+                      ? 'bg-green-100 text-green-800 border border-green-200' 
+                      : 'bg-red-100 text-red-800 border border-red-200'
+                  } text-sm`}>
+                    {roomSubmitMessage.text}
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmitRoom} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Room Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Room Number <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="room_no"
+                        value={roomFormData.room_no}
+                        onChange={handleRoomFormChange}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          roomFormErrors.room_no ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="101"
+                      />
+                      {roomFormErrors.room_no && <p className="text-red-500 text-xs mt-1">{roomFormErrors.room_no}</p>}
+                    </div>
+
+                    {/* Floor Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Floor Number <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        name="floor_no"
+                        min="0"
+                        value={roomFormData.floor_no}
+                        onChange={handleRoomFormChange}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          roomFormErrors.floor_no ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="1"
+                      />
+                      {roomFormErrors.floor_no && <p className="text-red-500 text-xs mt-1">{roomFormErrors.floor_no}</p>}
+                    </div>
+
+                    {/* Room Type */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Room Type <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="room_type_id"
+                        value={roomFormData.room_type_id}
+                        onChange={handleRoomFormChange}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          roomFormErrors.room_type_id ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                      >
+                        <option value="">Select Room Type</option>
+                        {roomTypes.map(type => (
+                          <option key={type.room_type_id} value={type.room_type_id}>
+                            {type.type} - ${type.daily_rate}/night (Capacity: {type.capacity})
+                          </option>
+                        ))}
+                      </select>
+                      {roomFormErrors.room_type_id && <p className="text-red-500 text-xs mt-1">{roomFormErrors.room_type_id}</p>}
+                    </div>
+
+                    {/* Branch */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Branch <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="branch_id"
+                        value={roomFormData.branch_id}
+                        onChange={handleRoomFormChange}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          roomFormErrors.branch_id ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                      >
+                        <option value="">Select Branch</option>
+                        {branches.map(branch => (
+                          <option key={branch.branch_id} value={branch.branch_id}>
+                            {branch.branch_name}
+                          </option>
+                        ))}
+                      </select>
+                      {roomFormErrors.branch_id && <p className="text-red-500 text-xs mt-1">{roomFormErrors.branch_id}</p>}
+                    </div>
+
+                    {/* State */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        State <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="state"
+                        value={roomFormData.state}
+                        onChange={handleRoomFormChange}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          roomFormErrors.state ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                      >
+                        {ROOM_STATES.map(state => (
+                          <option key={state} value={state}>
+                            {state.charAt(0).toUpperCase() + state.slice(1)}
+                          </option>
+                        ))}
+                      </select>
+                      {roomFormErrors.state && <p className="text-red-500 text-xs mt-1">{roomFormErrors.state}</p>}
+                    </div>
+                  </div>
+
+                  {/* Form Actions */}
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddRoomModal(false)}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                      disabled={loadingRooms}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loadingRooms}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center"
+                    >
+                      {loadingRooms ? (
+                        <>
+                          <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                          Creating...
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create Room
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Room Modal */}
+        {showEditRoomModal && selectedRoom && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full my-8">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">Edit Room</h2>
+                  <button
+                    onClick={() => {
+                      setShowEditRoomModal(false);
+                      setSelectedRoom(null);
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {roomSubmitMessage.text && (
+                  <div className={`mb-4 p-3 rounded-lg ${
+                    roomSubmitMessage.type === 'success' 
+                      ? 'bg-green-100 text-green-800 border border-green-200' 
+                      : 'bg-red-100 text-red-800 border border-red-200'
+                  } text-sm`}>
+                    {roomSubmitMessage.text}
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmitEditRoom} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Room Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Room Number <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="room_no"
+                        value={roomFormData.room_no}
+                        onChange={handleRoomFormChange}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          roomFormErrors.room_no ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="101"
+                      />
+                      {roomFormErrors.room_no && <p className="text-red-500 text-xs mt-1">{roomFormErrors.room_no}</p>}
+                    </div>
+
+                    {/* Floor Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Floor Number <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        name="floor_no"
+                        min="0"
+                        value={roomFormData.floor_no}
+                        onChange={handleRoomFormChange}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          roomFormErrors.floor_no ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="1"
+                      />
+                      {roomFormErrors.floor_no && <p className="text-red-500 text-xs mt-1">{roomFormErrors.floor_no}</p>}
+                    </div>
+
+                    {/* Room Type */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Room Type <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="room_type_id"
+                        value={roomFormData.room_type_id}
+                        onChange={handleRoomFormChange}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          roomFormErrors.room_type_id ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                      >
+                        <option value="">Select Room Type</option>
+                        {roomTypes.map(type => (
+                          <option key={type.room_type_id} value={type.room_type_id}>
+                            {type.type} - ${type.daily_rate}/night (Capacity: {type.capacity})
+                          </option>
+                        ))}
+                      </select>
+                      {roomFormErrors.room_type_id && <p className="text-red-500 text-xs mt-1">{roomFormErrors.room_type_id}</p>}
+                    </div>
+
+                    {/* Branch */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Branch <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="branch_id"
+                        value={roomFormData.branch_id}
+                        onChange={handleRoomFormChange}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          roomFormErrors.branch_id ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                      >
+                        <option value="">Select Branch</option>
+                        {branches.map(branch => (
+                          <option key={branch.branch_id} value={branch.branch_id}>
+                            {branch.branch_name}
+                          </option>
+                        ))}
+                      </select>
+                      {roomFormErrors.branch_id && <p className="text-red-500 text-xs mt-1">{roomFormErrors.branch_id}</p>}
+                    </div>
+
+                    {/* State */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        State <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="state"
+                        value={roomFormData.state}
+                        onChange={handleRoomFormChange}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          roomFormErrors.state ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                      >
+                        {ROOM_STATES.map(state => (
+                          <option key={state} value={state}>
+                            {state.charAt(0).toUpperCase() + state.slice(1)}
+                          </option>
+                        ))}
+                      </select>
+                      {roomFormErrors.state && <p className="text-red-500 text-xs mt-1">{roomFormErrors.state}</p>}
+                    </div>
+                  </div>
+
+                  {/* Form Actions */}
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowEditRoomModal(false);
+                        setSelectedRoom(null);
+                      }}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                      disabled={loadingRooms}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loadingRooms}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center"
+                    >
+                      {loadingRooms ? (
+                        <>
+                          <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <Edit className="w-4 h-4 mr-2" />
+                          Update Room
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Room Confirmation Modal */}
+        {showDeleteRoomConfirmModal && selectedRoom && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+              <div className="p-6">
+                <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-red-100 rounded-full">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                
+                <h2 className="text-xl font-bold text-gray-900 text-center mb-2">
+                  Delete Room
+                </h2>
+                
+                <p className="text-gray-600 text-center mb-4">
+                  Are you sure you want to delete this room? This action cannot be undone.
+                </p>
+
+                <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-600">Room Number:</span>
+                    <span className="text-sm font-medium text-gray-900">{selectedRoom.room_no}</span>
+                  </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-600">Type:</span>
+                    <span className="text-sm font-medium text-gray-900">{selectedRoom.room_type || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-600">Branch:</span>
+                    <span className="text-sm font-medium text-gray-900">{selectedRoom.branch_name || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">State:</span>
+                    <span className={`px-2 py-1 text-xs rounded-full ${getRoomStateBadgeColor(selectedRoom.state)}`}>
+                      {selectedRoom.state}
+                    </span>
+                  </div>
+                </div>
+
+                {roomSubmitMessage.text && roomSubmitMessage.type === 'error' && (
+                  <div className="mb-4 p-3 rounded-lg bg-red-100 text-red-800 border border-red-200 text-sm">
+                    {roomSubmitMessage.text}
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleCancelDeleteRoom}
+                    disabled={loadingRooms}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleConfirmDeleteRoom}
+                    disabled={loadingRooms}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    {loadingRooms ? (
                       <>
                         <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
                         Deleting...
