@@ -11,3 +11,4 @@ export { default as bookingService } from './bookingService';
 export { default as serviceCatalogueService } from './serviceCatalogueService';
 export { default as discountService } from './discountService';
 export { default as userService } from './userService';
+export { default as dashboardService } from './dashboardService';

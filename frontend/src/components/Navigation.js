@@ -5,12 +5,22 @@ const Navigation = ({ currentPage, setCurrentPage, isLoggedIn, user, onLogout })
   const [menuOpen, setMenuOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
-  const navItems = [
-    { id: 'home', label: 'Home' },
-    { id: 'booking', label: 'Booking' },
-    { id: 'offers', label: 'Offers' },
-    { id: 'contact', label: 'Contact' }
-  ];
+  // Define staff roles that should see dashboard
+  const isStaff = user && ['ADMIN', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPING'].includes(user.role);
+
+  // Navigation items based on user role
+  const navItems = isStaff 
+    ? [
+        { id: 'dashboard', label: 'Dashboard' },
+        { id: 'booking', label: 'Bookings' },
+        { id: 'offers', label: 'Offers' }
+      ]
+    : [
+        { id: 'home', label: 'Home' },
+        { id: 'booking', label: 'Booking' },
+        { id: 'offers', label: 'Offers' },
+        { id: 'contact', label: 'Contact' }
+      ];
 
   const handlePageChange = (page) => {
     setCurrentPage(page);

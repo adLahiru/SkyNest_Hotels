@@ -9,6 +9,7 @@ import OffersPage from './components/OffersPage';
 import ContactPage from './components/ContactPage';
 import LoginPage from './components/LoginPage';
 import UserProfilePage from './components/UserProfilePage';
+import Dashboard from './components/Dashboard';
 import Footer from './components/Footer';
 import authService from './services/authService';
 import './styles/App.css';
@@ -44,6 +45,9 @@ const App = () => {
     setIsLoggedIn(true);
     setUser(userData);
     
+    // Check if user is staff (should see dashboard)
+    const isStaff = ['ADMIN', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPING'].includes(userData.role);
+    
     // Handle login redirect logic
     if (pendingBookingRoom && selectedBranch) {
       // User was trying to book a room, redirect to booking page
@@ -53,7 +57,11 @@ const App = () => {
     } else if (returnToPage) {
       setCurrentPage(returnToPage);
       setReturnToPage(null);
+    } else if (isStaff) {
+      // Staff members should go to dashboard after login
+      setCurrentPage('dashboard');
     } else {
+      // Regular guests go to home
       setCurrentPage('home');
     }
   };
@@ -107,6 +115,9 @@ const App = () => {
     switch (currentPage) {
       case 'home':
         return <HomePage setCurrentPage={setCurrentPage} />;
+      
+      case 'dashboard':
+        return <Dashboard />;
       
       case 'booking':
       case 'branch-selection':

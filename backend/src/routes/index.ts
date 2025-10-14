@@ -7,6 +7,7 @@ import serviceCatalogueRoutes from './serviceCatalogueRoutes';
 import discountRoutes from './discountRoutes';
 import roomRoutes from './roomRoutes';
 import bookingRoutes from './bookingRoutes';
+import dashboardRoutes from './dashboardRoutes';
 
 const router: Router = Router();
 
@@ -34,6 +35,9 @@ router.use('/services', serviceCatalogueRoutes);
 // Mount discount routes
 router.use('/discounts', discountRoutes);
 
+// Mount dashboard routes
+router.use('/dashboard', dashboardRoutes);
+
 // Health check for the entire API
 router.get('/health', (req, res) => {
   res.json({
@@ -49,7 +53,8 @@ router.get('/health', (req, res) => {
       rooms: 'Available at /api/rooms',
       bookings: 'Available at /api/bookings',
       services: 'Available at /api/services',
-      discounts: 'Available at /api/discounts'
+      discounts: 'Available at /api/discounts',
+      dashboard: 'Available at /api/dashboard'
     }
   });
 });
