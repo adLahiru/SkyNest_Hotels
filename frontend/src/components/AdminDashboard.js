@@ -1,11 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2 } from 'lucide-react';
+import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2, Save, X, Upload, AlertCircle, CheckCircle } from 'lucide-react';
 import dashboardService from '../services/dashboardService';
+import branchService from '../services/branchService';
 
 const AdminDashboard = ({ user }) => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
+  
+  // Branch Management States
+  const [showAddBranchModal, setShowAddBranchModal] = useState(false);
+  const [showEditBranchModal, setShowEditBranchModal] = useState(false);
+  const [showDeleteBranchModal, setShowDeleteBranchModal] = useState(false);
+  const [selectedBranch, setSelectedBranch] = useState(null);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [imageFile, setImageFile] = useState(null);
+  
+  const [branchFormData, setBranchFormData] = useState({
+    branch_name: '',
+    address: '',
+    email: '',
+    phone: '',
+    manager_id: ''
+  });
+  
+  const [branchFormErrors, setBranchFormErrors] = useState({});
 
   useEffect(() => {
     fetchDashboardStats();
@@ -18,6 +41,193 @@ const AdminDashboard = ({ user }) => {
       setStats(result.data);
     }
     setLoading(false);
+  };
+
+  // Branch Management Functions
+  const validateBranchForm = () => {
+    const errors = {};
+    if (!branchFormData.branch_name.trim()) errors.branch_name = 'Branch name is required';
+    if (!branchFormData.address.trim()) errors.address = 'Address is required';
+    if (branchFormData.email && !/\S+@\S+\.\S+/.test(branchFormData.email)) {
+      errors.email = 'Email is invalid';
+    }
+    if (branchFormData.phone && !/^[\+]?[\d\s\-\(\)]+$/.test(branchFormData.phone)) {
+      errors.phone = 'Phone number is invalid';
+    }
+    setBranchFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleImageFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleImageFile = (file) => {
+    if (!file.type.startsWith('image/')) {
+      setErrorMessage('Please upload an image file');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setErrorMessage('Image size should be less than 5MB');
+      return;
+    }
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setImagePreview(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+  };
+
+  const openAddBranchModal = () => {
+    setBranchFormData({
+      branch_name: '',
+      address: '',
+      email: '',
+      phone: '',
+      manager_id: ''
+    });
+    setBranchFormErrors({});
+    setImagePreview(null);
+    setImageFile(null);
+    setShowAddBranchModal(true);
+  };
+
+  const openEditBranchModal = (branch) => {
+    setSelectedBranch(branch);
+    setBranchFormData({
+      branch_name: branch.branch_name || '',
+      address: branch.location || branch.address || '',
+      email: branch.email || '',
+      phone: branch.phone || '',
+      manager_id: branch.manager_id || ''
+    });
+    setShowEditBranchModal(true);
+  };
+
+  const openDeleteBranchModal = (branch) => {
+    setSelectedBranch(branch);
+    setShowDeleteBranchModal(true);
+  };
+
+  const closeModals = () => {
+    setShowAddBranchModal(false);
+    setShowEditBranchModal(false);
+    setShowDeleteBranchModal(false);
+    setSelectedBranch(null);
+    setBranchFormData({
+      branch_name: '',
+      address: '',
+      email: '',
+      phone: '',
+      manager_id: ''
+    });
+    setBranchFormErrors({});
+    setImagePreview(null);
+    setImageFile(null);
+  };
+
+  const handleAddBranch = async () => {
+    if (!validateBranchForm()) return;
+    
+    setIsSaving(true);
+    setErrorMessage('');
+    
+    try {
+      const result = await branchService.createBranch({
+        branch_name: branchFormData.branch_name,
+        address: branchFormData.address,
+        email: branchFormData.email || undefined,
+        phone: branchFormData.phone || undefined,
+        manager_id: branchFormData.manager_id || undefined
+      });
+
+      if (result.success) {
+        setSuccessMessage('Branch added successfully!');
+        setTimeout(() => setSuccessMessage(''), 3000);
+        closeModals();
+        fetchDashboardStats(); // Refresh stats
+      } else {
+        setErrorMessage(result.message || 'Failed to add branch');
+      }
+    } catch (error) {
+      console.error('Add branch error:', error);
+      setErrorMessage('Failed to add branch. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleEditBranch = async () => {
+    if (!validateBranchForm()) return;
+    
+    setIsSaving(true);
+    setErrorMessage('');
+    
+    try {
+      const result = await branchService.updateBranch(selectedBranch.branch_id, {
+        branch_name: branchFormData.branch_name,
+        address: branchFormData.address,
+        email: branchFormData.email || undefined,
+        phone: branchFormData.phone || undefined,
+        manager_id: branchFormData.manager_id || undefined
+      });
+
+      if (result.success) {
+        setSuccessMessage('Branch updated successfully!');
+        setTimeout(() => setSuccessMessage(''), 3000);
+        closeModals();
+        fetchDashboardStats(); // Refresh stats
+      } else {
+        setErrorMessage(result.message || 'Failed to update branch');
+      }
+    } catch (error) {
+      console.error('Update branch error:', error);
+      setErrorMessage('Failed to update branch. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteBranch = async () => {
+    setIsSaving(true);
+    setErrorMessage('');
+    
+    try {
+      const result = await branchService.deleteBranch(selectedBranch.branch_id);
+
+      if (result.success) {
+        setSuccessMessage('Branch deleted successfully!');
+        setTimeout(() => setSuccessMessage(''), 3000);
+        closeModals();
+        fetchDashboardStats(); // Refresh stats
+      } else {
+        setErrorMessage(result.message || 'Failed to delete branch');
+      }
+    } catch (error) {
+      console.error('Delete branch error:', error);
+      setErrorMessage('Failed to delete branch. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (loading) {
@@ -243,7 +453,10 @@ const AdminDashboard = ({ user }) => {
               <div>
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">Branch Performance</h3>
-                  <button className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                  <button 
+                    onClick={openAddBranchModal}
+                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
                     <Plus className="w-4 h-4 mr-2" />
                     Add Branch
                   </button>
@@ -271,10 +484,16 @@ const AdminDashboard = ({ user }) => {
                             ${Number(branch.revenue || 0).toLocaleString()}
                           </td>
                           <td className="px-4 py-3 text-sm">
-                            <button className="text-blue-600 hover:text-blue-800 mr-3">
+                            <button 
+                              onClick={() => openEditBranchModal(branch)}
+                              className="text-blue-600 hover:text-blue-800 mr-3"
+                            >
                               <Edit className="w-4 h-4 inline" />
                             </button>
-                            <button className="text-red-600 hover:text-red-800">
+                            <button 
+                              onClick={() => openDeleteBranchModal(branch)}
+                              className="text-red-600 hover:text-red-800"
+                            >
                               <Trash2 className="w-4 h-4 inline" />
                             </button>
                           </td>
@@ -354,6 +573,332 @@ const AdminDashboard = ({ user }) => {
           </div>
         </div>
       </div>
+
+      {/* Success/Error Messages */}
+      {successMessage && (
+        <div className="fixed top-4 right-4 bg-green-50 border border-green-200 text-green-800 px-6 py-3 rounded-lg shadow-lg flex items-center z-50">
+          <CheckCircle className="w-5 h-5 mr-2" />
+          {successMessage}
+        </div>
+      )}
+      {errorMessage && (
+        <div className="fixed top-4 right-4 bg-red-50 border border-red-200 text-red-800 px-6 py-3 rounded-lg shadow-lg flex items-center z-50">
+          <AlertCircle className="w-5 h-5 mr-2" />
+          {errorMessage}
+        </div>
+      )}
+
+      {/* Add Branch Modal */}
+      {showAddBranchModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Add New Branch</h2>
+                <button onClick={closeModals} className="text-gray-400 hover:text-gray-600">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <form onSubmit={(e) => { e.preventDefault(); handleAddBranch(); }} className="space-y-6">
+                {/* Branch Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Branch Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={branchFormData.branch_name}
+                    onChange={(e) => setBranchFormData({ ...branchFormData, branch_name: e.target.value })}
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      branchFormErrors.branch_name ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="Enter branch name"
+                  />
+                  {branchFormErrors.branch_name && (
+                    <p className="mt-1 text-sm text-red-600">{branchFormErrors.branch_name}</p>
+                  )}
+                </div>
+
+                {/* Address */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Address <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={branchFormData.address}
+                    onChange={(e) => setBranchFormData({ ...branchFormData, address: e.target.value })}
+                    rows="3"
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      branchFormErrors.address ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="Enter complete address"
+                  />
+                  {branchFormErrors.address && (
+                    <p className="mt-1 text-sm text-red-600">{branchFormErrors.address}</p>
+                  )}
+                </div>
+
+                {/* Email */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                  <input
+                    type="email"
+                    value={branchFormData.email}
+                    onChange={(e) => setBranchFormData({ ...branchFormData, email: e.target.value })}
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      branchFormErrors.email ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="branch@example.com"
+                  />
+                  {branchFormErrors.email && (
+                    <p className="mt-1 text-sm text-red-600">{branchFormErrors.email}</p>
+                  )}
+                </div>
+
+                {/* Phone */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+                  <input
+                    type="tel"
+                    value={branchFormData.phone}
+                    onChange={(e) => setBranchFormData({ ...branchFormData, phone: e.target.value })}
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      branchFormErrors.phone ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="+1 234 567 8900"
+                  />
+                  {branchFormErrors.phone && (
+                    <p className="mt-1 text-sm text-red-600">{branchFormErrors.phone}</p>
+                  )}
+                </div>
+
+                {/* Image Upload */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Branch Image</label>
+                  <div
+                    onDragEnter={handleDrag}
+                    onDragLeave={handleDrag}
+                    onDragOver={handleDrag}
+                    onDrop={handleDrop}
+                    className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                      dragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    {imagePreview ? (
+                      <div className="relative">
+                        <img src={imagePreview} alt="Preview" className="max-h-64 mx-auto rounded-lg" />
+                        <button
+                          type="button"
+                          onClick={removeImage}
+                          className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <Upload className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+                        <p className="text-sm text-gray-600 mb-2">
+                          Drag and drop your image here, or
+                        </p>
+                        <label className="inline-block px-4 py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700">
+                          Browse Files
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept="image/*"
+                            onChange={(e) => e.target.files[0] && handleImageFile(e.target.files[0])}
+                          />
+                        </label>
+                        <p className="text-xs text-gray-500 mt-2">Max file size: 5MB</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex justify-end space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={closeModals}
+                    className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 flex items-center"
+                  >
+                    {isSaving ? (
+                      <>Processing...</>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4 mr-2" />
+                        Add Branch
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Branch Modal */}
+      {showEditBranchModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Edit Branch</h2>
+                <button onClick={closeModals} className="text-gray-400 hover:text-gray-600">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <form onSubmit={(e) => { e.preventDefault(); handleEditBranch(); }} className="space-y-6">
+                {/* Branch Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Branch Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={branchFormData.branch_name}
+                    onChange={(e) => setBranchFormData({ ...branchFormData, branch_name: e.target.value })}
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      branchFormErrors.branch_name ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="Enter branch name"
+                  />
+                  {branchFormErrors.branch_name && (
+                    <p className="mt-1 text-sm text-red-600">{branchFormErrors.branch_name}</p>
+                  )}
+                </div>
+
+                {/* Address */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Address <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={branchFormData.address}
+                    onChange={(e) => setBranchFormData({ ...branchFormData, address: e.target.value })}
+                    rows="3"
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      branchFormErrors.address ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="Enter complete address"
+                  />
+                  {branchFormErrors.address && (
+                    <p className="mt-1 text-sm text-red-600">{branchFormErrors.address}</p>
+                  )}
+                </div>
+
+                {/* Email */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                  <input
+                    type="email"
+                    value={branchFormData.email}
+                    onChange={(e) => setBranchFormData({ ...branchFormData, email: e.target.value })}
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      branchFormErrors.email ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="branch@example.com"
+                  />
+                  {branchFormErrors.email && (
+                    <p className="mt-1 text-sm text-red-600">{branchFormErrors.email}</p>
+                  )}
+                </div>
+
+                {/* Phone */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+                  <input
+                    type="tel"
+                    value={branchFormData.phone}
+                    onChange={(e) => setBranchFormData({ ...branchFormData, phone: e.target.value })}
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      branchFormErrors.phone ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="+1 234 567 8900"
+                  />
+                  {branchFormErrors.phone && (
+                    <p className="mt-1 text-sm text-red-600">{branchFormErrors.phone}</p>
+                  )}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex justify-end space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={closeModals}
+                    className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 flex items-center"
+                  >
+                    {isSaving ? (
+                      <>Processing...</>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4 mr-2" />
+                        Update Branch
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Branch Modal */}
+      {showDeleteBranchModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-red-600" />
+              </div>
+              <div className="ml-4">
+                <h3 className="text-lg font-semibold text-gray-900">Delete Branch</h3>
+                <p className="text-sm text-gray-600">This action cannot be undone</p>
+              </div>
+            </div>
+
+            <p className="text-gray-700 mb-6">
+              Are you sure you want to delete <span className="font-semibold">{selectedBranch?.branch_name}</span>? 
+              All associated data will be permanently removed.
+            </p>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={closeModals}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteBranch}
+                disabled={isSaving}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400"
+              >
+                {isSaving ? 'Deleting...' : 'Delete Branch'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
