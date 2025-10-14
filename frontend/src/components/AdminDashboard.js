@@ -637,63 +637,7 @@ const AdminDashboard = ({ user }) => {
     }
   };
 
-  const compressImage = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.85) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      
-      reader.onload = (e) => {
-        const img = new Image();
-        
-        img.onload = () => {
-          // Create canvas
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-          
-          // Calculate new dimensions while maintaining aspect ratio
-          if (width > height) {
-            if (width > maxWidth) {
-              height = Math.round((height * maxWidth) / width);
-              width = maxWidth;
-            }
-          } else {
-            if (height > maxHeight) {
-              width = Math.round((width * maxHeight) / height);
-              height = maxHeight;
-            }
-          }
-          
-          canvas.width = width;
-          canvas.height = height;
-          
-          // Draw and compress
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          
-          // Convert to blob with compression
-          canvas.toBlob(
-            (blob) => {
-              if (blob) {
-                resolve(blob);
-              } else {
-                reject(new Error('Failed to compress image'));
-              }
-            },
-            'image/jpeg',
-            quality
-          );
-        };
-        
-        img.onerror = () => reject(new Error('Failed to load image'));
-        img.src = e.target.result;
-      };
-      
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const processImageFile = async (file) => {
+  const processImageFile = (file) => {
     // Validate file type
     if (!file.type.startsWith('image/')) {
       setRoomTypeFormErrors(prev => ({
@@ -703,11 +647,11 @@ const AdminDashboard = ({ user }) => {
       return;
     }
 
-    // Validate file size (max 10MB for original file)
-    if (file.size > 10 * 1024 * 1024) {
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
       setRoomTypeFormErrors(prev => ({
         ...prev,
-        photo: 'Image size must be less than 10MB'
+        photo: 'Image size must be less than 5MB'
       }));
       return;
     }
@@ -718,38 +662,17 @@ const AdminDashboard = ({ user }) => {
       photo: ''
     }));
 
-    try {
-      // Compress image if larger than 500KB
-      let processedFile = file;
-      if (file.size > 500 * 1024) {
-        const compressedBlob = await compressImage(file);
-        processedFile = new File([compressedBlob], file.name, {
-          type: 'image/jpeg',
-          lastModified: Date.now(),
-        });
-        
-        // Show compression info
-        console.log(`Image compressed: ${(file.size / 1024).toFixed(2)}KB → ${(processedFile.size / 1024).toFixed(2)}KB`);
-      }
-
-      // Convert to base64
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result;
-        setPhotoPreview(base64String);
-        setRoomTypeFormData(prev => ({
-          ...prev,
-          photo: base64String
-        }));
-      };
-      reader.readAsDataURL(processedFile);
-    } catch (error) {
-      console.error('Error processing image:', error);
-      setRoomTypeFormErrors(prev => ({
+    // Convert to base64
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result;
+      setPhotoPreview(base64String);
+      setRoomTypeFormData(prev => ({
         ...prev,
-        photo: 'Failed to process image. Please try another file.'
+        photo: base64String
       }));
-    }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleDragOver = (e) => {
@@ -3017,7 +2940,7 @@ const AdminDashboard = ({ user }) => {
                                 Drag and drop an image here, or click to select
                               </p>
                               <p className="text-gray-400 text-sm">
-                                Supports: JPG, PNG, GIF (max 10MB - auto-compressed)
+                                Supports: JPG, PNG, GIF (max 5MB)
                               </p>
                             </div>
                           </label>
@@ -3228,7 +3151,7 @@ const AdminDashboard = ({ user }) => {
                                 Drag and drop an image here, or click to select
                               </p>
                               <p className="text-gray-400 text-sm">
-                                Supports: JPG, PNG, GIF (max 10MB - auto-compressed)
+                                Supports: JPG, PNG, GIF (max 5MB)
                               </p>
                             </div>
                           </label>
