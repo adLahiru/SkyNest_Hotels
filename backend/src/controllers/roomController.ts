@@ -87,13 +87,13 @@ export const createRoom = async (req: AuthenticatedRequest, res: Response): Prom
       return;
     }
 
-    const { room_type_id, branch_id, room_no, floor_no, state = RoomState.AVAILABLE } = req.body;
+    let { room_type_id, branch_id, room_no, floor_no, state = RoomState.AVAILABLE } = req.body;
 
-    // Validate required fields
-    if (!room_type_id || !branch_id || !room_no || floor_no === undefined) {
+    // Validate required fields (room_no is now optional, will be auto-generated if not provided)
+    if (!room_type_id || !branch_id || floor_no === undefined) {
       res.status(400).json({
         success: false,
-        message: 'Missing required fields: room_type_id, branch_id, room_no, and floor_no are required.'
+        message: 'Missing required fields: room_type_id, branch_id, and floor_no are required.'
       });
       return;
     }
@@ -103,15 +103,6 @@ export const createRoom = async (req: AuthenticatedRequest, res: Response): Prom
       res.status(403).json({
         success: false,
         message: 'Access denied. Managers can only add rooms to their own branch.'
-      });
-      return;
-    }
-
-    // Validate room_no length
-    if (room_no.length > 20) {
-      res.status(400).json({
-        success: false,
-        message: 'Room number must be 20 characters or less.'
       });
       return;
     }
@@ -164,6 +155,49 @@ export const createRoom = async (req: AuthenticatedRequest, res: Response): Prom
         message: 'Branch not found.'
       });
       return;
+    }
+
+    // Auto-generate room_no if not provided
+    if (!room_no || room_no.trim() === '') {
+      // Get the highest room number for this floor in this branch
+      const [existingRoomsOnFloor] = await connection.query<RowDataPacket[]>(
+        `SELECT room_no FROM rooms 
+         WHERE branch_id = ? AND floor_no = ? 
+         ORDER BY room_no DESC LIMIT 1`,
+        [branch_id, floor_no]
+      );
+
+      let nextRoomNumber = 1;
+      
+      if (existingRoomsOnFloor.length > 0 && existingRoomsOnFloor[0]) {
+        const lastRoomNo = existingRoomsOnFloor[0].room_no as string;
+        
+        // Remove the floor number prefix to get just the sequence part
+        // For floor 2, room "201" becomes "01", floor 10, room "1005" becomes "05"
+        const floorPrefix = floor_no.toString();
+        if (lastRoomNo.startsWith(floorPrefix)) {
+          const sequencePart = lastRoomNo.substring(floorPrefix.length);
+          const lastSequence = parseInt(sequencePart, 10);
+          if (!isNaN(lastSequence)) {
+            nextRoomNumber = lastSequence + 1;
+          }
+        }
+      }
+
+      // Format: <floor><sequence> (e.g., floor 1, room 1 = "101", floor 1, room 15 = "115")
+      // For floor 0 (ground floor), format as "001", "002", etc.
+      const sequenceStr = nextRoomNumber.toString().padStart(2, '0');
+      room_no = `${floor_no}${sequenceStr}`;
+    } else {
+      // Validate room_no length if provided manually
+      if (room_no.length > 20) {
+        await connection.rollback();
+        res.status(400).json({
+          success: false,
+          message: 'Room number must be 20 characters or less.'
+        });
+        return;
+      }
     }
 
     // Check if room_no already exists in this branch
@@ -714,9 +748,9 @@ export const deleteRoom = async (req: AuthenticatedRequest, res: Response): Prom
 
     await connection.beginTransaction();
 
-    // Check if room is being used in bookings
+    // Check if room is being used in bookings (table name is 'booking' not 'bookings')
     const [bookings] = await connection.query<RowDataPacket[]>(
-      'SELECT COUNT(*) as count FROM bookings WHERE room_id = ?',
+      'SELECT COUNT(*) as count FROM booking WHERE room_id = ?',
       [room_id]
     );
 

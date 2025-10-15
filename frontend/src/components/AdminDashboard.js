@@ -484,10 +484,21 @@ const AdminDashboard = ({ user }) => {
 
   const handleRoomFormChange = (e) => {
     const { name, value } = e.target;
-    setRoomFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    
+    // If floor number changes, clear the room number to trigger auto-generation
+    if (name === 'floor_no') {
+      setRoomFormData(prev => ({
+        ...prev,
+        [name]: value,
+        room_no: '' // Clear room number when floor changes
+      }));
+    } else {
+      setRoomFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
+    
     // Clear error for this field
     if (roomFormErrors[name]) {
       setRoomFormErrors(prev => ({
@@ -500,7 +511,8 @@ const AdminDashboard = ({ user }) => {
   const validateRoomForm = () => {
     const errors = {};
     
-    if (!roomFormData.room_no.trim()) errors.room_no = 'Room number is required';
+    // Room number is now optional - will be auto-generated if empty
+    // if (!roomFormData.room_no.trim()) errors.room_no = 'Room number is required';
     if (roomFormData.floor_no === '' || roomFormData.floor_no < 0) {
       errors.floor_no = 'Floor number must be 0 or greater';
     }
@@ -585,6 +597,7 @@ const AdminDashboard = ({ user }) => {
 
   const handleDeleteRoomClick = (room) => {
     setSelectedRoom(room);
+    setRoomSubmitMessage({ type: '', text: '' }); // Clear any previous error messages
     setShowDeleteRoomConfirmModal(true);
   };
 
@@ -592,17 +605,20 @@ const AdminDashboard = ({ user }) => {
     if (!selectedRoom) return;
 
     setLoadingRooms(true);
+    setRoomSubmitMessage({ type: '', text: '' }); // Clear messages before attempting delete
     
     const result = await roomService.deleteRoom(selectedRoom.room_id);
     
     if (result.success) {
       setShowDeleteRoomConfirmModal(false);
       setSelectedRoom(null);
+      setRoomSubmitMessage({ type: '', text: '' }); // Clear message on success
       setTimeout(() => {
         fetchRooms();
         fetchDashboardStats();
       }, 500);
     } else {
+      // Keep modal open to show error
       setRoomSubmitMessage({ type: 'error', text: result.message || 'Failed to delete room' });
     }
     
@@ -612,6 +628,7 @@ const AdminDashboard = ({ user }) => {
   const handleCancelDeleteRoom = () => {
     setShowDeleteRoomConfirmModal(false);
     setSelectedRoom(null);
+    setRoomSubmitMessage({ type: '', text: '' }); // Clear messages when canceling
   };
 
   const getRoomStateBadgeColor = (state) => {
@@ -2710,7 +2727,7 @@ const AdminDashboard = ({ user }) => {
                     {/* Room Number */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Room Number <span className="text-red-500">*</span>
+                        Room Number <span className="text-gray-400 text-xs">(Auto-generated if empty)</span>
                       </label>
                       <input
                         type="text"
@@ -2720,9 +2737,12 @@ const AdminDashboard = ({ user }) => {
                         className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                           roomFormErrors.room_no ? 'border-red-500' : 'border-gray-300'
                         }`}
-                        placeholder="101"
+                        placeholder="Leave empty for auto-generation (e.g., 101, 102...)"
                       />
                       {roomFormErrors.room_no && <p className="text-red-500 text-xs mt-1">{roomFormErrors.room_no}</p>}
+                      <p className="text-gray-500 text-xs mt-1">
+                        💡 Leave empty to auto-generate based on floor number (Format: Floor + Sequence)
+                      </p>
                     </div>
 
                     {/* Floor Number */}
