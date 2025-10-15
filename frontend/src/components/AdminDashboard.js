@@ -484,21 +484,10 @@ const AdminDashboard = ({ user }) => {
 
   const handleRoomFormChange = (e) => {
     const { name, value } = e.target;
-    
-    // If floor number changes, clear the room number to trigger auto-generation
-    if (name === 'floor_no') {
-      setRoomFormData(prev => ({
-        ...prev,
-        [name]: value,
-        room_no: '' // Clear room number when floor changes
-      }));
-    } else {
-      setRoomFormData(prev => ({
-        ...prev,
-        [name]: value
-      }));
-    }
-    
+    setRoomFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
     // Clear error for this field
     if (roomFormErrors[name]) {
       setRoomFormErrors(prev => ({
@@ -597,7 +586,6 @@ const AdminDashboard = ({ user }) => {
 
   const handleDeleteRoomClick = (room) => {
     setSelectedRoom(room);
-    setRoomSubmitMessage({ type: '', text: '' }); // Clear any previous error messages
     setShowDeleteRoomConfirmModal(true);
   };
 
@@ -605,20 +593,17 @@ const AdminDashboard = ({ user }) => {
     if (!selectedRoom) return;
 
     setLoadingRooms(true);
-    setRoomSubmitMessage({ type: '', text: '' }); // Clear messages before attempting delete
     
     const result = await roomService.deleteRoom(selectedRoom.room_id);
     
     if (result.success) {
       setShowDeleteRoomConfirmModal(false);
       setSelectedRoom(null);
-      setRoomSubmitMessage({ type: '', text: '' }); // Clear message on success
       setTimeout(() => {
         fetchRooms();
         fetchDashboardStats();
       }, 500);
     } else {
-      // Keep modal open to show error
       setRoomSubmitMessage({ type: 'error', text: result.message || 'Failed to delete room' });
     }
     
@@ -628,7 +613,6 @@ const AdminDashboard = ({ user }) => {
   const handleCancelDeleteRoom = () => {
     setShowDeleteRoomConfirmModal(false);
     setSelectedRoom(null);
-    setRoomSubmitMessage({ type: '', text: '' }); // Clear messages when canceling
   };
 
   const getRoomStateBadgeColor = (state) => {
