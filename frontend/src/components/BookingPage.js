@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Users, Bed, MapPin, CheckCircle, AlertCircle, ArrowLeft, Loader2 } from 'lucide-react';
 import bookingService from '../services/bookingService';
+import userService from '../services/userService';
 
 const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
   const [bookingForm, setBookingForm] = useState({
@@ -23,18 +24,54 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
   const [bookingReference, setBookingReference] = useState('');
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingUserData, setLoadingUserData] = useState(true);
 
-  // Update form when user data is available
+  // Fetch fresh user data from backend when component loads
   useEffect(() => {
-    if (user) {
+    const fetchUserData = async () => {
+      try {
+        setLoadingUserData(true);
+        const response = await userService.getCurrentUserProfile();
+        
+        if (response.success && response.user) {
+          console.log('Fresh user data loaded:', response.user);
+          setBookingForm(prev => ({
+            ...prev,
+            name: response.user.name || '',
+            email: response.user.email || '',
+            phone: response.user.phone || ''
+          }));
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+        // Fallback to user prop if API fails
+        if (user) {
+          setBookingForm(prev => ({
+            ...prev,
+            name: user.name || '',
+            email: user.email || '',
+            phone: user.phone || ''
+          }));
+        }
+      } finally {
+        setLoadingUserData(false);
+      }
+    };
+
+    fetchUserData();
+  }, []); // Run once on mount
+
+  // Update form when user prop changes (fallback)
+  useEffect(() => {
+    if (user && !loadingUserData) {
       setBookingForm(prev => ({
         ...prev,
-        name: user.full_name || user.name || '',
-        email: user.email || '',
-        phone: user.phone || ''
+        name: user.full_name || user.name || prev.name,
+        email: user.email || prev.email,
+        phone: user.phone || prev.phone
       }));
     }
-  }, [user]);
+  }, [user, loadingUserData]);
 
   const validateForm = () => {
     const errors = {};
@@ -216,6 +253,16 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
             You're almost there! Complete your booking for {selectedRoom?.name} at {selectedBranch?.name}.
           </p>
         </div>
+
+        {/* Loading User Data */}
+        {loadingUserData && (
+          <div className="max-w-4xl mx-auto mb-8">
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 text-center">
+              <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-2" />
+              <p className="text-blue-600">Loading your profile information...</p>
+            </div>
+          </div>
+        )}
 
         {/* Selected Room Summary */}
         {selectedRoom && selectedBranch && (
