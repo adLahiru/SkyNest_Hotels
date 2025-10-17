@@ -1,36 +1,49 @@
-import React, { useState } from 'react';
-import { Calendar, Users, Bed, MapPin, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, Users, Bed, MapPin, CheckCircle, AlertCircle, ArrowLeft, Loader2 } from 'lucide-react';
+import bookingService from '../services/bookingService';
 
 const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
   const [bookingForm, setBookingForm] = useState({
-    name: user?.name || '',
+    name: user?.full_name || user?.name || '',
     email: user?.email || '',
     phone: user?.phone || '',
     checkIn: '',
     checkOut: '',
-    guests: selectedRoom?.occupancy || '2',
+    guests: selectedRoom?.occupancy || 2,
     roomType: selectedRoom?.type || 'standard',
     roomId: selectedRoom?.id || '',
     roomName: selectedRoom?.name || '',
     specialRequests: '',
-    location: selectedBranch?.id || 'colombo',
+    location: selectedBranch?.id || '',
     branchName: selectedBranch?.name || '',
     totalPrice: selectedRoom?.price || 0
   });
 
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [bookingReference, setBookingReference] = useState('');
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-
+  // Update form when user data is available
+  useEffect(() => {
+    if (user) {
+      setBookingForm(prev => ({
+        ...prev,
+        name: user.full_name || user.name || '',
+        email: user.email || '',
+        phone: user.phone || ''
+      }));
+    }
+  }, [user]);
 
   const validateForm = () => {
     const errors = {};
     
-    if (!bookingForm.name.trim()) errors.name = 'Name is required';
-    if (!bookingForm.email.trim()) errors.email = 'Email is required';
-    else if (!/\S+@\S+\.\S+/.test(bookingForm.email)) errors.email = 'Email is invalid';
-    if (!bookingForm.phone.trim()) errors.phone = 'Phone number is required';
+    // Name, email, phone are from user profile - already validated
+    if (!bookingForm.name || !bookingForm.email || !bookingForm.phone) {
+      errors.user = 'User information is missing. Please update your profile first.';
+    }
+    
     if (!bookingForm.checkIn) errors.checkIn = 'Check-in date is required';
     if (!bookingForm.checkOut) errors.checkOut = 'Check-out date is required';
     
@@ -70,12 +83,39 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
     if (!validateForm()) return;
     
     setIsSubmitting(true);
+    setFormErrors({});
     
-    // Simulate API call
-    setTimeout(() => {
-      setShowConfirmation(true);
+    try {
+      // Prepare booking data for API
+      // Note: user_id is extracted from JWT token on backend
+      // branch_id is extracted from the room's branch
+      const bookingData = {
+        room_id: selectedRoom?.id,
+        checking_datetime: new Date(bookingForm.checkIn).toISOString(),
+        checkout_datetime: new Date(bookingForm.checkOut).toISOString(),
+        number_of_guests: parseInt(bookingForm.guests) || 1,
+        special_requests: bookingForm.specialRequests?.trim() || null
+      };
+
+      console.log('Submitting booking:', bookingData);
+
+      // Call booking API
+      const response = await bookingService.createBooking(bookingData);
+      
+      if (response.success) {
+        console.log('Booking created successfully:', response.booking);
+        setBookingReference(response.booking?.booking_id || 'SKN' + Date.now().toString().slice(-6));
+        setShowConfirmation(true);
+      } else {
+        console.error('Booking failed:', response.message);
+        setFormErrors({ submit: response.message || 'Failed to create booking. Please try again.' });
+      }
+    } catch (error) {
+      console.error('Error creating booking:', error);
+      setFormErrors({ submit: 'An error occurred while processing your booking. Please try again.' });
+    } finally {
       setIsSubmitting(false);
-    }, 2000);
+    }
   };
 
   const resetForm = () => {
@@ -146,7 +186,7 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
                 Make Another Booking
               </button>
               <p className="text-sm text-gray-500">
-                Booking Reference: SKN{Date.now().toString().slice(-6).toUpperCase()}
+                Booking Reference: {bookingReference}
               </p>
             </div>
           </div>
@@ -204,6 +244,25 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
           {/* Booking Form */}
           <div>
             <div className="bg-white rounded-3xl shadow-2xl p-8 md:p-12">
+              {/* Error Messages */}
+              {formErrors.user && (
+                <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4">
+                  <p className="text-red-600 flex items-center">
+                    <AlertCircle className="w-5 h-5 mr-2" />
+                    {formErrors.user}
+                  </p>
+                </div>
+              )}
+              
+              {formErrors.submit && (
+                <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4">
+                  <p className="text-red-600 flex items-center">
+                    <AlertCircle className="w-5 h-5 mr-2" />
+                    {formErrors.submit}
+                  </p>
+                </div>
+              )}
+              
               <form onSubmit={handleSubmit} className="space-y-8">
                 {/* Personal Information */}
                 <div>
@@ -220,16 +279,13 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
                       <input
                         type="text"
                         value={bookingForm.name}
-                        onChange={(e) => setBookingForm({...bookingForm, name: e.target.value})}
-                        className={`form-input ${formErrors.name ? 'border-red-500' : ''}`}
-                        placeholder="SkyNest"
+                        disabled
+                        className="form-input bg-gray-100 cursor-not-allowed"
+                        placeholder="Your name from profile"
                       />
-                      {formErrors.name && (
-                        <p className="text-red-500 text-sm mt-1 flex items-center">
-                          <AlertCircle className="w-4 h-4 mr-1" />
-                          {formErrors.name}
-                        </p>
-                      )}
+                      <p className="text-xs text-gray-500 mt-1">
+                        Name is taken from your profile
+                      </p>
                     </div>
                     
                     <div>
@@ -239,16 +295,13 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
                       <input
                         type="email"
                         value={bookingForm.email}
-                        onChange={(e) => setBookingForm({...bookingForm, email: e.target.value})}
-                        className={`form-input ${formErrors.email ? 'border-red-500' : ''}`}
-                        placeholder="abc@gmail.com"
+                        disabled
+                        className="form-input bg-gray-100 cursor-not-allowed"
+                        placeholder="Your email from profile"
                       />
-                      {formErrors.email && (
-                        <p className="text-red-500 text-sm mt-1 flex items-center">
-                          <AlertCircle className="w-4 h-4 mr-1" />
-                          {formErrors.email}
-                        </p>
-                      )}
+                      <p className="text-xs text-gray-500 mt-1">
+                        Email is taken from your profile
+                      </p>
                     </div>
                   </div>
 
@@ -259,16 +312,13 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
                     <input
                       type="tel"
                       value={bookingForm.phone}
-                      onChange={(e) => setBookingForm({...bookingForm, phone: e.target.value})}
-                      className={`form-input ${formErrors.phone ? 'border-red-500' : ''}`}
-                      placeholder="+94 123 456721"
+                      disabled
+                      className="form-input bg-gray-100 cursor-not-allowed"
+                      placeholder="Your phone from profile"
                     />
-                    {formErrors.phone && (
-                      <p className="text-red-500 text-sm mt-1 flex items-center">
-                        <AlertCircle className="w-4 h-4 mr-1" />
-                        {formErrors.phone}
-                      </p>
-                    )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      Phone number is taken from your profile
+                    </p>
                   </div>
                 </div>
 
@@ -358,19 +408,22 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
                 <button 
                   type="submit" 
                   disabled={isSubmitting}
-                  className={`w-full py-4 text-lg rounded-xl font-semibold transition-all duration-300 ${
+                  className={`w-full py-4 text-lg rounded-xl font-semibold transition-all duration-300 flex items-center justify-center ${
                     isSubmitting 
                       ? 'bg-gray-400 cursor-not-allowed' 
-                      : 'btn-primary'
+                      : 'btn-primary hover:shadow-xl'
                   }`}
                 >
                   {isSubmitting ? (
-                    <div className="flex items-center justify-center">
-                      <div className="spinner mr-3"></div>
+                    <>
+                      <Loader2 className="w-5 h-5 mr-3 animate-spin" />
                       Processing Booking...
-                    </div>
+                    </>
                   ) : (
-                    'Complete Booking'
+                    <>
+                      <CheckCircle className="w-5 h-5 mr-2" />
+                      Complete Booking
+                    </>
                   )}
                 </button>
               </form>

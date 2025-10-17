@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { db } from '../config/db';
 import { UserRole, AuthenticatedRequest } from '../types/auth.types';
+import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Booking Controller
@@ -28,6 +29,8 @@ interface Booking extends RowDataPacket {
   booking_status: BookingStatus;
   booking_date: Date;
   branch_id: string;
+  number_of_guests: number;
+  special_requests: string | null;
   created_at: Date;
   updated_at: Date;
   // Joined fields
@@ -83,17 +86,24 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
   const connection = await db.getConnection();
   
   try {
+    console.log('=== CREATE BOOKING REQUEST ===');
+    console.log('Request body:', req.body);
+    console.log('User from JWT:', req.user);
+    
     const { 
       room_id, 
       checking_datetime, 
       checkout_datetime,
-      staff_id // Optional - can be assigned by receptionist
+      staff_id, // Optional - can be assigned by receptionist
+      number_of_guests, // New field
+      special_requests // New field
     } = req.body;
 
     // Get the user_id from the authenticated user
     const user_id = req.user?.user_id;
 
     if (!user_id) {
+      console.log('ERROR: No user_id found in JWT token');
       res.status(401).json({
         success: false,
         message: 'Authentication required.'
@@ -114,6 +124,7 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
     const checkIn = new Date(checking_datetime);
     const checkOut = new Date(checkout_datetime);
     const now = new Date();
+    now.setHours(0, 0, 0, 0); // Set to start of today for fair comparison
 
     if (isNaN(checkIn.getTime()) || isNaN(checkOut.getTime())) {
       res.status(400).json({
@@ -123,16 +134,18 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
       return;
     }
 
-    // Validate check-in is in the future
+    // Validate check-in is not in the past (allow today)
+    checkIn.setHours(0, 0, 0, 0); // Normalize to start of day
     if (checkIn < now) {
       res.status(400).json({
         success: false,
-        message: 'Check-in date must be in the future.'
+        message: 'Check-in date cannot be in the past.'
       });
       return;
     }
 
     // Validate checkout is after check-in
+    checkOut.setHours(0, 0, 0, 0); // Normalize to start of day
     if (checkOut <= checkIn) {
       res.status(400).json({
         success: false,
@@ -239,29 +252,46 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
     const dailyRate = room.daily_rate ? parseFloat(room.daily_rate.toString()) : 0;
     const totalCost = calculateTotalCost(dailyRate, totalDays);
 
+    // Generate UUID for booking
+    const booking_id = uuidv4();
+
+    console.log('Creating booking with data:', {
+      booking_id,
+      user_id,
+      room_id,
+      staff_id: staff_id || null,
+      checking_datetime,
+      checkout_datetime,
+      booking_status: BookingStatus.CONFIRMED,
+      branch_id: room.branch_id,
+      number_of_guests: number_of_guests || 1,
+      special_requests: special_requests || null
+    });
+
     // Create the booking
     const [result] = await connection.query<ResultSetHeader>(
       `INSERT INTO booking 
-       (user_id, room_id, staff_id, checking_datetime, checkout_datetime, booking_status, booking_date, branch_id) 
-       VALUES (?, ?, ?, ?, ?, ?, CURDATE(), ?)`,
-      [user_id, room_id, staff_id || null, checking_datetime, checkout_datetime, BookingStatus.CONFIRMED, room.branch_id]
+       (booking_id, user_id, room_id, staff_id, checking_datetime, checkout_datetime, booking_status, booking_date, branch_id, number_of_guests, special_requests) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?)`,
+      [booking_id, user_id, room_id, staff_id || null, checking_datetime, checkout_datetime, BookingStatus.CONFIRMED, room.branch_id, number_of_guests || 1, special_requests || null]
     );
 
     // Fetch the created booking with joined data
     const [newBooking] = await connection.query<Booking[]>(
       `SELECT b.*, 
-              u.fname as user_name, u.email as user_email,
+              u.name as user_name, u.email as user_email,
               r.room_no, rt.type as room_type, rt.daily_rate,
               hb.branch_name,
-              s.fname as staff_name
+              su.name as staff_name
        FROM booking b
        LEFT JOIN users u ON b.user_id = u.user_id
        LEFT JOIN rooms r ON b.room_id = r.room_id
        LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
        LEFT JOIN hotel_branches hb ON b.branch_id = hb.branch_id
-       LEFT JOIN staff s ON b.staff_id = s.staff_id
+       LEFT JOIN staff st ON b.staff_id = st.staff_id
+       LEFT JOIN users su ON st.staff_id = su.user_id
        WHERE b.booking_id = ?`,
-      [result.insertId]
+      [booking_id]
     );
 
     // Update room state to occupied (optional - can be done at check-in)
@@ -303,6 +333,11 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
   } catch (error) {
     await connection.rollback();
     console.error('Error creating booking:', error);
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      error: error
+    });
     res.status(500).json({
       success: false,
       message: 'An error occurred while creating the booking.',
@@ -325,16 +360,17 @@ export const getBookings = async (req: AuthenticatedRequest, res: Response): Pro
     const { status, room_id, branch_id, user_id } = req.query;
 
     let query = `SELECT b.*, 
-                        u.fname as user_name, u.email as user_email,
+                        u.name as user_name, u.email as user_email,
                         r.room_no, rt.type as room_type, rt.daily_rate,
                         hb.branch_name,
-                        s.fname as staff_name
+                        su.name as staff_name
                  FROM booking b
                  LEFT JOIN users u ON b.user_id = u.user_id
                  LEFT JOIN rooms r ON b.room_id = r.room_id
                  LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
                  LEFT JOIN hotel_branches hb ON b.branch_id = hb.branch_id
-                 LEFT JOIN staff s ON b.staff_id = s.staff_id
+                 LEFT JOIN staff st ON b.staff_id = st.staff_id
+                 LEFT JOIN users su ON st.staff_id = su.user_id
                  WHERE 1=1`;
     const params: any[] = [];
 
@@ -446,16 +482,17 @@ export const getBookingById = async (req: AuthenticatedRequest, res: Response): 
 
     const [bookings] = await db.query<Booking[]>(
       `SELECT b.*, 
-              u.fname as user_name, u.email as user_email, u.phone as user_phone,
+              u.name as user_name, u.email as user_email, u.phone as user_phone,
               r.room_no, rt.type as room_type, rt.daily_rate, rt.capacity,
               hb.branch_name, hb.address as branch_address,
-              s.fname as staff_name, s.email as staff_email
+              su.name as staff_name, su.email as staff_email
        FROM booking b
        LEFT JOIN users u ON b.user_id = u.user_id
        LEFT JOIN rooms r ON b.room_id = r.room_id
        LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
        LEFT JOIN hotel_branches hb ON b.branch_id = hb.branch_id
-       LEFT JOIN staff s ON b.staff_id = s.staff_id
+       LEFT JOIN staff st ON b.staff_id = st.staff_id
+       LEFT JOIN users su ON st.staff_id = su.user_id
        WHERE b.booking_id = ?`,
       [booking_id]
     );
@@ -724,16 +761,17 @@ export const updateBooking = async (req: AuthenticatedRequest, res: Response): P
     // Fetch updated booking
     const [updatedBookings] = await connection.query<Booking[]>(
       `SELECT b.*, 
-              u.fname as user_name, u.email as user_email,
+              u.name as user_name, u.email as user_email,
               r.room_no, rt.type as room_type, rt.daily_rate,
               hb.branch_name,
-              s.fname as staff_name
+              su.name as staff_name
        FROM booking b
        LEFT JOIN users u ON b.user_id = u.user_id
        LEFT JOIN rooms r ON b.room_id = r.room_id
        LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
        LEFT JOIN hotel_branches hb ON b.branch_id = hb.branch_id
-       LEFT JOIN staff s ON b.staff_id = s.staff_id
+       LEFT JOIN staff st ON b.staff_id = st.staff_id
+       LEFT JOIN users su ON st.staff_id = su.user_id
        WHERE b.booking_id = ?`,
       [booking_id]
     );
@@ -924,12 +962,13 @@ export const getMyBookings = async (req: AuthenticatedRequest, res: Response): P
     let query = `SELECT b.*, 
                         r.room_no, rt.type as room_type, rt.daily_rate,
                         hb.branch_name,
-                        s.fname as staff_name
+                        su.name as staff_name
                  FROM booking b
                  LEFT JOIN rooms r ON b.room_id = r.room_id
                  LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
                  LEFT JOIN hotel_branches hb ON b.branch_id = hb.branch_id
-                 LEFT JOIN staff s ON b.staff_id = s.staff_id
+                 LEFT JOIN staff st ON b.staff_id = st.staff_id
+                 LEFT JOIN users su ON st.staff_id = su.user_id
                  WHERE b.user_id = ?`;
     const params: any[] = [user_id];
 
