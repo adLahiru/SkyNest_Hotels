@@ -5,7 +5,6 @@ import roomTypeService from '../services/roomTypeService';
 
 const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isLoggedIn, onLoginRequired }) => {
   const [selectedRoom, setSelectedRoom] = useState(null);
-  const [isVisible, setIsVisible] = useState({});
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -140,25 +139,6 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
     }
   };
 
-  // Intersection Observer for animations
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setIsVisible(prev => ({ ...prev, [entry.target.id]: true }));
-          }
-        });
-      },
-      { threshold: 0.1 }
-    );
-
-    const elements = document.querySelectorAll('.reveal');
-    elements.forEach((el) => observer.observe(el));
-
-    return () => observer.disconnect();
-  }, []);
-
   const handleRoomBooking = (room) => {
     if (!room.available) return;
     
@@ -199,7 +179,7 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-20 pt-32">
       <div className="max-w-7xl mx-auto px-6">
         {/* Header with Back Button */}
-        <div className={`mb-16 reveal ${isVisible['header'] ? 'active' : ''}`} id="header">
+        <div className="mb-16" id="header">
           <button 
             onClick={onBackToBranches}
             className="flex items-center space-x-2 text-amber-600 hover:text-amber-700 mb-6 transition-colors duration-300"
@@ -261,9 +241,8 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
             return (
               <div 
                 key={room.id}
-                className={`bg-white rounded-3xl overflow-hidden shadow-xl transition-all duration-500 reveal ${isVisible[`room-${room.id}`] ? 'active' : ''} ${selectedRoom === room.id ? 'ring-4 ring-amber-400 transform scale-105' : 'hover:shadow-2xl'}`}
+                className={`bg-white rounded-3xl overflow-hidden shadow-xl transition-all duration-500 ${selectedRoom === room.id ? 'ring-4 ring-amber-400 transform scale-105' : 'hover:shadow-2xl'}`}
                 id={`room-${room.id}`}
-                style={{ animationDelay: `${index * 0.2}s` }}
               >
                 {/* Room Image */}
                 <div className="relative h-64 overflow-hidden">
@@ -412,7 +391,7 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
 
         {/* Help Text */}
         {!loading && !error && rooms.length > 0 && (
-          <div className={`text-center mt-16 reveal ${isVisible['help-text'] ? 'active' : ''}`} id="help-text">
+          <div className="text-center mt-16" id="help-text">
             <div className="max-w-3xl mx-auto p-6 bg-blue-50 rounded-2xl">
               <h3 className="text-lg font-semibold text-blue-800 mb-2">Room Selection Guide</h3>
               <p className="text-blue-600 text-sm leading-relaxed">
@@ -426,17 +405,8 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
       </div>
 
       <style>{`
-        .reveal {
-          opacity: 0;
-          transform: translateY(30px);
-          transition: all 0.6s ease;
-        }
+        /* Room cards are visible by default - no reveal animation delay */
         
-        .reveal.active {
-          opacity: 1;
-          transform: translateY(0);
-        }
-
         /* Perfect alignment for room cards - 2 per row */
         .grid.lg\\:grid-cols-2 > div {
           display: flex;
