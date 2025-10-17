@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import connection from '../config/db';
-import { v7 as uuidv7 } from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
 import e from 'express';
 
@@ -39,13 +39,13 @@ const createAdminUser = async () => {
 
     await conn.query('START TRANSACTION');
 
-    const userID = uuidv7();
+    const userID = uuidv4();
 
     await conn.query(
         'INSERT INTO users (user_id, name, email, phone, nic_no, username, password) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [userID, adminDetails.name, adminDetails.email, adminDetails.phone, adminDetails.nic_no, adminDetails.username, hashedPassword]
     );
-    const branchID = uuidv7();
+    const branchID = uuidv4();
     await conn.query(
         'INSERT INTO hotel_branches (branch_id, branch_name, address, phone, email) VALUES (?, ?, ?, ?, ?)',
         [
