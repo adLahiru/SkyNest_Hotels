@@ -327,7 +327,7 @@ class DashboardController {
           u.phone as guest_phone,
           u.email as guest_email,
           r.room_no as room_number,
-          rt.name as room_type
+          rt.type as room_type
         FROM booking bk
         JOIN users u ON bk.user_id = u.user_id
         JOIN rooms r ON bk.room_id = r.room_id
@@ -350,7 +350,7 @@ class DashboardController {
           u.name as guest_name,
           u.phone as guest_phone,
           r.room_no as room_number,
-          rt.name as room_type
+          rt.type as room_type
         FROM booking bk
         JOIN users u ON bk.user_id = u.user_id
         JOIN rooms r ON bk.room_id = r.room_id
@@ -373,7 +373,7 @@ class DashboardController {
           u.name as guest_name,
           u.phone as guest_phone,
           r.room_no as room_number,
-          rt.name as room_type
+          rt.type as room_type
         FROM booking bk
         JOIN users u ON bk.user_id = u.user_id
         JOIN rooms r ON bk.room_id = r.room_id
@@ -392,9 +392,9 @@ class DashboardController {
           r.room_id,
           r.room_no as room_number,
           r.floor_no as floor,
-          rt.name as room_type,
-          rt.base_price,
-          rt.max_occupancy
+          rt.type as room_type,
+          rt.daily_rate as base_price,
+          rt.capacity as max_occupancy
         FROM rooms r
         JOIN room_types rt ON r.room_type_id = rt.room_type_id
         WHERE r.branch_id = ? 
@@ -412,7 +412,7 @@ class DashboardController {
           u.name as guest_name,
           u.phone as guest_phone,
           r.room_no as room_number,
-          rt.name as room_type
+          rt.type as room_type
         FROM booking bk
         JOIN users u ON bk.user_id = u.user_id
         JOIN rooms r ON bk.room_id = r.room_id
@@ -459,6 +459,182 @@ class DashboardController {
       
     } catch (error) {
       console.error('Get receptionist stats error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve dashboard statistics'
+      } as ApiResponse);
+    }
+  }
+
+  /**
+   * Get Housekeeping Dashboard Statistics
+   * - Same as receptionist dashboard but for housekeeping staff
+   * - Today's check-ins and check-outs
+   * - Pending bookings
+   * - Available rooms
+   */
+  async getHousekeepingStats(req: Request, res: Response): Promise<void> {
+    try {
+      const authReq = req as AuthenticatedRequest;
+      const branchId = authReq.user?.branch_id;
+      
+      if (!branchId) {
+        res.status(400).json({
+          success: false,
+          message: 'Housekeeping staff must be assigned to a branch'
+        } as ApiResponse);
+        return;
+      }
+      
+      // Get branch details
+      const [branchDetails] = await db.execute<RowDataPacket[]>(
+        'SELECT * FROM hotel_branches WHERE branch_id = ?',
+        [branchId]
+      );
+      
+      // Get today's check-ins
+      const [todayCheckIns] = await db.execute<RowDataPacket[]>(
+        `SELECT 
+          bk.booking_id,
+          bk.checking_datetime as check_in,
+          bk.checkout_datetime as check_out,
+          bk.booking_status as status,
+          u.name as guest_name,
+          u.phone as guest_phone,
+          u.email as guest_email,
+          r.room_no as room_number,
+          rt.type as room_type
+        FROM booking bk
+        JOIN users u ON bk.user_id = u.user_id
+        JOIN rooms r ON bk.room_id = r.room_id
+        JOIN room_types rt ON r.room_type_id = rt.room_type_id
+        WHERE r.branch_id = ? 
+        AND DATE(bk.checking_datetime) = CURRENT_DATE()
+        AND bk.booking_status IN ('CONFIRMED', 'CHECKED_IN')
+        ORDER BY bk.checking_datetime ASC`,
+        [branchId]
+      );
+      
+      // Get today's check-outs
+      const [todayCheckOuts] = await db.execute<RowDataPacket[]>(
+        `SELECT 
+          bk.booking_id,
+          bk.checking_datetime as check_in,
+          bk.checkout_datetime as check_out,
+          bk.booking_status as status,
+          p.total_charges as total_amount,
+          u.name as guest_name,
+          u.phone as guest_phone,
+          r.room_no as room_number,
+          rt.type as room_type
+        FROM booking bk
+        JOIN users u ON bk.user_id = u.user_id
+        JOIN rooms r ON bk.room_id = r.room_id
+        JOIN room_types rt ON r.room_type_id = rt.room_type_id
+        LEFT JOIN payments p ON bk.booking_id = p.booking_id
+        WHERE r.branch_id = ? 
+        AND DATE(bk.checkout_datetime) = CURRENT_DATE()
+        AND bk.booking_status = 'CHECKED_IN'
+        ORDER BY bk.checkout_datetime ASC`,
+        [branchId]
+      );
+      
+      // Get pending bookings
+      const [pendingBookings] = await db.execute<RowDataPacket[]>(
+        `SELECT 
+          bk.booking_id,
+          bk.checking_datetime as check_in,
+          bk.checkout_datetime as check_out,
+          p.total_charges as total_amount,
+          u.name as guest_name,
+          u.phone as guest_phone,
+          r.room_no as room_number,
+          rt.type as room_type
+        FROM booking bk
+        JOIN users u ON bk.user_id = u.user_id
+        JOIN rooms r ON bk.room_id = r.room_id
+        JOIN room_types rt ON r.room_type_id = rt.room_type_id
+        LEFT JOIN payments p ON bk.booking_id = p.booking_id
+        WHERE r.branch_id = ? 
+        AND bk.booking_status = 'PENDING'
+        ORDER BY bk.created_at DESC
+        LIMIT 10`,
+        [branchId]
+      );
+      
+      // Get available rooms
+      const [availableRooms] = await db.execute<RowDataPacket[]>(
+        `SELECT 
+          r.room_id,
+          r.room_no as room_number,
+          r.floor_no as floor,
+          rt.type as room_type,
+          rt.daily_rate as price,
+          rt.capacity as max_occupancy
+        FROM rooms r
+        JOIN room_types rt ON r.room_type_id = rt.room_type_id
+        WHERE r.branch_id = ? 
+        AND r.state = 'available'
+        ORDER BY r.room_no ASC`,
+        [branchId]
+      );
+      
+      // Get current guests (checked in)
+      const [currentGuests] = await db.execute<RowDataPacket[]>(
+        `SELECT 
+          bk.booking_id,
+          bk.checking_datetime as check_in,
+          bk.checkout_datetime as check_out,
+          u.name as guest_name,
+          u.phone as guest_phone,
+          r.room_no as room_number,
+          rt.type as room_type
+        FROM booking bk
+        JOIN users u ON bk.user_id = u.user_id
+        JOIN rooms r ON bk.room_id = r.room_id
+        JOIN room_types rt ON r.room_type_id = rt.room_type_id
+        WHERE r.branch_id = ? 
+        AND bk.booking_status = 'CHECKED_IN'
+        ORDER BY r.room_no ASC`,
+        [branchId]
+      );
+      
+      // Get quick stats
+      const [quickStats] = await db.execute<RowDataPacket[]>(
+        `SELECT 
+          SUM(CASE WHEN r.state = 'available' THEN 1 ELSE 0 END) as availableRooms,
+          SUM(CASE WHEN r.state = 'occupied' THEN 1 ELSE 0 END) as occupiedRooms,
+          (SELECT COUNT(*) FROM booking bk2 
+           JOIN rooms r2 ON bk2.room_id = r2.room_id 
+           WHERE r2.branch_id = ? 
+           AND DATE(bk2.checking_datetime) = CURRENT_DATE() 
+           AND bk2.booking_status IN ('CONFIRMED', 'CHECKED_IN')) as todayCheckIns,
+          (SELECT COUNT(*) FROM booking bk3 
+           JOIN rooms r3 ON bk3.room_id = r3.room_id 
+           WHERE r3.branch_id = ? 
+           AND DATE(bk3.checkout_datetime) = CURRENT_DATE() 
+           AND bk3.booking_status = 'CHECKED_IN') as todayCheckOuts
+        FROM rooms r
+        WHERE r.branch_id = ?`,
+        [branchId, branchId, branchId]
+      );
+      
+      res.status(200).json({
+        success: true,
+        message: 'Housekeeping dashboard stats retrieved successfully',
+        data: {
+          branch: branchDetails[0],
+          quickStats: quickStats[0],
+          todayCheckIns,
+          todayCheckOuts,
+          pendingBookings,
+          availableRooms,
+          currentGuests
+        }
+      } as ApiResponse);
+      
+    } catch (error) {
+      console.error('Get housekeeping stats error:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve dashboard statistics'
