@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, DoorOpen, Calendar, DollarSign, Home, UserCheck, UserX } from 'lucide-react';
+import { Building2, Users, Calendar, DollarSign, Home, UserCheck, UserX } from 'lucide-react';
 import dashboardService from '../services/dashboardService';
 
 const ManagerDashboard = ({ user }) => {

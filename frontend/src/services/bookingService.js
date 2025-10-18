@@ -20,7 +20,6 @@ const bookingService = {
         message: response.data.message || 'Booking created successfully',
       };
     } catch (error) {
-      console.error('Create booking error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to create booking',
@@ -50,7 +49,6 @@ const bookingService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get all bookings error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch bookings',
@@ -73,7 +71,6 @@ const bookingService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get booking by ID error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch booking details',
@@ -96,7 +93,6 @@ const bookingService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get user bookings error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch user bookings',
@@ -120,7 +116,6 @@ const bookingService = {
         message: response.data.message || 'Booking updated successfully',
       };
     } catch (error) {
-      console.error('Update booking error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to update booking',
@@ -144,7 +139,6 @@ const bookingService = {
         message: response.data.message || 'Booking status updated successfully',
       };
     } catch (error) {
-      console.error('Update booking status error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to update booking status',
@@ -167,7 +161,6 @@ const bookingService = {
         message: response.data.message || 'Booking cancelled successfully',
       };
     } catch (error) {
-      console.error('Cancel booking error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to cancel booking',
@@ -190,7 +183,6 @@ const bookingService = {
         message: response.data.message || 'Check-in successful',
       };
     } catch (error) {
-      console.error('Check-in booking error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to check-in',
@@ -213,7 +205,6 @@ const bookingService = {
         message: response.data.message || 'Check-out successful',
       };
     } catch (error) {
-      console.error('Check-out booking error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to check-out',
@@ -235,7 +226,6 @@ const bookingService = {
         message: response.data.message || 'Booking deleted successfully',
       };
     } catch (error) {
-      console.error('Delete booking error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to delete booking',

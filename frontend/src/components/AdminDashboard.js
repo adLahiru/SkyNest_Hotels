@@ -111,6 +111,7 @@ const AdminDashboard = ({ user }) => {
     fetchDashboardStats();
     fetchBranches();
     fetchRoomTypes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -123,6 +124,7 @@ const AdminDashboard = ({ user }) => {
     } else if (activeTab === 'branches') {
       fetchBranches();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, searchQuery, roleFilter, roomSearchQuery, roomStateFilter, roomTypeFilter, roomBranchFilter, roomFloorFilter, roomTypeSearchQuery, minCapacityFilter, maxCapacityFilter, minPriceFilter, maxPriceFilter, branchSearchQuery]);
 
   const fetchDashboardStats = async () => {
@@ -144,7 +146,6 @@ const AdminDashboard = ({ user }) => {
     if (result.success) {
       setUsers(result.users);
     } else {
-      console.error('Failed to fetch users:', result.message);
     }
     setLoadingUsers(false);
   };
@@ -189,7 +190,6 @@ const AdminDashboard = ({ user }) => {
       
       setRoomTypes(filteredTypes);
     } else {
-      console.error('Failed to fetch room types:', result.message);
     }
     setLoadingRoomTypes(false);
   };
@@ -215,7 +215,6 @@ const AdminDashboard = ({ user }) => {
       
       setRooms(filteredRooms);
     } else {
-      console.error('Failed to fetch rooms:', result.message);
     }
     setLoadingRooms(false);
   };
@@ -455,10 +454,6 @@ const AdminDashboard = ({ user }) => {
 
   const handleRoomBranchFilterChange = (e) => {
     setRoomBranchFilter(e.target.value);
-  };
-
-  const handleRoomFloorFilterChange = (e) => {
-    setRoomFloorFilter(e.target.value);
   };
 
   const clearRoomFilters = () => {

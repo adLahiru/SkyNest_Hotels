@@ -125,7 +125,7 @@ const ContactPage = () => {
           </div>
           
           <div className="grid md:grid-cols-3 gap-8">
-            {locations.map((location, index) => (
+            {locations.map((location) => (
               <div key={location.id} className="bg-white rounded-2xl shadow-xl p-6 card-hover transform hover:scale-105 transition-all duration-300">
                 <div className="flex items-center justify-center mb-4">
                   <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center">

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Bed, ChevronLeft, ChevronRight, Star } from 'lucide-react';
+import { Bed, Star } from 'lucide-react';
 
 const HomePage = ({ setCurrentPage }) => {
-  const [currentRoomIndex, setCurrentRoomIndex] = useState(0);
   const [isVisible, setIsVisible] = useState({});
 
   const rooms = [
@@ -77,15 +76,6 @@ const HomePage = ({ setCurrentPage }) => {
       comment: 'The spa services were incredible and the dining experience was world-class. Every detail was thoughtfully considered.'
     }
   ];
-
-  const nextRoom = () => setCurrentRoomIndex((prev) => (prev + 1) % rooms.length);
-  const prevRoom = () => setCurrentRoomIndex((prev) => (prev - 1 + rooms.length) % rooms.length);
-
-  // Auto-rotate rooms
-  useEffect(() => {
-    const interval = setInterval(nextRoom, 5000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Intersection Observer for animations
   useEffect(() => {

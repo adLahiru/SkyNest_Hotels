@@ -27,7 +27,6 @@ const discountService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get all discounts error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch discounts',
@@ -49,7 +48,6 @@ const discountService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get active discounts error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch active discounts',
@@ -72,7 +70,6 @@ const discountService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get discount by ID error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch discount details',
@@ -100,7 +97,6 @@ const discountService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Validate discount code error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Invalid discount code',
@@ -123,7 +119,6 @@ const discountService = {
         message: response.data.message || 'Discount created successfully',
       };
     } catch (error) {
-      console.error('Create discount error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to create discount',
@@ -147,7 +142,6 @@ const discountService = {
         message: response.data.message || 'Discount updated successfully',
       };
     } catch (error) {
-      console.error('Update discount error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to update discount',
@@ -169,7 +163,6 @@ const discountService = {
         message: response.data.message || 'Discount deleted successfully',
       };
     } catch (error) {
-      console.error('Delete discount error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to delete discount',

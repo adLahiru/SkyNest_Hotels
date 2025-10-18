@@ -39,7 +39,6 @@ const authService = {
         message: response.data.message || 'Login failed',
       };
     } catch (error) {
-      console.error('Login error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Login failed. Please try again.',
@@ -78,7 +77,6 @@ const authService = {
         message: response.data.message || 'Registration failed',
       };
     } catch (error) {
-      console.error('Registration error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Registration failed. Please try again.',
@@ -109,7 +107,6 @@ const authService = {
         message: 'Logged out successfully',
       };
     } catch (error) {
-      console.error('Logout error:', error);
       
       // Clear local storage even if API call fails
       localStorage.removeItem('accessToken');
@@ -154,7 +151,6 @@ const authService = {
         message: response.data.message || 'Token refresh failed',
       };
     } catch (error) {
-      console.error('Token refresh error:', error);
       return {
         success: false,
         message: 'Token refresh failed',
@@ -186,7 +182,6 @@ const authService = {
         message: response.data.message || 'Failed to fetch profile',
       };
     } catch (error) {
-      console.error('Get profile error:', error);
       return {
         success: false,
         message: 'Failed to fetch profile',
@@ -215,7 +210,6 @@ const authService = {
       try {
         return JSON.parse(userStr);
       } catch (error) {
-        console.error('Error parsing user data:', error);
         return null;
       }
     }

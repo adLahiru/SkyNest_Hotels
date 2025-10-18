@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Lock, Mail, Eye, EyeOff, LogIn, UserPlus, CheckCircle, AlertCircle } from 'lucide-react';
+import { User, Eye, EyeOff, LogIn, UserPlus, CheckCircle, AlertCircle } from 'lucide-react';
 import authService from '../services/authService';
 
 const LoginPage = ({ onLogin, setCurrentPage }) => {
@@ -78,6 +78,7 @@ const LoginPage = ({ onLogin, setCurrentPage }) => {
         setIsSubmitting(false);
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Login error:', error);
       setApiError('An error occurred during login. Please try again.');
       setIsSubmitting(false);
@@ -130,6 +131,7 @@ const LoginPage = ({ onLogin, setCurrentPage }) => {
         setIsSubmitting(false);
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Registration error:', error);
       setApiError('An error occurred during registration. Please try again.');
       setIsSubmitting(false);
@@ -141,13 +143,6 @@ const LoginPage = ({ onLogin, setCurrentPage }) => {
     setFormErrors({});
     setShowSuccess(false);
     setApiError('');
-  };
-
-  const demoLogin = () => {
-    setLoginForm({
-      username: 'demo',
-      password: 'demo123'
-    });
   };
 
   if (showSuccess) {
@@ -499,7 +494,7 @@ const LoginPage = ({ onLogin, setCurrentPage }) => {
                     className={`rounded border-gray-300 text-amber-600 shadow-sm focus:border-amber-300 focus:ring focus:ring-amber-200 focus:ring-opacity-50 mt-1 ${formErrors.agreeToTerms ? 'border-red-500' : ''}`}
                   />
                   <span className="ml-2 text-sm text-gray-600 leading-relaxed">
-                    I agree to the <a href="#" className="text-amber-600 hover:text-amber-700">Terms of Service</a> and <a href="#" className="text-amber-600 hover:text-amber-700">Privacy Policy</a>
+                    I agree to the <button type="button" className="text-amber-600 hover:text-amber-700 underline">Terms of Service</button> and <button type="button" className="text-amber-600 hover:text-amber-700 underline">Privacy Policy</button>
                   </span>
                 </label>
                 {formErrors.agreeToTerms && (

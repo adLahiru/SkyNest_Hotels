@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Users, Bed, MapPin, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Calendar, Users, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 
 const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
   const [bookingForm, setBookingForm] = useState({

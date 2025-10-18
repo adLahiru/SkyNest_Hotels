@@ -27,7 +27,6 @@ const userService = {
         message: response.data.message || 'Failed to fetch user profile',
       };
     } catch (error) {
-      console.error('Get user error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch user profile',
@@ -60,7 +59,6 @@ const userService = {
         message: response.data.message || 'Failed to fetch profile',
       };
     } catch (error) {
-      console.error('Get current profile error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch profile',
@@ -101,7 +99,6 @@ const userService = {
         message: response.data.message || 'Failed to update profile',
       };
     } catch (error) {
-      console.error('Update profile error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to update profile. Please try again.',
@@ -135,7 +132,6 @@ const userService = {
         message: response.data.message || 'Failed to change password',
       };
     } catch (error) {
-      console.error('Change password error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to change password. Please try again.',
@@ -173,7 +169,6 @@ const userService = {
         message: response.data.message || 'Failed to fetch users',
       };
     } catch (error) {
-      console.error('Get all users error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch users',
@@ -204,7 +199,6 @@ const userService = {
         message: response.data.message || 'Failed to create user',
       };
     } catch (error) {
-      console.error('Create user error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to create user. Please try again.',
@@ -235,7 +229,6 @@ const userService = {
         message: response.data.message || 'Failed to search users',
       };
     } catch (error) {
-      console.error('Search users error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to search users',
@@ -266,7 +259,6 @@ const userService = {
         message: response.data.message || 'Failed to filter users',
       };
     } catch (error) {
-      console.error('Filter users error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to filter users',
@@ -298,7 +290,6 @@ const userService = {
         message: response.data.message || 'Failed to update user',
       };
     } catch (error) {
-      console.error('Update user error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to update user. Please try again.',
@@ -329,7 +320,6 @@ const userService = {
         message: response.data.message || 'Failed to delete user',
       };
     } catch (error) {
-      console.error('Delete user error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to delete user. Please try again.',

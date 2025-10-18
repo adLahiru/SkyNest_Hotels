@@ -27,7 +27,6 @@ const roomService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get all rooms error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch rooms',
@@ -50,7 +49,6 @@ const roomService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get room by ID error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch room details',
@@ -80,7 +78,6 @@ const roomService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get available rooms error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch available rooms',
@@ -103,7 +100,6 @@ const roomService = {
         message: response.data.message || 'Room created successfully',
       };
     } catch (error) {
-      console.error('Create room error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to create room',
@@ -127,7 +123,6 @@ const roomService = {
         message: response.data.message || 'Room updated successfully',
       };
     } catch (error) {
-      console.error('Update room error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to update room',
@@ -151,7 +146,6 @@ const roomService = {
         message: response.data.message || 'Room status updated successfully',
       };
     } catch (error) {
-      console.error('Update room status error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to update room status',
@@ -173,7 +167,6 @@ const roomService = {
         message: response.data.message || 'Room deleted successfully',
       };
     } catch (error) {
-      console.error('Delete room error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to delete room',
