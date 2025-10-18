@@ -1,14 +1,15 @@
 # This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs
 
-name: SkyNest Backend CI/CD
+name: SkyNest Hotels CI/CD
 
 on:
   push:
     branches: [ "main" ]
 
+
 jobs:
-  build:
+  build-and-deploy:
     runs-on: self-hosted
 
     strategy:
@@ -42,26 +43,71 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-pnpm-store-
           
-    - name: Install dependencies
+    # Backend deployment
+    - name: Install backend dependencies
       working-directory: ./backend
       run: pnpm install
       
-    - name: Setup environment
+    - name: Setup backend environment
       working-directory: ./backend
       run: |
-        if [ ! -d "config" ]; then
-          mkdir -p config
-        fi
+        mkdir -p config
         echo "${{ secrets.PROD_ENV_FILE }}" > config/.env.production
+        echo "${{ secrets.PROD_ENV_FILE }}" > config/.env.test
       
-    - name: Build
+    - name: Build backend
       working-directory: ./backend
       run: pnpm build
+      
+    - name: Run backend tests
+      working-directory: ./backend
+      run: pnpm test
       
     - name: Run database migrations
       working-directory: ./backend
       run: pnpm migrate:prod
       
-    - name: Restart service
+    # Frontend deployment
+    - name: Setup frontend environment
+      working-directory: ./frontend
+      run: |
+        echo "${{ secrets.FRONT_ENV_FILE }}" > .env
+      
+    - name: Install frontend dependencies
+      working-directory: ./frontend
+      run: pnpm install
+      
+    - name: Build frontend
+      working-directory: ./frontend
+      run: pnpm build
+      
+    - name: Run frontend tests
+      working-directory: ./frontend
+      run: pnpm test
+      
+    # Deployment steps
+    - name: Restart backend service
       run: |
         pm2 reload backend || pm2 start ./backend/dist/index.js --name backend
+        
+    - name: Deploy frontend to Nginx
+      run: |
+        # Backup existing deployment
+        if [ -d "/var/www/skynest-hotels" ]; then
+          mkdir -p /var/www/backups
+          cp -r /var/www/skynest-hotels /var/www/backups/skynest-hotels-$(date +%Y%m%d%H%M%S)
+        fi
+        
+        # Ensure directory exists
+        mkdir -p /var/www/skynest-hotels
+        
+        # Copy new build to Nginx serve directory
+        cp -r ./frontend/build/* /var/www/skynest-hotels/
+        
+        # Set proper permissions
+        chown -R www-data:www-data /var/www/skynest-hotels
+        chmod -R 755 /var/www/skynest-hotels
+        
+    - name: Reload Nginx
+      run: |
+        sudo systemctl reload nginx || sudo systemctl restart nginx
