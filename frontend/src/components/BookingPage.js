@@ -2,20 +2,27 @@ import React, { useState } from 'react';
 import { Calendar, Users, Bed, MapPin, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 
 const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
+  // Map room type fields to expected format
+  const roomName = selectedRoom?.type || selectedRoom?.name || '';
+  const roomPrice = selectedRoom?.daily_rate || selectedRoom?.price || 0;
+  const roomCapacity = selectedRoom?.capacity || selectedRoom?.occupancy || 2;
+  const branchName = selectedBranch?.branch_name || selectedBranch?.name || '';
+  const branchId = selectedBranch?.branch_id || selectedBranch?.id || '';
+
   const [bookingForm, setBookingForm] = useState({
     name: user?.name || '',
     email: user?.email || '',
     phone: user?.phone || '',
     checkIn: '',
     checkOut: '',
-    guests: selectedRoom?.occupancy || '2',
+    guests: roomCapacity.toString(),
     roomType: selectedRoom?.type || 'standard',
-    roomId: selectedRoom?.id || '',
-    roomName: selectedRoom?.name || '',
+    roomId: selectedRoom?.room_type_id || selectedRoom?.id || '',
+    roomName: roomName,
     specialRequests: '',
-    location: selectedBranch?.id || 'colombo',
-    branchName: selectedBranch?.name || '',
-    totalPrice: selectedRoom?.price || 0
+    location: branchId,
+    branchName: branchName,
+    totalPrice: roomPrice
   });
 
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -61,7 +68,7 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
 
   const calculateTotal = () => {
     const nights = calculateNights();
-    return selectedRoom ? selectedRoom.price * nights : 0;
+    return roomPrice * nights;
   };
 
   const handleSubmit = async (e) => {
@@ -173,7 +180,7 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
           <h1 className="text-5xl md:text-6xl font-light text-gray-800 mb-4">Complete Your Booking</h1>
           <div className="w-24 h-1 bg-gradient-to-r from-amber-400 to-amber-600 mx-auto mb-6"></div>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            You're almost there! Complete your booking for {selectedRoom?.name} at {selectedBranch?.name}.
+            You're almost there! Complete your booking for {roomName} at {branchName}.
           </p>
         </div>
 
@@ -185,15 +192,15 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
               <div className="grid md:grid-cols-3 gap-4 text-sm">
                 <div>
                   <span className="text-amber-600 font-medium">Location:</span>
-                  <p className="text-gray-800">{selectedBranch.name}</p>
+                  <p className="text-gray-800">{branchName}</p>
                 </div>
                 <div>
                   <span className="text-amber-600 font-medium">Room:</span>
-                  <p className="text-gray-800">{selectedRoom.name}</p>
+                  <p className="text-gray-800">{roomName}</p>
                 </div>
                 <div>
                   <span className="text-amber-600 font-medium">Price:</span>
-                  <p className="text-gray-800">${selectedRoom.price} per night</p>
+                  <p className="text-gray-800">${roomPrice} per night</p>
                 </div>
               </div>
             </div>
@@ -324,14 +331,14 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
                     <div className="grid md:grid-cols-2 gap-6">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Number of Guests (Max: {selectedRoom?.occupancy || 2})
+                          Number of Guests (Max: {roomCapacity})
                         </label>
                         <select
                           value={bookingForm.guests}
                           onChange={(e) => setBookingForm({...bookingForm, guests: e.target.value})}
                           className="form-input"
                         >
-                          {Array.from({length: selectedRoom?.occupancy || 2}, (_, i) => i + 1).map(num => (
+                          {Array.from({length: roomCapacity}, (_, i) => i + 1).map(num => (
                             <option key={num} value={num}>
                               {num} Guest{num > 1 ? 's' : ''}
                             </option>
