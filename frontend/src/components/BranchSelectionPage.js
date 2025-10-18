@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapPin, Star, ArrowRight, Wifi, Car, Coffee, Flower2, Utensils, Loader2, AlertCircle } from 'lucide-react';
+import { MapPin, Star, ArrowRight, Wifi, Car, Coffee, Utensils, Loader2, AlertCircle } from 'lucide-react';
 import branchService from '../services/branchService';
 import roomService from '../services/roomService';
 
@@ -19,34 +19,24 @@ const BranchSelectionPage = ({ onBranchSelect }) => {
       setLoading(true);
       setError(null);
       
-      console.log('Fetching branches from API...');
       // Use public endpoint (no authentication required)
       const response = await branchService.getAllBranchesPublic();
-      console.log('Branches API response:', response);
       
       if (response.success && response.branches) {
-        console.log('Branches found:', response.branches.length);
-        
         // Fetch room count for each branch
         const branchesWithRoomCount = await Promise.all(
           response.branches.map(async (branch) => {
             let roomCount = 0;
             try {
               // Use public endpoint for rooms
-              console.log(`Fetching rooms for branch ${branch.branch_name} (${branch.branch_id})...`);
               const roomsResponse = await roomService.getAllRoomsPublic({ branch_id: branch.branch_id });
-              console.log(`Rooms response for ${branch.branch_name}:`, roomsResponse);
               
               if (roomsResponse.success && Array.isArray(roomsResponse.rooms)) {
                 roomCount = roomsResponse.rooms.length;
               } else {
-                console.warn(`Failed to get rooms for ${branch.branch_name}:`, roomsResponse.message);
                 roomCount = 0;
               }
-              
-              console.log(`Branch ${branch.branch_name}: ${roomCount} rooms`);
             } catch (err) {
-              console.error(`Error fetching rooms for branch ${branch.branch_name}:`, err);
               roomCount = 0;
             }
               
@@ -85,20 +75,11 @@ const BranchSelectionPage = ({ onBranchSelect }) => {
           })
         );
         
-        console.log('Processed branches:', branchesWithRoomCount);
         setBranches(branchesWithRoomCount);
       } else {
-        console.error('API response not successful:', response);
         setError(response.message || 'Failed to load branches');
       }
     } catch (err) {
-      console.error('Error fetching branches:', err);
-      console.error('Error details:', {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status
-      });
-      
       // More specific error messages
       if (err.response?.status === 401) {
         setError('Authentication required. Please login to view branches.');

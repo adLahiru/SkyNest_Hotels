@@ -9,6 +9,7 @@ const ManagerFinancial = ({ branchId, stats }) => {
 
   useEffect(() => {
     fetchPayments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId, dateFilter]);
 
   const fetchPayments = async () => {

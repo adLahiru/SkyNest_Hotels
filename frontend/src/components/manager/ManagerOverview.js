@@ -1,7 +1,7 @@
 import React from 'react';
 import { Building2, Home, Users, Calendar, DollarSign, UserCheck, UserX, DoorOpen } from 'lucide-react';
 
-const ManagerOverview = ({ stats, user }) => {
+const ManagerOverview = ({ stats }) => {
   return (
     <div className="space-y-6">
       {/* Branch Info Card */}

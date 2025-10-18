@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DoorOpen, Plus, Edit, Trash2, X } from 'lucide-react';
+import { Plus, Trash2, X } from 'lucide-react';
 import axios from 'axios';
 
 const ManagerRooms = ({ branchId }) => {
@@ -17,6 +17,7 @@ const ManagerRooms = ({ branchId }) => {
   useEffect(() => {
     fetchRooms();
     fetchRoomTypes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId]);
 
   const fetchRooms = async () => {

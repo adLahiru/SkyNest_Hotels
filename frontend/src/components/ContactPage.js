@@ -27,43 +27,32 @@ const ContactPage = () => {
         setLoadingUserData(true);
         const token = localStorage.getItem('token');
         
-        console.log('🔍 Contact Page - Checking for token:', token ? 'Token exists' : 'No token found');
-        
         if (token) {
           setIsLoggedIn(true);
-          console.log('✅ User is logged in, fetching profile...');
           
           const response = await userService.getCurrentUserProfile();
-          console.log('📦 API Response:', response);
           
           if (response.success && response.user) {
-            console.log('✅ User data loaded for contact form:', response.user);
-            console.log('📝 Setting form fields - Name:', response.user.name, 'Email:', response.user.email, 'Phone:', response.user.phone);
-            
             setContactForm(prev => ({
               ...prev,
               name: response.user.name || '',
               email: response.user.email || '',
               phone: response.user.phone || ''
             }));
-          } else {
-            console.warn('⚠️ API call succeeded but no user data:', response);
           }
         } else {
-          console.log('❌ No token found - user is guest');
           setIsLoggedIn(false);
         }
       } catch (error) {
-        console.error('❌ Error fetching user data for contact form:', error);
         setIsLoggedIn(false);
       } finally {
         setLoadingUserData(false);
-        console.log('✅ Loading complete. isLoggedIn:', isLoggedIn);
       }
     };
 
     fetchUserData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount
 
   const contactReasons = [
     { id: 'general', name: 'General Inquiry' },

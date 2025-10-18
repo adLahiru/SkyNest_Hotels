@@ -9,6 +9,7 @@ const ManagerStaff = ({ branchId }) => {
 
   useEffect(() => {
     fetchStaff();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId]);
 
   const fetchStaff = async () => {

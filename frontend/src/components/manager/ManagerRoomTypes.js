@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Home, Users, DollarSign, Info } from 'lucide-react';
 import axios from 'axios';
 
-const ManagerRoomTypes = ({ branchId }) => {
+const ManagerRoomTypes = () => {
   const [roomTypes, setRoomTypes] = useState([]);
   const [loading, setLoading] = useState(true);
 

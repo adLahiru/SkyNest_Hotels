@@ -9,14 +9,7 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch rooms from API when branch is selected
-  useEffect(() => {
-    if (selectedBranch?.id) {
-      fetchRooms();
-    }
-  }, [selectedBranch]);
-
-  const fetchRooms = async () => {
+  const fetchRooms = React.useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -115,7 +108,6 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
                 state: room.state
               };
             } catch (err) {
-              console.error(`Error fetching room type for room ${room.room_id}:`, err);
               return null;
             }
           })
@@ -132,12 +124,18 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
         setError(roomsResponse.message || 'Failed to load rooms');
       }
     } catch (err) {
-      console.error('Error fetching rooms:', err);
       setError('Unable to load rooms. Please try again later.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedBranch.id]);
+
+  // Fetch rooms when branch is selected
+  useEffect(() => {
+    if (selectedBranch?.id) {
+      fetchRooms();
+    }
+  }, [selectedBranch, fetchRooms]);
 
   const handleRoomBooking = (room) => {
     if (!room.available) return;
@@ -234,7 +232,7 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
         {/* Rooms Grid - Display 2 rooms per row with perfect alignment */}
         {!loading && !error && rooms.length > 0 && (
           <div className="grid lg:grid-cols-2 gap-8">
-            {rooms.map((room, index) => {
+            {rooms.map((room) => {
               const availability = getAvailabilityStatus(room);
               const StatusIconComponent = availability.icon;
             

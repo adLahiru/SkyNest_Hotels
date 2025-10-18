@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Users, Bed, MapPin, CheckCircle, AlertCircle, ArrowLeft, Loader2 } from 'lucide-react';
+import { Calendar, Users, CheckCircle, AlertCircle, ArrowLeft, Loader2 } from 'lucide-react';
 import bookingService from '../services/bookingService';
 import userService from '../services/userService';
 
@@ -34,7 +34,6 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
         const response = await userService.getCurrentUserProfile();
         
         if (response.success && response.user) {
-          console.log('Fresh user data loaded:', response.user);
           setBookingForm(prev => ({
             ...prev,
             name: response.user.name || '',
@@ -43,7 +42,6 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
           }));
         }
       } catch (error) {
-        console.error('Error fetching user data:', error);
         // Fallback to user prop if API fails
         if (user) {
           setBookingForm(prev => ({
@@ -59,7 +57,8 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
     };
 
     fetchUserData();
-  }, []); // Run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount - user is intentionally excluded to prevent re-fetch
 
   // Update form when user prop changes (fallback)
   useEffect(() => {
@@ -134,21 +133,16 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
         special_requests: bookingForm.specialRequests?.trim() || null
       };
 
-      console.log('Submitting booking:', bookingData);
-
       // Call booking API
       const response = await bookingService.createBooking(bookingData);
       
       if (response.success) {
-        console.log('Booking created successfully:', response.booking);
         setBookingReference(response.booking?.booking_id || 'SKN' + Date.now().toString().slice(-6));
         setShowConfirmation(true);
       } else {
-        console.error('Booking failed:', response.message);
         setFormErrors({ submit: response.message || 'Failed to create booking. Please try again.' });
       }
     } catch (error) {
-      console.error('Error creating booking:', error);
       setFormErrors({ submit: 'An error occurred while processing your booking. Please try again.' });
     } finally {
       setIsSubmitting(false);

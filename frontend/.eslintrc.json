@@ -13,7 +13,7 @@
         "argsIgnorePattern": "^_"
       }
     ],
-    "no-console": "warn",
+    "no-console": "off",
     "no-debugger": "warn",
     "no-unreachable": "error",
     "no-duplicate-imports": "error",
