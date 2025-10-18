@@ -6,6 +6,30 @@ import { UserRole } from '../types/auth.types';
 
 const router: Router = Router();
 
+// ============================================
+// PUBLIC ROUTES (No authentication required)
+// ============================================
+
+// Get all room types (Public - for guests to browse)
+// GET /api/room-types/public
+// Accessible by: Everyone (no auth required)
+router.get(
+  '/public',
+  roomTypeController.getRoomTypes
+);
+
+// Get room type by ID (Public - for guests to browse)
+// GET /api/room-types/public/:roomTypeId
+// Accessible by: Everyone (no auth required)
+router.get(
+  '/public/:roomTypeId',
+  roomTypeController.getRoomTypeById
+);
+
+// ============================================
+// PROTECTED ROUTES (Authentication required)
+// ============================================
+
 // Create a new room type
 // POST /api/room-types
 // Accessible by: ADMIN only

@@ -7,7 +7,38 @@ import apiClient from '../config/api';
 
 const roomService = {
   /**
-   * Get all rooms with optional filters
+   * Get all rooms with optional filters (Public - No auth required)
+   * @param {Object} filters - Filter options (branch_id, room_type_id, status, etc.)
+   * @returns {Promise} Response with list of rooms
+   */
+  getAllRoomsPublic: async (filters = {}) => {
+    try {
+      const params = new URLSearchParams();
+      Object.keys(filters).forEach(key => {
+        if (filters[key] !== null && filters[key] !== undefined) {
+          params.append(key, filters[key]);
+        }
+      });
+      
+      const response = await apiClient.get(`/rooms/public?${params.toString()}`);
+      return {
+        success: response.data.success,
+        rooms: response.data.data?.rooms || [], // Backend returns data.rooms
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.error('Get all rooms (public) error:', error);
+      return {
+        success: false,
+        rooms: [],
+        message: error.response?.data?.message || 'Failed to fetch rooms',
+        error,
+      };
+    }
+  },
+
+  /**
+   * Get all rooms with optional filters (Authenticated)
    * @param {Object} filters - Filter options (branch_id, room_type_id, status, etc.)
    * @returns {Promise} Response with list of rooms
    */
@@ -23,13 +54,14 @@ const roomService = {
       const response = await apiClient.get(`/rooms?${params.toString()}`);
       return {
         success: response.data.success,
-        rooms: response.data.data || [],
+        rooms: response.data.data?.rooms || [], // Backend returns data.rooms
         message: response.data.message,
       };
     } catch (error) {
       console.error('Get all rooms error:', error);
       return {
         success: false,
+        rooms: [],
         message: error.response?.data?.message || 'Failed to fetch rooms',
         error,
       };

@@ -13,7 +13,6 @@ const router: Router = express.Router();
 
 /**
  * Room Routes
- * All routes require authentication
  * 
  * Access Control:
  * - Admin: Full access to all branches
@@ -21,10 +20,27 @@ const router: Router = express.Router();
  * - Receptionist/Housekeeping/Guest: Read-only access
  */
 
-// Get available rooms (public for authenticated users)
+// ============================================
+// PUBLIC ROUTES (No authentication required)
+// ============================================
+
+// Get available rooms (Public - for guests to browse)
+router.get('/public/available', getAvailableRooms);
+
+// Get all rooms with optional filters (Public - for guests to browse)
+router.get('/public', getRooms);
+
+// Get specific room by ID (Public - for guests to view details)
+router.get('/public/:room_id', getRoomById);
+
+// ============================================
+// PROTECTED ROUTES (Authentication required)
+// ============================================
+
+// Get available rooms (authenticated)
 router.get('/available', authenticateToken, getAvailableRooms);
 
-// Get all rooms with optional filters
+// Get all rooms with optional filters (authenticated)
 router.get('/', authenticateToken, getRooms);
 
 // Get specific room by ID

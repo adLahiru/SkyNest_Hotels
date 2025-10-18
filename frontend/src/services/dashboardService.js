@@ -71,6 +71,28 @@ const dashboardService = {
       };
     }
   },
+
+  /**
+   * Get Housekeeping Dashboard Statistics
+   * @returns {Promise} Response with housekeeping's branch stats
+   */
+  getHousekeepingStats: async () => {
+    try {
+      const response = await apiClient.get('/dashboard/housekeeping');
+      return {
+        success: response.data.success,
+        data: response.data.data,
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.error('Get housekeeping stats error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to fetch housekeeping dashboard',
+        error,
+      };
+    }
+  },
 };
 
 export default dashboardService;

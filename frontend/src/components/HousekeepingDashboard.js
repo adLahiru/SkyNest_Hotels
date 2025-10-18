@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserCheck, UserX, Clock, Home, Users, DoorOpen, CheckCircle, XCircle } from 'lucide-react';
 import dashboardService from '../services/dashboardService';
 
-const ReceptionistDashboard = ({ user }) => {
+const HousekeepingDashboard = ({ user }) => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -12,7 +12,7 @@ const ReceptionistDashboard = ({ user }) => {
 
   const fetchDashboardStats = async () => {
     setLoading(true);
-    const result = await dashboardService.getReceptionistStats();
+    const result = await dashboardService.getHousekeepingStats();
     if (result.success) {
       setStats(result.data);
     }
@@ -42,7 +42,7 @@ const ReceptionistDashboard = ({ user }) => {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Receptionist Dashboard</h1>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Housekeeping Dashboard</h1>
           <p className="text-gray-600">Welcome back, {user?.name}! Here's today's operations.</p>
         </div>
 
@@ -342,4 +342,4 @@ const ReceptionistDashboard = ({ user }) => {
   );
 };
 
-export default ReceptionistDashboard;
+export default HousekeepingDashboard;

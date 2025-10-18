@@ -14,16 +14,17 @@ const bookingService = {
   createBooking: async (bookingData) => {
     try {
       const response = await apiClient.post('/bookings', bookingData);
+      console.log('Booking API response:', response.data);
       return {
         success: response.data.success,
-        booking: response.data.data,
+        booking: response.data.data?.booking || response.data.data,
         message: response.data.message || 'Booking created successfully',
       };
     } catch (error) {
       console.error('Create booking error:', error);
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to create booking',
+        message: error.response?.data?.message || error.message || 'Failed to create booking',
         error,
       };
     }

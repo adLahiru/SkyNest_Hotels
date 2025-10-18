@@ -345,3 +345,204 @@ body {
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
+
+/* ============================================
+   BRANCH & ROOM SELECTION PERFECT ALIGNMENT
+   ============================================ */
+
+/* Branch Card Alignment - 3 columns */
+.branch-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+}
+
+@media (min-width: 768px) {
+  .branch-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .branch-cards-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Ensure all branch cards have equal height */
+.branch-card {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+}
+
+.branch-card .branch-content {
+  display: flex;
+  flex-direction: column;
+  padding: 2rem;
+}
+
+.branch-card .branch-content > *:last-child {
+  margin-top: auto;
+}
+
+/* Room Card Alignment - 2 columns */
+.room-cards-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+
+@media (min-width: 1024px) {
+  .room-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Ensure all room cards have equal height in a row */
+.room-card {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+}
+
+.room-card .room-content {
+  display: flex;
+  flex-direction: column;
+  padding: 2rem;
+}
+
+.room-card .room-content > button {
+  margin-top: auto;
+}
+
+/* Perfect alignment for stats sections */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.stats-grid > div {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+  padding: 0.75rem;
+  background-color: #f9fafb;
+  border-radius: 0.5rem;
+}
+
+/* Features grid alignment */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.features-grid > div {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Amenities flex alignment */
+.amenities-flex {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.amenities-flex > div {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  background-color: #f9fafb;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
+/* Button alignment at bottom of cards */
+.card-button {
+  width: 100%;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: auto;
+}
+
+/* Ensure consistent heights for all card sections */
+.card-section {
+  min-height: fit-content;
+}
+
+/* Image container with consistent aspect ratio */
+.card-image-container {
+  position: relative;
+  width: 100%;
+  height: 16rem; /* 256px */
+  overflow: hidden;
+}
+
+.card-image-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.card-image-container:hover img {
+  transform: scale(1.1);
+}
+
+/* Perfect vertical alignment for text sections */
+.text-section {
+  min-height: 3rem;
+  display: flex;
+  align-items: flex-start;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .branch-cards-grid,
+  .room-cards-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .features-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Loading spinner alignment */
+.loading-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  gap: 1rem;
+}
+
+/* Error message alignment */
+.error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 3rem;
+  gap: 1rem;
+}

@@ -6,6 +6,30 @@ import { UserRole } from '../types/auth.types';
 
 const router: Router = Router();
 
+// ============================================
+// PUBLIC ROUTES (No authentication required)
+// ============================================
+
+// Get all branches (Public - for guests to browse)
+// GET /api/branches/public
+// Accessible by: Everyone (no auth required)
+router.get(
+  '/public',
+  branchController.getBranches
+);
+
+// Get branch by ID (Public - for guests to browse)
+// GET /api/branches/public/:branchId
+// Accessible by: Everyone (no auth required)
+router.get(
+  '/public/:branchId',
+  branchController.getBranchById
+);
+
+// ============================================
+// PROTECTED ROUTES (Authentication required)
+// ============================================
+
 // Create a new branch
 // POST /api/branches
 // Accessible by: ADMIN only

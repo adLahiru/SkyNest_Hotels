@@ -203,8 +203,9 @@ const AdminDashboard = ({ user }) => {
     if (roomFloorFilter) filters.floor_no = roomFloorFilter;
     
     const result = await roomService.getAllRooms(filters);
+    console.log('Fetched rooms result:', result); // Debug log
     if (result.success) {
-      let filteredRooms = result.rooms.rooms || [];
+      let filteredRooms = result.rooms || []; // Fixed: result.rooms NOT result.rooms.rooms
       
       // Apply search filter on room number
       if (roomSearchQuery) {
@@ -213,6 +214,7 @@ const AdminDashboard = ({ user }) => {
         );
       }
       
+      console.log('Filtered rooms:', filteredRooms); // Debug log
       setRooms(filteredRooms);
     } else {
       console.error('Failed to fetch rooms:', result.message);
@@ -1114,7 +1116,7 @@ const AdminDashboard = ({ user }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 pt-24 px-6">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 pt-28 px-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-center h-64">
             <div className="animate-pulse flex space-x-4">
@@ -1131,7 +1133,7 @@ const AdminDashboard = ({ user }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 pt-24 px-6 pb-12">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 pt-28 px-8 pb-16">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
