@@ -60,10 +60,6 @@ jobs:
       working-directory: ./backend
       run: pnpm build
       
-    - name: Run database migrations
-      working-directory: ./backend
-      run: pnpm migrate:prod
-      
     # =========================
     # Frontend Deployment
     # =========================
