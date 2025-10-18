@@ -1,38 +1,44 @@
 import React, { useState, useEffect } from 'react';
 import { Bed, ChevronLeft, ChevronRight, Star } from 'lucide-react';
+import roomTypeService from '../services/roomTypeService';
 
 const HomePage = ({ setCurrentPage }) => {
   const [currentRoomIndex, setCurrentRoomIndex] = useState(0);
   const [isVisible, setIsVisible] = useState({});
 
-  const rooms = [
+  const [rooms, setRooms] = useState([]);
+  const [loadingRooms, setLoadingRooms] = useState(true);
+  const [roomsError, setRoomsError] = useState('');
+
+  // Fallback static cards if API fails or has no data
+  const fallbackRooms = [
     {
       name: 'Standard Double Room',
-      area: '45m²',
+      area: '—',
       occupancy: 2,
       bedrooms: 1,
       price: 150,
       image: '/Images/6256702-middle.png',
-      fallback: '/assets/images/external/home/standard-room.jpg'
+      fallback: '/assets/images/external/home/standard-room.jpg',
     },
     {
       name: 'Deluxe Suite',
-      area: '65m²',
+      area: '—',
       occupancy: 3,
       bedrooms: 2,
       price: 250,
       image: '/Images/f_a6ac69d2b315fc52106206940c54e2e36375e06e.jpg',
-      fallback: '/assets/images/external/home/deluxe-suite.jpg'
+      fallback: '/assets/images/external/home/deluxe-suite.jpg',
     },
     {
       name: 'Family Room',
-      area: '80m²',
+      area: '—',
       occupancy: 4,
       bedrooms: 2,
       price: 320,
       image: '/Images/istockphoto-1452529483-612x612.jpg',
-      fallback: '/assets/images/external/home/family-room.jpg'
-    }
+      fallback: '/assets/images/external/home/family-room.jpg',
+    },
   ];
 
   const facilities = [
@@ -81,13 +87,61 @@ const HomePage = ({ setCurrentPage }) => {
   const nextRoom = () => setCurrentRoomIndex((prev) => (prev + 1) % rooms.length);
   const prevRoom = () => setCurrentRoomIndex((prev) => (prev - 1 + rooms.length) % rooms.length);
 
-  // Auto-rotate rooms
+  // Auto-rotate rooms (disabled while loading)
   useEffect(() => {
+    if (loadingRooms || rooms.length === 0) return;
     const interval = setInterval(nextRoom, 5000);
     return () => clearInterval(interval);
+  }, [loadingRooms, rooms.length, nextRoom]);
+
+  // Fetch room types for public homepage cards
+  useEffect(() => {
+    let ignore = false;
+    const fetchRooms = async () => {
+      setLoadingRooms(true);
+      setRoomsError('');
+      try {
+        const res = await roomTypeService.getAllRoomTypesPublic();
+        if (!ignore && res.success) {
+          const mapped = (res.roomTypes || []).map((rt) => {
+            const amenitiesArr = typeof rt.amenities === 'string'
+              ? rt.amenities.split(',').map(a => a.trim()).filter(Boolean)
+              : [];
+            return {
+              id: rt.room_type_id,
+              name: rt.type,
+              capacity: rt.capacity,
+              available: rt.room_count || 0,
+              price: rt.daily_rate,
+              description: rt.description || '',
+              amenities: amenitiesArr,
+              image: rt.photo || '/assets/images/external/home/standard-room.jpg',
+              fallback: '/assets/images/external/home/standard-room.jpg',
+            };
+          });
+          // Use top 3 or fallback if empty (keep 3 for layout consistency)
+          setRooms(mapped.length > 0 ? mapped.slice(0, 3) : fallbackRooms);
+        } else if (!ignore) {
+          setRooms(fallbackRooms);
+          setRoomsError(res.message || '');
+        }
+      } catch (e) {
+        if (!ignore) {
+          setRooms(fallbackRooms);
+          setRoomsError('Unable to load rooms at this time.');
+        }
+      } finally {
+        if (!ignore) setLoadingRooms(false);
+      }
+    };
+    fetchRooms();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   // Intersection Observer for animations
+  // Re-run when rooms change so newly rendered cards are observed
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -104,7 +158,7 @@ const HomePage = ({ setCurrentPage }) => {
     elements.forEach((el) => observer.observe(el));
 
     return () => observer.disconnect();
-  }, []);
+  }, [rooms]);
 
   return (
     <div className="min-h-screen pt-20">
@@ -190,6 +244,30 @@ const HomePage = ({ setCurrentPage }) => {
             </p>
           </div>
           
+          {loadingRooms && rooms.length === 0 && (
+            <div className="grid md:grid-cols-3 gap-8 mb-6">
+              {[0,1,2].map((i) => (
+                <div key={i} className="bg-white rounded-2xl overflow-hidden shadow-xl p-8 animate-pulse">
+                  <div className="h-64 bg-gray-200 mb-6 rounded"></div>
+                  <div className="h-6 bg-gray-200 w-2/3 mb-4 rounded"></div>
+                  <div className="space-y-2 mb-6">
+                    <div className="h-4 bg-gray-200 w-full rounded"></div>
+                    <div className="h-4 bg-gray-200 w-5/6 rounded"></div>
+                    <div className="h-4 bg-gray-200 w-4/6 rounded"></div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="h-8 bg-gray-200 w-24 rounded"></div>
+                    <div className="h-10 bg-gray-200 w-28 rounded"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {roomsError && (
+            <div className="max-w-2xl mx-auto mb-6 text-center text-amber-700 bg-amber-50 border border-amber-200 p-3 rounded">
+              Showing featured rooms. {roomsError}
+            </div>
+          )}
           <div className="grid md:grid-cols-3 gap-8">
             {rooms.map((room, index) => (
               <div 
@@ -207,23 +285,32 @@ const HomePage = ({ setCurrentPage }) => {
                       e.target.src = room.fallback;
                     }}
                   />
-                  <div className="absolute top-4 right-4 bg-amber-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
-                    Featured
-                  </div>
+                  {typeof room.available === 'number' && (
+                    <div className="absolute top-4 right-4 bg-amber-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
+                      {room.available} available
+                    </div>
+                  )}
                 </div>
                 <div className="p-8">
                   <h3 className="text-2xl font-semibold mb-4 text-gray-800">{room.name}</h3>
+                  {room.description && (
+                    <p className="text-gray-600 mb-4 leading-relaxed line-clamp-2">{room.description}</p>
+                  )}
                   <div className="space-y-2 mb-6 text-gray-600">
                     <p className="flex justify-between">
-                      <span>Room Area:</span> <span className="font-medium">{room.area}</span>
+                      <span>Max Occupancy:</span> <span className="font-medium">{room.capacity} guests</span>
                     </p>
                     <p className="flex justify-between">
-                      <span>Max Occupancy:</span> <span className="font-medium">{room.occupancy} guests</span>
-                    </p>
-                    <p className="flex justify-between">
-                      <span>Bedrooms:</span> <span className="font-medium">{room.bedrooms}</span>
+                      <span>Available Rooms:</span> <span className="font-medium">{room.available}</span>
                     </p>
                   </div>
+                  {Array.isArray(room.amenities) && room.amenities.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-6">
+                      {room.amenities.slice(0, 3).map((am, i) => (
+                        <span key={i} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">{am}</span>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="text-sm text-gray-500">From</span>

@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Users, Bed, Wifi, Coffee, Tv, Wind, Car, CheckCircle, XCircle, Calendar, Star } from 'lucide-react';
-import axios from 'axios';
-
-const API_URL = 'http://localhost:8084/api';
+import roomTypeService from '../services/roomTypeService';
 
 const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isLoggedIn, onLoginRequired }) => {
   const [selectedRoom, setSelectedRoom] = useState(null);
@@ -11,47 +9,37 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch room types from the database
+  // Fetch room types filtered by selected branch (public endpoint)
   useEffect(() => {
     const fetchRoomTypes = async () => {
+      const branchId = selectedBranch?.branch_id ?? selectedBranch?.id;
+      if (!branchId) {
+        // No branch selected: stop loading and prompt user
+        setLoading(false);
+        setError('Please select a branch first.');
+        return;
+      }
       try {
         setLoading(true);
-        const token = localStorage.getItem('accessToken');
-        
-        if (!token) {
-          setError('Please login to view available rooms');
-          setLoading(false);
-          return;
-        }
-
-        const response = await axios.get(`${API_URL}/room-types`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (response.data.success) {
-          setRoomTypes(response.data.data || []);
-        } else {
-          setError('Failed to load room types');
-        }
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching room types:', error);
-        if (error.response?.status === 401) {
-          setError('Your session has expired or is invalid. Please log in again.');
-          if (typeof onLoginRequired === 'function') {
-            onLoginRequired();
+        setError(null);
+        const res = await roomTypeService.getRoomTypesByBranchPublic(branchId);
+        if (res.success) {
+          setRoomTypes(res.roomTypes || []);
+          if (!res.roomTypes || res.roomTypes.length === 0) {
+            setError('No rooms available at this branch yet.');
           }
         } else {
-          setError('Failed to load rooms. Please try again later.');
+          setError(res.message || 'Failed to load room types');
         }
+      } catch (e) {
+        setError('Failed to load rooms. Please try again later.');
+      } finally {
         setLoading(false);
       }
     };
 
     fetchRoomTypes();
-  }, []);
+  }, [selectedBranch?.branch_id, selectedBranch?.id]);
 
   // Intersection Observer for animations
   useEffect(() => {
@@ -154,11 +142,11 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
           
           <div className="text-center">
             <h1 className="text-5xl md:text-6xl font-light text-gray-800 mb-4">
-              {selectedBranch?.name} - Available Rooms
+              {(selectedBranch?.branch_name || selectedBranch?.name || 'Selected Branch')} - Available Rooms
             </h1>
             <div className="w-24 h-1 bg-gradient-to-r from-amber-400 to-amber-600 mx-auto mb-6"></div>
             <p className="text-lg text-gray-600 max-w-3xl mx-auto">
-              Choose from our carefully selected rooms at {selectedBranch?.location}. 
+              Choose from our carefully selected rooms at {selectedBranch?.address || selectedBranch?.location || 'our hotel'}. 
               Each room is designed for comfort and equipped with modern amenities.
             </p>
           </div>

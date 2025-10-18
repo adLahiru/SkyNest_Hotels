@@ -234,6 +234,71 @@ export class RoomTypeController {
     }
   };
 
+  // Get room types available for a specific branch (only types with at least one available room in that branch)
+  public getRoomTypesByBranch = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const branchId = req.params.branchId || (req.query.branch_id as string);
+
+      if (!branchId) {
+        res.status(400).json({
+          success: false,
+          message: 'Branch ID is required'
+        } as ApiResponse);
+        return;
+      }
+
+      const connection = await db.getConnection();
+
+      try {
+        const [rows] = await connection.execute<DatabaseRoomTypeRow[]>(
+          `SELECT rt.room_type_id, rt.type, rt.capacity, rt.daily_rate, rt.amenities, 
+                  rt.description, rt.photo, rt.created_at, rt.updated_at,
+                  COUNT(r.room_id) as room_count
+           FROM room_types rt
+           LEFT JOIN rooms r 
+             ON rt.room_type_id = r.room_type_id 
+            AND r.branch_id = ?
+            AND r.state = 'available'
+           GROUP BY rt.room_type_id
+           ORDER BY rt.created_at DESC`,
+          [branchId]
+        );
+
+        // Only return room types that have at least one available room for the branch
+        const filtered = rows.filter(rt => (rt.room_count || 0) > 0).map(roomType => ({
+          room_type_id: roomType.room_type_id,
+          type: roomType.type,
+          capacity: roomType.capacity,
+          daily_rate: parseFloat(roomType.daily_rate.toString()),
+          amenities: roomType.amenities,
+          description: roomType.description,
+          photo: roomType.photo 
+            ? `data:image/jpeg;base64,${roomType.photo.toString('base64')}`
+            : null,
+          room_count: roomType.room_count || 0,
+          created_at: roomType.created_at,
+          updated_at: roomType.updated_at
+        }));
+
+        res.status(200).json({
+          success: true,
+          message: 'Room types for branch retrieved successfully',
+          data: filtered
+        } as ApiResponse);
+
+      } finally {
+        connection.release();
+      }
+
+    } catch (error) {
+      console.error('Error retrieving room types by branch:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error while retrieving room types by branch'
+      } as ApiResponse);
+    }
+  };
+
   // Get room type by ID
   public getRoomTypeById = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Star, LogIn } from 'lucide-react';
-import axios from 'axios';
+import branchService from '../services/branchService';
 
-const API_URL = 'http://localhost:8084/api';
 
 const BranchSelectionPage = ({ onBranchSelect, setCurrentPage }) => {
   const [branches, setBranches] = useState([]);
@@ -12,7 +11,7 @@ const BranchSelectionPage = ({ onBranchSelect, setCurrentPage }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    const checkAuth = () => {
+  const checkAuth = () => {
       const token = localStorage.getItem('accessToken');
       const user = localStorage.getItem('user');
       const isAuth = !!(token && user);
@@ -22,9 +21,13 @@ const BranchSelectionPage = ({ onBranchSelect, setCurrentPage }) => {
 
     const fetchBranches = async () => {
       try {
-        const response = await axios.get(`${API_URL}/branches/public`);
-        console.log('Branch data:', response.data);
-        setBranches(response.data.data || []);
+        const response = await branchService.getPublicAvailableBranches();
+        console.log('Branch data:', response);
+        if (response.success) {
+          setBranches(response.branches || []);
+        } else {
+          setError(response.message || 'Failed to load branches');
+        }
         setLoading(false);
       } catch (error) {
         console.error('Error fetching branches:', error);

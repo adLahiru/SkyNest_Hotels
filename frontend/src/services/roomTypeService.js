@@ -7,6 +7,51 @@ import apiClient from '../config/api';
 
 const roomTypeService = {
   /**
+   * Get all room types (Public endpoint)
+   * No authentication required
+   * @returns {Promise} Response with list of room types
+   */
+  getAllRoomTypesPublic: async () => {
+    try {
+      const response = await apiClient.get('/room-types/public');
+      return {
+        success: response.data.success,
+        roomTypes: response.data.data || [],
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.error('Get public room types error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to fetch public room types',
+        error,
+      };
+    }
+  },
+
+  /**
+   * Get room types by branch (Public endpoint)
+   * @param {string} branchId - Branch ID
+   * @returns {Promise} Response with list of room types available at branch
+   */
+  getRoomTypesByBranchPublic: async (branchId) => {
+    try {
+      const response = await apiClient.get(`/room-types/public/branch/${branchId}`);
+      return {
+        success: response.data.success,
+        roomTypes: response.data.data || [],
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.error('Get public room types by branch error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to fetch room types for branch',
+        error,
+      };
+    }
+  },
+  /**
    * Get all room types
    * @returns {Promise} Response with list of room types
    */

@@ -6,6 +6,14 @@ import { UserRole } from '../types/auth.types';
 
 const router: Router = Router();
 
+// Public: Get all room types without authentication (for homepage display)
+// GET /api/room-types/public
+router.get('/public', roomTypeController.getRoomTypes);
+
+// Public: Get room types for a specific branch that are available
+// GET /api/room-types/public/branch/:branchId
+router.get('/public/branch/:branchId', roomTypeController.getRoomTypesByBranch);
+
 // Create a new room type
 // POST /api/room-types
 // Accessible by: ADMIN only
@@ -23,6 +31,14 @@ router.get(
   '/',
   authenticateToken,
   roomTypeController.getRoomTypes
+);
+
+// Authenticated: Get room types by branch (available only)
+// GET /api/room-types/branch/:branchId
+router.get(
+  '/branch/:branchId',
+  authenticateToken,
+  roomTypeController.getRoomTypesByBranch
 );
 
 // Get room type by ID

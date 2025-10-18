@@ -267,6 +267,54 @@ export class BranchController {
     }
   };
 
+  // Get branches that currently have at least one available room
+  public getBranchesWithAvailability = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const connection = await db.getConnection();
+
+      try {
+        const [rows] = await connection.execute<DatabaseBranchRow[] & RowDataPacket[]>(
+          `SELECT hb.branch_id, hb.branch_name, hb.address, hb.email, hb.phone,
+                  hb.manager_id, hb.photo, hb.created_at, hb.updated_at,
+                  COUNT(r.room_id) as available_room_count
+           FROM hotel_branches hb
+           LEFT JOIN rooms r ON r.branch_id = hb.branch_id AND r.state = 'available'
+           GROUP BY hb.branch_id
+           HAVING available_room_count > 0
+           ORDER BY hb.created_at DESC`
+        );
+
+        const branches = (rows as any[]).map(row => ({
+          branch_id: row.branch_id,
+          branch_name: row.branch_name,
+          address: row.address,
+          email: row.email,
+          phone: row.phone,
+          manager_id: row.manager_id,
+          available_room_count: row.available_room_count,
+          created_at: row.created_at,
+          updated_at: row.updated_at
+        }));
+
+        res.status(200).json({
+          success: true,
+          message: 'Branches with availability retrieved successfully',
+          data: branches
+        } as ApiResponse);
+
+      } finally {
+        connection.release();
+      }
+
+    } catch (error) {
+      console.error('Error retrieving branches with availability:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error while retrieving branches with availability'
+      } as ApiResponse);
+    }
+  };
+
   // Get branch by ID
   public getBranchById = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {

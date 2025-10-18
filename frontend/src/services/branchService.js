@@ -7,6 +7,26 @@ import apiClient from '../config/api';
 
 const branchService = {
   /**
+   * Get public branches that currently have available rooms
+   */
+  getPublicAvailableBranches: async () => {
+    try {
+      const response = await apiClient.get('/branches/public/available');
+      return {
+        success: response.data.success,
+        branches: response.data.data || [],
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.error('Get public available branches error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to fetch available branches',
+        error,
+      };
+    }
+  },
+  /**
    * Get all branches
    * @returns {Promise} Response with list of branches
    */

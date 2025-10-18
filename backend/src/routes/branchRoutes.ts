@@ -10,6 +10,10 @@ const router: Router = Router();
 // GET /api/branches/public
 router.get('/public', branchController.getBranches);
 
+// Get branches with available rooms only (public access)
+// GET /api/branches/public/available
+router.get('/public/available', branchController.getBranchesWithAvailability);
+
 // Create a new branch
 // POST /api/branches
 // Accessible by: ADMIN only
