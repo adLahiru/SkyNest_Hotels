@@ -7,7 +7,6 @@ on:
   push:
     branches: [ "main" ]
 
-
 jobs:
   build-and-deploy:
     runs-on: self-hosted
@@ -86,19 +85,19 @@ jobs:
       run: |
         # Backup existing deployment
         if [ -d "/var/www/skynest-hotels" ]; then
-          mkdir -p /var/www/backups
-          cp -r /var/www/skynest-hotels /var/www/backups/skynest-hotels-$(date +%Y%m%d%H%M%S)
+          sudo mkdir -p /var/www/backups
+          sudo cp -r /var/www/skynest-hotels /var/www/backups/skynest-hotels-$(date +%Y%m%d%H%M%S)
         fi
         
-        # Ensure directory exists
-        mkdir -p /var/www/skynest-hotels
+        # Ensure directory exists with sudo
+        sudo mkdir -p /var/www/skynest-hotels
         
         # Copy new build to Nginx serve directory
-        cp -r ./frontend/build/* /var/www/skynest-hotels/
+        sudo cp -r ./frontend/build/* /var/www/skynest-hotels/
         
         # Set proper permissions
-        chown -R www-data:www-data /var/www/skynest-hotels
-        chmod -R 755 /var/www/skynest-hotels
+        sudo chown -R www-data:www-data /var/www/skynest-hotels
+        sudo chmod -R 755 /var/www/skynest-hotels
         
     - name: Reload Nginx
       run: |
