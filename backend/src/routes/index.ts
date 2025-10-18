@@ -8,6 +8,7 @@ import discountRoutes from './discountRoutes';
 import roomRoutes from './roomRoutes';
 import bookingRoutes from './bookingRoutes';
 import dashboardRoutes from './dashboardRoutes';
+import paymentRoutes from './paymentRoutes';
 
 const router: Router = Router();
 
@@ -38,6 +39,9 @@ router.use('/discounts', discountRoutes);
 // Mount dashboard routes
 router.use('/dashboard', dashboardRoutes);
 
+// Mount payment routes
+router.use('/payments', paymentRoutes);
+
 // Health check for the entire API
 router.get('/health', (req, res) => {
   res.json({
@@ -54,7 +58,8 @@ router.get('/health', (req, res) => {
       bookings: 'Available at /api/bookings',
       services: 'Available at /api/services',
       discounts: 'Available at /api/discounts',
-      dashboard: 'Available at /api/dashboard'
+      dashboard: 'Available at /api/dashboard',
+      payments: 'Available at /api/payments'
     }
   });
 });

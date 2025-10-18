@@ -906,7 +906,7 @@ class DashboardController {
       
       // Service type filtering
       if (serviceType) {
-        filters.push('s.service_type = ?');
+        filters.push('sc.category = ?');
         queryParams.push(serviceType);
       }
       
@@ -914,42 +914,42 @@ class DashboardController {
 
       const [serviceUsageData] = await db.execute<RowDataPacket[]>(
         `SELECT 
-          bs.service_id,
-          s.service_name,
-          s.service_type,
-          s.charge as service_charge,
+          su.service_id,
+          sc.service_name,
+          sc.category as service_type,
+          sc.unit_price as service_charge,
           b.branch_name,
           r.room_no,
           bk.booking_id,
-          u.name as guest_name,
-          bs.quantity,
-          bs.date_time as usage_date,
-          (s.charge * bs.quantity) as total_charge
-        FROM booking_service bs
-        JOIN services s ON bs.service_id = s.service_id
-        JOIN booking bk ON bs.booking_id = bk.booking_id
+          u.fname as guest_name,
+          su.quantity,
+          su.usage_date,
+          su.total as total_charge
+        FROM service_usage su
+        JOIN service_catalogue sc ON su.service_id = sc.service_id
+        JOIN booking bk ON su.booking_id = bk.booking_id
         JOIN rooms r ON bk.room_id = r.room_id
         JOIN hotel_branches b ON r.branch_id = b.branch_id
         JOIN users u ON bk.user_id = u.user_id
         ${whereClause}
-        ORDER BY bs.date_time DESC`,
+        ORDER BY su.usage_date DESC`,
         queryParams
       );
 
       // Get service usage statistics
       const [usageStats] = await db.execute<RowDataPacket[]>(
         `SELECT 
-          s.service_type,
-          COUNT(bs.service_id) as usage_count,
-          SUM(bs.quantity) as total_quantity,
-          SUM(s.charge * bs.quantity) as total_revenue
-        FROM booking_service bs
-        JOIN services s ON bs.service_id = s.service_id
-        JOIN booking bk ON bs.booking_id = bk.booking_id
+          sc.category as service_type,
+          COUNT(su.service_id) as usage_count,
+          SUM(su.quantity) as total_quantity,
+          SUM(su.total) as total_revenue
+        FROM service_usage su
+        JOIN service_catalogue sc ON su.service_id = sc.service_id
+        JOIN booking bk ON su.booking_id = bk.booking_id
         JOIN rooms r ON bk.room_id = r.room_id
         JOIN hotel_branches b ON r.branch_id = b.branch_id
         ${whereClause}
-        GROUP BY s.service_type
+        GROUP BY sc.category
         ORDER BY total_revenue DESC`,
         queryParams
       );
@@ -1003,8 +1003,6 @@ class DashboardController {
           b.branch_name,
           b.address,
           COUNT(DISTINCT bk.booking_id) as total_bookings,
-          SUM(p.room_charges) as room_revenue,
-          SUM(p.service_charges) as service_revenue,
           SUM(p.total_charges) as total_revenue,
           AVG(p.total_charges) as avg_booking_value
         FROM hotel_branches b
@@ -1084,27 +1082,27 @@ class DashboardController {
       const queryParams: any[] = [];
       
       if (startDate && endDate) {
-        dateFilter = 'AND bs.date_time BETWEEN ? AND ?';
+        dateFilter = 'AND su.usage_date BETWEEN ? AND ?';
         queryParams.push(startDate, endDate);
       }
 
       // Get top services by usage count
       const [topServicesByUsage] = await db.execute<RowDataPacket[]>(
         `SELECT 
-          s.service_id,
-          s.service_name,
-          s.service_type,
-          s.charge,
-          COUNT(bs.booking_id) as usage_count,
-          SUM(bs.quantity) as total_quantity,
-          SUM(s.charge * bs.quantity) as total_revenue,
+          sc.service_id,
+          sc.service_name,
+          sc.category as service_type,
+          sc.unit_price as charge,
+          COUNT(su.booking_id) as usage_count,
+          SUM(su.quantity) as total_quantity,
+          SUM(su.total) as total_revenue,
           COUNT(DISTINCT bk.user_id) as unique_customers,
-          AVG(bs.quantity) as avg_quantity_per_booking
-        FROM services s
-        LEFT JOIN booking_service bs ON s.service_id = bs.service_id
-        LEFT JOIN booking bk ON bs.booking_id = bk.booking_id
+          AVG(su.quantity) as avg_quantity_per_booking
+        FROM service_catalogue sc
+        LEFT JOIN service_usage su ON sc.service_id = su.service_id
+        LEFT JOIN booking bk ON su.booking_id = bk.booking_id
         WHERE 1=1 ${dateFilter}
-        GROUP BY s.service_id, s.service_name, s.service_type, s.charge
+        GROUP BY sc.service_id, sc.service_name, sc.category, sc.unit_price
         ORDER BY usage_count DESC, total_revenue DESC
         LIMIT ?`,
         [...queryParams, topLimit]
@@ -1113,16 +1111,16 @@ class DashboardController {
       // Get top services by revenue
       const [topServicesByRevenue] = await db.execute<RowDataPacket[]>(
         `SELECT 
-          s.service_id,
-          s.service_name,
-          s.service_type,
-          s.charge,
-          SUM(s.charge * bs.quantity) as total_revenue,
-          COUNT(bs.booking_id) as usage_count
-        FROM services s
-        LEFT JOIN booking_service bs ON s.service_id = bs.service_id
+          sc.service_id,
+          sc.service_name,
+          sc.category as service_type,
+          sc.unit_price as charge,
+          SUM(su.total) as total_revenue,
+          COUNT(su.booking_id) as usage_count
+        FROM service_catalogue sc
+        LEFT JOIN service_usage su ON sc.service_id = su.service_id
         WHERE 1=1 ${dateFilter}
-        GROUP BY s.service_id, s.service_name, s.service_type, s.charge
+        GROUP BY sc.service_id, sc.service_name, sc.category, sc.unit_price
         ORDER BY total_revenue DESC
         LIMIT ?`,
         [...queryParams, topLimit]
@@ -1133,17 +1131,17 @@ class DashboardController {
         `SELECT 
           b.branch_id,
           b.branch_name,
-          s.service_type,
-          COUNT(bs.booking_id) as usage_count,
-          SUM(bs.quantity) as total_quantity,
-          SUM(s.charge * bs.quantity) as total_revenue
+          sc.category as service_type,
+          COUNT(su.booking_id) as usage_count,
+          SUM(su.quantity) as total_quantity,
+          SUM(su.total) as total_revenue
         FROM hotel_branches b
         JOIN rooms r ON b.branch_id = r.branch_id
         JOIN booking bk ON r.room_id = bk.room_id
-        JOIN booking_service bs ON bk.booking_id = bs.booking_id
-        JOIN services s ON bs.service_id = s.service_id
+        JOIN service_usage su ON bk.booking_id = su.booking_id
+        JOIN service_catalogue sc ON su.service_id = sc.service_id
         WHERE 1=1 ${dateFilter}
-        GROUP BY b.branch_id, b.branch_name, s.service_type
+        GROUP BY b.branch_id, b.branch_name, sc.category
         ORDER BY b.branch_name, total_revenue DESC`,
         queryParams
       );
@@ -1151,18 +1149,18 @@ class DashboardController {
       // Get service type preferences
       const [serviceTypePreferences] = await db.execute<RowDataPacket[]>(
         `SELECT 
-          s.service_type,
-          COUNT(DISTINCT bs.booking_id) as booking_count,
+          sc.category as service_type,
+          COUNT(DISTINCT su.booking_id) as booking_count,
           COUNT(DISTINCT bk.user_id) as customer_count,
-          SUM(bs.quantity) as total_quantity,
-          SUM(s.charge * bs.quantity) as total_revenue,
-          ROUND(COUNT(DISTINCT bs.booking_id) * 100.0 / 
-            (SELECT COUNT(DISTINCT booking_id) FROM booking_service), 2) as usage_percentage
-        FROM services s
-        LEFT JOIN booking_service bs ON s.service_id = bs.service_id
-        LEFT JOIN booking bk ON bs.booking_id = bk.booking_id
+          SUM(su.quantity) as total_quantity,
+          SUM(su.total) as total_revenue,
+          ROUND(COUNT(DISTINCT su.booking_id) * 100.0 / 
+            (SELECT COUNT(DISTINCT booking_id) FROM service_usage), 2) as usage_percentage
+        FROM service_catalogue sc
+        LEFT JOIN service_usage su ON sc.service_id = su.service_id
+        LEFT JOIN booking bk ON su.booking_id = bk.booking_id
         WHERE 1=1 ${dateFilter}
-        GROUP BY s.service_type
+        GROUP BY sc.category
         ORDER BY total_revenue DESC`,
         queryParams
       );

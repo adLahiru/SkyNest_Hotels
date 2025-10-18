@@ -1035,3 +1035,324 @@ export const getMyBookings = async (req: AuthenticatedRequest, res: Response): P
     });
   }
 };
+
+/**
+ * Check in a guest
+ * PATCH /api/bookings/:booking_id/checkin
+ */
+export const checkInGuest = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const connection = await db.getConnection();
+  
+  try {
+    const { booking_id } = req.params;
+    const staffId = req.user?.staff_id || req.user?.user_id;
+    
+    if (!booking_id) {
+      res.status(400).json({ error: 'Booking ID is required' });
+      return;
+    }
+    
+    await connection.beginTransaction();
+    
+    // Get booking details
+    const [bookings] = await connection.query<Booking[]>(
+      `SELECT * FROM booking WHERE booking_id = ?`,
+      [booking_id]
+    );
+    
+    if (bookings.length === 0) {
+      await connection.rollback();
+      res.status(404).json({ error: 'Booking not found' });
+      return;
+    }
+    
+    const booking = bookings[0];
+    
+    if (!booking) {
+      await connection.rollback();
+      res.status(404).json({ error: 'Booking not found' });
+      return;
+    }
+    
+    // Check if user has access
+    if (!canAccessBooking(req, booking)) {
+      await connection.rollback();
+      res.status(403).json({ error: 'Access denied' });
+      return;
+    }
+    
+    // Validate booking status
+    if (booking.booking_status !== BookingStatus.CONFIRMED) {
+      await connection.rollback();
+      res.status(400).json({ 
+        error: `Cannot check in booking with status: ${booking.booking_status}. Only confirmed bookings can be checked in.` 
+      });
+      return;
+    }
+    
+    // Update booking status to checked_in
+    // The trigger will automatically update room status to 'occupied'
+    await connection.query(
+      `UPDATE booking 
+       SET booking_status = ?,
+           staff_id = ?,
+           checking_datetime = NOW()
+       WHERE booking_id = ?`,
+      [BookingStatus.CHECKED_IN, staffId, booking_id]
+    );
+    
+    await connection.commit();
+    
+    // Fetch updated booking with room details
+    const [updatedBooking] = await connection.query<Booking[]>(
+      `SELECT b.*, r.room_no, r.state as room_state, rt.type as room_type
+       FROM booking b
+       JOIN rooms r ON b.room_id = r.room_id
+       JOIN room_types rt ON r.room_type_id = rt.room_type_id
+       WHERE b.booking_id = ?`,
+      [booking_id]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Check-in successful',
+      booking: updatedBooking[0],
+      roomStatus: 'occupied'
+    });
+    
+  } catch (error: any) {
+    await connection.rollback();
+    
+    // Handle trigger errors (double-booking)
+    if (error.sqlState === '45000') {
+      res.status(400).json({
+        error: 'Check-in validation failed',
+        message: error.sqlMessage
+      });
+      return;
+    }
+    
+    console.error('Check-in error:', error);
+    res.status(500).json({ error: 'Check-in failed' });
+  } finally {
+    connection.release();
+  }
+};
+
+/**
+ * Check out a guest
+ * PATCH /api/bookings/:booking_id/checkout
+ */
+export const checkOutGuest = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const connection = await db.getConnection();
+  
+  try {
+    const { booking_id } = req.params;
+    const staffId = req.user?.staff_id || req.user?.user_id;
+    
+    if (!booking_id) {
+      res.status(400).json({ error: 'Booking ID is required' });
+      return;
+    }
+    
+    await connection.beginTransaction();
+    
+    // Get booking details
+    const [bookings] = await connection.query<Booking[]>(
+      `SELECT * FROM booking WHERE booking_id = ?`,
+      [booking_id]
+    );
+    
+    if (bookings.length === 0) {
+      await connection.rollback();
+      res.status(404).json({ error: 'Booking not found' });
+      return;
+    }
+    
+    const booking = bookings[0];
+    
+    if (!booking) {
+      await connection.rollback();
+      res.status(404).json({ error: 'Booking not found' });
+      return;
+    }
+    
+    // Check if user has access
+    if (!canAccessBooking(req, booking)) {
+      await connection.rollback();
+      res.status(403).json({ error: 'Access denied' });
+      return;
+    }
+    
+    // Validate booking status
+    if (booking.booking_status !== BookingStatus.CHECKED_IN) {
+      await connection.rollback();
+      res.status(400).json({ 
+        error: `Cannot check out booking with status: ${booking.booking_status}. Only checked-in bookings can be checked out.` 
+      });
+      return;
+    }
+    
+    // Pre-validate payment (for better error messages)
+    const [payment] = await connection.query<RowDataPacket[]>(
+      `SELECT payment_status, due_amount, total_charges 
+       FROM payments 
+       WHERE booking_id = ?`,
+      [booking_id]
+    );
+    
+    if (payment.length === 0) {
+      await connection.rollback();
+      res.status(400).json({
+        error: 'No payment record found',
+        message: 'Please generate the bill before checkout'
+      });
+      return;
+    }
+    
+    if (payment[0]?.payment_status !== 'paid' || (payment[0]?.due_amount || 0) > 0) {
+      await connection.rollback();
+      res.status(400).json({
+        error: 'Payment incomplete',
+        message: `Outstanding balance: $${payment[0]?.due_amount || 0}`,
+        totalCharges: payment[0]?.total_charges || 0,
+        dueAmount: payment[0]?.due_amount || 0
+      });
+      return;
+    }
+    
+    // Update booking status to checked_out
+    // The trigger will automatically update room status to 'available'
+    // The payment validation trigger will ensure payment is complete
+    await connection.query(
+      `UPDATE booking 
+       SET booking_status = ?,
+           checkout_datetime = NOW(),
+           staff_id = ?
+       WHERE booking_id = ?`,
+      [BookingStatus.CHECKED_OUT, staffId, booking_id]
+    );
+    
+    await connection.commit();
+    
+    // Fetch updated booking with room details
+    const [updatedBooking] = await connection.query<Booking[]>(
+      `SELECT b.*, r.room_no, r.state as room_state, rt.type as room_type,
+              p.total_charges, p.amount_paid
+       FROM booking b
+       JOIN rooms r ON b.room_id = r.room_id
+       JOIN room_types rt ON r.room_type_id = rt.room_type_id
+       LEFT JOIN payments p ON b.booking_id = p.booking_id
+       WHERE b.booking_id = ?`,
+      [booking_id]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Check-out successful',
+      booking: updatedBooking[0],
+      roomStatus: 'available',
+      payment: {
+        totalCharges: updatedBooking[0]?.total_charges || 0,
+        amountPaid: updatedBooking[0]?.amount_paid || 0,
+        status: 'paid'
+      }
+    });
+    
+  } catch (error: any) {
+    await connection.rollback();
+    
+    // Handle trigger errors
+    if (error.sqlState === '45000') {
+      res.status(400).json({
+        error: 'Check-out validation failed',
+        message: error.sqlMessage
+      });
+      return;
+    }
+    
+    console.error('Check-out error:', error);
+    res.status(500).json({ error: 'Check-out failed' });
+  } finally {
+    connection.release();
+  }
+};
+
+/**
+ * Validate checkout eligibility
+ * GET /api/bookings/:booking_id/checkout-validation
+ */
+export const validateCheckout = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { booking_id } = req.params;
+    
+    // Get booking and payment details
+    const [result] = await db.query<RowDataPacket[]>(
+      `SELECT 
+        b.booking_id,
+        b.booking_status,
+        b.user_id,
+        b.branch_id,
+        p.payment_status,
+        p.total_charges,
+        p.amount_paid,
+        p.due_amount
+       FROM booking b
+       LEFT JOIN payments p ON b.booking_id = p.booking_id
+       WHERE b.booking_id = ?`,
+      [booking_id]
+    );
+    
+    if (result.length === 0) {
+      res.status(404).json({ error: 'Booking not found' });
+      return;
+    }
+    
+    const booking = result[0];
+    
+    if (!booking) {
+      res.status(404).json({ error: 'Booking not found' });
+      return;
+    }
+    
+    // Check if user has access
+    const tempBooking: any = {
+      booking_id: booking.booking_id,
+      user_id: booking.user_id,
+      branch_id: booking.branch_id
+    };
+    
+    if (!canAccessBooking(req, tempBooking)) {
+      res.status(403).json({ error: 'Access denied' });
+      return;
+    }
+    
+    // Validation checks
+    const validations = {
+      bookingExists: true,
+      isCheckedIn: booking.booking_status === BookingStatus.CHECKED_IN,
+      paymentRecordExists: booking.payment_status !== null,
+      paymentComplete: booking.payment_status === 'paid' && (booking.due_amount || 0) === 0,
+      canCheckout: false
+    };
+    
+    validations.canCheckout = validations.isCheckedIn 
+                            && validations.paymentRecordExists 
+                            && validations.paymentComplete;
+    
+    res.json({
+      validations,
+      bookingStatus: booking.booking_status,
+      paymentDetails: {
+        status: booking.payment_status,
+        totalCharges: booking.total_charges || 0,
+        amountPaid: booking.amount_paid || 0,
+        dueAmount: booking.due_amount || 0
+      }
+    });
+    
+  } catch (error) {
+    console.error('Validation error:', error);
+    res.status(500).json({ error: 'Validation failed' });
+  }
+};

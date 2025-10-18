@@ -5,7 +5,10 @@ import {
   getBookingById,
   updateBooking,
   cancelBooking,
-  getMyBookings
+  getMyBookings,
+  checkInGuest,
+  checkOutGuest,
+  validateCheckout
 } from '../controllers/bookingController';
 import { authenticateToken } from '../middleware/authMiddleware';
 
@@ -44,5 +47,14 @@ router.put('/:booking_id', authenticateToken, updateBooking);
 
 // Cancel booking (access-controlled)
 router.delete('/:booking_id', authenticateToken, cancelBooking);
+
+// Check-in guest (staff only)
+router.patch('/:booking_id/checkin', authenticateToken, checkInGuest);
+
+// Validate checkout eligibility
+router.get('/:booking_id/checkout-validation', authenticateToken, validateCheckout);
+
+// Check-out guest (staff only)
+router.patch('/:booking_id/checkout', authenticateToken, checkOutGuest);
 
 export default router;
