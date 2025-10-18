@@ -1178,13 +1178,12 @@ export class UserController {
       await this.connection!.beginTransaction();
 
       try {
-        // If user is a manager, remove them from branch manager assignment
-        if (userToDelete.role === UserRole.MANAGER && userToDelete.branch_id) {
-          await this.connection!.execute(
-            `UPDATE hotel_branches SET manager_id = NULL WHERE manager_id = ?`,
-            [userId]
-          );
-        }
+        // If user is assigned as a branch manager, remove the assignment
+        // (applicable for MANAGER or ADMIN roles who manage branches)
+        await this.connection!.execute(
+          `UPDATE hotel_branches SET manager_id = NULL WHERE manager_id = ?`,
+          [userId]
+        );
 
         // Soft delete: mark as retired in staff table
         if (!userToDelete.is_guest) {
@@ -1201,7 +1200,22 @@ export class UserController {
         // );
 
         // Option 2: Hard delete (if you prefer complete removal)
-        // Delete from staff table first (foreign key constraint)
+        // Delete all foreign key dependencies first
+
+        // 1. Delete refresh tokens FIRST (must come before user_session)
+        await this.connection!.execute(
+          `DELETE FROM refresh_token WHERE session_id IN 
+          (SELECT session_id FROM user_session WHERE user_id = ?)`,
+          [userId]
+        );
+
+        // 2. Delete user sessions SECOND (after refresh tokens are gone)
+        await this.connection!.execute(
+          `DELETE FROM user_session WHERE user_id = ?`,
+          [userId]
+        );
+
+        // 3. Delete from staff table (if applicable)
         if (!userToDelete.is_guest) {
           await this.connection!.execute(
             `DELETE FROM staff WHERE staff_id = ?`,
@@ -1209,7 +1223,7 @@ export class UserController {
           );
         }
 
-        // Delete from users table
+        // 4. Delete from users table LAST
         await this.connection!.execute(
           `DELETE FROM users WHERE user_id = ?`,
           [userId]

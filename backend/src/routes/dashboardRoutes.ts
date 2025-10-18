@@ -30,4 +30,11 @@ router.get('/manager', authenticateToken, requireManager, dashboardController.ge
  */
 router.get('/receptionist', authenticateToken, requireStaff, dashboardController.getReceptionistStats.bind(dashboardController));
 
+/**
+ * @route GET /api/dashboard/housekeeping
+ * @desc Get housekeeping dashboard statistics for their branch
+ * @access Private (Staff only - Housekeeping, Manager, Admin)
+ */
+router.get('/housekeeping', authenticateToken, requireStaff, dashboardController.getHousekeepingStats.bind(dashboardController));
+
 export default router;
