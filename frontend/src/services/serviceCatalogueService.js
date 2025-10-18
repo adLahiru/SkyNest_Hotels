@@ -27,7 +27,6 @@ const serviceCatalogueService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get all services error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch services',
@@ -50,7 +49,6 @@ const serviceCatalogueService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get service by ID error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch service details',
@@ -73,7 +71,6 @@ const serviceCatalogueService = {
         message: response.data.message || 'Service created successfully',
       };
     } catch (error) {
-      console.error('Create service error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to create service',
@@ -97,7 +94,6 @@ const serviceCatalogueService = {
         message: response.data.message || 'Service updated successfully',
       };
     } catch (error) {
-      console.error('Update service error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to update service',
@@ -119,7 +115,6 @@ const serviceCatalogueService = {
         message: response.data.message || 'Service deleted successfully',
       };
     } catch (error) {
-      console.error('Delete service error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to delete service',
@@ -142,7 +137,6 @@ const serviceCatalogueService = {
         message: response.data.message || 'Service usage recorded successfully',
       };
     } catch (error) {
-      console.error('Record service usage error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to record service usage',
@@ -165,7 +159,6 @@ const serviceCatalogueService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get service usage error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch service usage',

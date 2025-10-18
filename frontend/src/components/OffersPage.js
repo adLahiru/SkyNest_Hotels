@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Gift, Clock, Users, Percent, Star, Calendar } from 'lucide-react';
+import { Gift, Clock, Users, Star, Calendar } from 'lucide-react';
 
 const OffersPage = ({ setCurrentPage }) => {
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -131,7 +131,7 @@ const OffersPage = ({ setCurrentPage }) => {
     return () => observer.disconnect();
   }, []);
 
-  const handleBookNow = (offer) => {
+  const handleBookNow = () => {
     // In a real app, you might pass the offer details to the booking page
     setCurrentPage('booking');
   };
@@ -156,7 +156,7 @@ const OffersPage = ({ setCurrentPage }) => {
             <h2 className="text-3xl md:text-4xl font-light mb-4">🎉 Featured Deals</h2>
             <p className="text-xl mb-6 opacity-90">Limited time offers you won't want to miss!</p>
             <div className="grid md:grid-cols-3 gap-6">
-              {featuredOffers.slice(0, 3).map((offer, index) => (
+              {featuredOffers.slice(0, 3).map((offer) => (
                 <div key={offer.id} className="bg-white/20 backdrop-blur-sm rounded-2xl p-6 card-hover">
                   <div className="text-3xl font-bold mb-2">{offer.discount}</div>
                   <div className="text-lg font-medium mb-2">{offer.title}</div>

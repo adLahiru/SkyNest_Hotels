@@ -41,7 +41,6 @@ const branchService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get all branches error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch branches',
@@ -87,7 +86,6 @@ const branchService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get branch by ID error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch branch details',
@@ -110,7 +108,6 @@ const branchService = {
         message: response.data.message || 'Branch created successfully',
       };
     } catch (error) {
-      console.error('Create branch error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to create branch',
@@ -134,7 +131,6 @@ const branchService = {
         message: response.data.message || 'Branch updated successfully',
       };
     } catch (error) {
-      console.error('Update branch error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to update branch',
@@ -156,7 +152,6 @@ const branchService = {
         message: response.data.message || 'Branch deleted successfully',
       };
     } catch (error) {
-      console.error('Delete branch error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to delete branch',

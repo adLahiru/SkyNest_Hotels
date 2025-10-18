@@ -19,7 +19,6 @@ const dashboardService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get admin stats error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch admin dashboard',
@@ -41,7 +40,6 @@ const dashboardService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get manager stats error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch manager dashboard',
@@ -63,7 +61,6 @@ const dashboardService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get receptionist stats error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch receptionist dashboard',

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Phone, MapPin, Calendar, Edit, Save, X, Key, Eye, EyeOff, CheckCircle, AlertCircle, CreditCard, Hash, Shield, Briefcase, Award, Clock } from 'lucide-react';
+import { User, Edit, Save, X, Key, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
 import userService from '../services/userService';
 
 const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
@@ -52,7 +52,6 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
           setErrorMessage(result.message || 'Failed to load profile');
         }
       } catch (error) {
-        console.error('Error fetching profile:', error);
         setErrorMessage('Failed to load profile data');
       } finally {
         setIsLoading(false);
@@ -70,7 +69,7 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
     else if (!/\S+@\S+\.\S+/.test(profileData.email)) errors.email = 'Email is invalid';
     if (!profileData.username.trim()) errors.username = 'Username is required';
     else if (profileData.username.length < 3) errors.username = 'Username must be at least 3 characters';
-    if (profileData.phone && !/^[\+]?[\d\s\-\(\)]+$/.test(profileData.phone)) {
+    if (profileData.phone && !/^[+]?[\d\s\-()]+$/.test(profileData.phone)) {
       errors.phone = 'Phone number is invalid';
     }
 
@@ -111,7 +110,6 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
         setErrorMessage(result.message || 'Failed to update profile');
       }
     } catch (error) {
-      console.error('Update profile error:', error);
       setErrorMessage('Failed to update profile. Please try again.');
     } finally {
       setIsSaving(false);
@@ -136,7 +134,6 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
         setErrorMessage(result.message || 'Failed to change password');
       }
     } catch (error) {
-      console.error('Change password error:', error);
       setErrorMessage('Failed to change password. Please try again.');
     } finally {
       setIsChangingPassword(false);
@@ -425,7 +422,7 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
               <h3 className="text-lg font-semibold text-gray-800 mb-6">Recent Bookings</h3>
               
               <div className="space-y-4">
-                {bookingHistory.map((booking, index) => (
+                {bookingHistory.map((booking) => (
                   <div key={booking.id} className="border-l-4 border-amber-500 pl-4 py-2">
                     <div className="flex justify-between items-start mb-1">
                       <span className="font-medium text-sm">{booking.branch}</span>

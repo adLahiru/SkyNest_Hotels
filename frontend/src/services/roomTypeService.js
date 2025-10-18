@@ -41,7 +41,6 @@ const roomTypeService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get all room types error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch room types',
@@ -87,7 +86,6 @@ const roomTypeService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get room type by ID error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch room type details',
@@ -110,7 +108,6 @@ const roomTypeService = {
         message: response.data.message || 'Room type created successfully',
       };
     } catch (error) {
-      console.error('Create room type error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to create room type',
@@ -134,7 +131,6 @@ const roomTypeService = {
         message: response.data.message || 'Room type updated successfully',
       };
     } catch (error) {
-      console.error('Update room type error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to update room type',
@@ -156,7 +152,6 @@ const roomTypeService = {
         message: response.data.message || 'Room type deleted successfully',
       };
     } catch (error) {
-      console.error('Delete room type error:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to delete room type',
