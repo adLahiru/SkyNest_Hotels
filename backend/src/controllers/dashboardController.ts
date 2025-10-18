@@ -83,8 +83,8 @@ class DashboardController {
         ORDER BY revenue DESC`
       );
       
-      // Get recent bookings
-      const [recentBookings] = await db.execute<RowDataPacket[]>(
+      // Get recent bookings grouped by branch
+      const [allRecentBookings] = await db.execute<RowDataPacket[]>(
         `SELECT 
           bk.booking_id,
           bk.checking_datetime as check_in,
@@ -92,16 +92,58 @@ class DashboardController {
           bk.booking_status as status,
           p.total_charges as total_amount,
           u.name as guest_name,
+          b.branch_id,
           b.branch_name,
-          r.room_no as room_number
+          r.room_no as room_number,
+          bk.created_at
         FROM booking bk
         JOIN users u ON bk.user_id = u.user_id
         JOIN rooms r ON bk.room_id = r.room_id
         JOIN hotel_branches b ON r.branch_id = b.branch_id
         LEFT JOIN payments p ON bk.booking_id = p.booking_id
-        ORDER BY bk.created_at DESC
-        LIMIT 10`
+        ORDER BY bk.created_at DESC`
       );
+
+      // Group bookings by branch and limit to 5 per branch
+      const bookingsByBranch: Record<string, any> = {};
+      const branchTotalCounts: Record<string, number> = {};
+
+      allRecentBookings.forEach((booking: any) => {
+        const branchId = booking.branch_id;
+        
+        // Count total bookings per branch
+        branchTotalCounts[branchId] = (branchTotalCounts[branchId] || 0) + 1;
+        
+        // Only take first 5 bookings per branch
+        if (!bookingsByBranch[branchId]) {
+          bookingsByBranch[branchId] = {
+            branch_id: booking.branch_id,
+            branch_name: booking.branch_name,
+            bookings: [],
+            total_count: 0
+          };
+        }
+        
+        if (bookingsByBranch[branchId].bookings.length < 5) {
+          bookingsByBranch[branchId].bookings.push({
+            booking_id: booking.booking_id,
+            check_in: booking.check_in,
+            check_out: booking.check_out,
+            status: booking.status,
+            total_amount: booking.total_amount,
+            guest_name: booking.guest_name,
+            room_number: booking.room_number,
+            created_at: booking.created_at
+          });
+        }
+      });
+
+      // Add total counts to each branch
+      Object.keys(bookingsByBranch).forEach(branchId => {
+        bookingsByBranch[branchId].total_count = branchTotalCounts[branchId];
+      });
+
+      const recentBookingsByBranch = Object.values(bookingsByBranch);
       
       res.status(200).json({
         success: true,
@@ -113,7 +155,7 @@ class DashboardController {
           bookings: bookingStats[0],
           revenue: revenueStats[0],
           branchWiseStats,
-          recentBookings
+          recentBookingsByBranch
         }
       } as ApiResponse);
       
