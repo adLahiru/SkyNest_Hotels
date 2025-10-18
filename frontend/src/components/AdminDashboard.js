@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2, Search, Filter, X, Eye, EyeOff, Home, Bed, Upload } from 'lucide-react';
+import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2, Search, Filter, X, Eye, EyeOff, Home, Bed, Upload, FileText } from 'lucide-react';
 import dashboardService from '../services/dashboardService';
 import userService from '../services/userService';
 import branchService from '../services/branchService';
 import roomService from '../services/roomService';
 import roomTypeService from '../services/roomTypeService';
+import ReportsMain from './Reports/ReportsMain';
 
 const AdminDashboard = ({ user }) => {
   const [stats, setStats] = useState(null);
@@ -1278,6 +1279,17 @@ const AdminDashboard = ({ user }) => {
                 <TrendingUp className="w-5 h-5 inline-block mr-2" />
                 Financial
               </button>
+              <button
+                onClick={() => setActiveTab('reports')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'reports'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <FileText className="w-5 h-5 inline-block mr-2" />
+                Reports
+              </button>
             </nav>
           </div>
 
@@ -2169,6 +2181,11 @@ const AdminDashboard = ({ user }) => {
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Reports Tab */}
+            {activeTab === 'reports' && (
+              <ReportsMain user={user} />
             )}
           </div>
         </div>

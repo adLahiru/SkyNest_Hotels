@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, DoorOpen, Calendar, DollarSign, Home, UserCheck, UserX } from 'lucide-react';
+import { Building2, Users, DoorOpen, Calendar, DollarSign, Home, UserCheck, UserX, FileText, BarChart3 } from 'lucide-react';
 import dashboardService from '../services/dashboardService';
+import ReportsMain from './Reports/ReportsMain';
 
 const ManagerDashboard = ({ user }) => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
     fetchDashboardStats();
@@ -46,8 +48,41 @@ const ManagerDashboard = ({ user }) => {
           <p className="text-gray-600">Welcome back, {user?.name}! Managing {stats?.branch?.name || 'your branch'}</p>
         </div>
 
-        {/* Branch Info Card */}
-        {stats?.branch && (
+        {/* Tab Navigation */}
+        <div className="bg-white rounded-lg shadow-md mb-8">
+          <div className="border-b border-gray-200">
+            <nav className="flex -mb-px space-x-8 px-6">
+              <button
+                onClick={() => setActiveTab('overview')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'overview'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <BarChart3 className="w-5 h-5 inline-block mr-2" />
+                Overview
+              </button>
+              <button
+                onClick={() => setActiveTab('reports')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'reports'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <FileText className="w-5 h-5 inline-block mr-2" />
+                Reports
+              </button>
+            </nav>
+          </div>
+        </div>
+
+        {/* Overview Tab */}
+        {activeTab === 'overview' && (
+          <>
+            {/* Branch Info Card */}
+            {stats?.branch && (
           <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 mb-8 text-white">
             <div className="flex items-start justify-between">
               <div>
@@ -269,6 +304,13 @@ const ManagerDashboard = ({ user }) => {
             </table>
           </div>
         </div>
+          </>
+        )}
+
+        {/* Reports Tab */}
+        {activeTab === 'reports' && (
+          <ReportsMain user={user} />
+        )}
       </div>
     </div>
   );

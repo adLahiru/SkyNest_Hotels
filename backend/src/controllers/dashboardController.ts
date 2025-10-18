@@ -683,6 +683,509 @@ class DashboardController {
       } as ApiResponse);
     }
   }
+  /**
+   * Get Room Occupancy Report for a selected date or period
+   * Admin only - shows all branches
+   */
+  async getRoomOccupancyReport(req: Request, res: Response): Promise<void> {
+    try {
+      const { startDate, endDate, branchId } = req.query;
+      
+      if (!startDate || !endDate) {
+        res.status(400).json({
+          success: false,
+          message: 'Start date and end date are required'
+        } as ApiResponse);
+        return;
+      }
+
+      let branchFilter = '';
+      const queryParams: any[] = [startDate, endDate];
+      
+      if (branchId) {
+        branchFilter = 'AND b.branch_id = ?';
+        queryParams.push(branchId);
+      }
+
+      const [occupancyData] = await db.execute<RowDataPacket[]>(
+        `SELECT 
+          b.branch_id,
+          b.branch_name,
+          r.room_id,
+          r.room_no,
+          r.floor_no,
+          rt.type as room_type,
+          rt.capacity,
+          r.state as room_state,
+          bk.booking_id,
+          bk.checking_datetime,
+          bk.checkout_datetime,
+          bk.booking_status,
+          u.name as guest_name,
+          DATEDIFF(
+            LEAST(bk.checkout_datetime, ?),
+            GREATEST(bk.checking_datetime, ?)
+          ) as days_occupied
+        FROM hotel_branches b
+        LEFT JOIN rooms r ON b.branch_id = r.branch_id
+        LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
+        LEFT JOIN booking bk ON r.room_id = bk.room_id
+          AND bk.booking_status IN ('CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT')
+          AND bk.checking_datetime <= ?
+          AND bk.checkout_datetime >= ?
+        LEFT JOIN users u ON bk.user_id = u.user_id
+        WHERE 1=1 ${branchFilter}
+        ORDER BY b.branch_name, r.room_no, bk.checking_datetime`,
+        queryParams
+      );
+
+      // Calculate occupancy statistics
+      const [occupancyStats] = await db.execute<RowDataPacket[]>(
+        `SELECT 
+          b.branch_id,
+          b.branch_name,
+          COUNT(DISTINCT r.room_id) as total_rooms,
+          COUNT(DISTINCT CASE WHEN bk.booking_id IS NOT NULL THEN r.room_id END) as occupied_rooms,
+          ROUND(COUNT(DISTINCT CASE WHEN bk.booking_id IS NOT NULL THEN r.room_id END) * 100.0 / 
+            NULLIF(COUNT(DISTINCT r.room_id), 0), 2) as occupancy_rate
+        FROM hotel_branches b
+        LEFT JOIN rooms r ON b.branch_id = r.branch_id
+        LEFT JOIN booking bk ON r.room_id = bk.room_id
+          AND bk.booking_status IN ('CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT')
+          AND bk.checking_datetime <= ?
+          AND bk.checkout_datetime >= ?
+        WHERE 1=1 ${branchFilter}
+        GROUP BY b.branch_id, b.branch_name
+        ORDER BY occupancy_rate DESC`,
+        queryParams
+      );
+
+      res.status(200).json({
+        success: true,
+        message: 'Room occupancy report retrieved successfully',
+        data: {
+          period: { startDate, endDate },
+          occupancyData,
+          occupancyStats
+        }
+      } as ApiResponse);
+    } catch (error) {
+      console.error('Get room occupancy report error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve room occupancy report'
+      } as ApiResponse);
+    }
+  }
+
+  /**
+   * Get Guest Billing Summary with unpaid balances
+   * Admin - all branches, Manager - their branch only
+   */
+  async getGuestBillingSummary(req: Request, res: Response): Promise<void> {
+    try {
+      const authReq = req as AuthenticatedRequest;
+      const userRole = authReq.user?.role;
+      const userBranchId = authReq.user?.branch_id;
+      
+      let branchFilter = '';
+      const queryParams: any[] = [];
+      
+      if (userRole === 'MANAGER' && userBranchId) {
+        branchFilter = 'AND b.branch_id = ?';
+        queryParams.push(userBranchId);
+      } else if (req.query.branchId) {
+        branchFilter = 'AND b.branch_id = ?';
+        queryParams.push(req.query.branchId);
+      }
+
+      const [billingData] = await db.execute<RowDataPacket[]>(
+        `SELECT 
+          bk.booking_id,
+          u.user_id,
+          u.name as guest_name,
+          u.email,
+          u.phone,
+          b.branch_name,
+          r.room_no,
+          bk.checking_datetime,
+          bk.checkout_datetime,
+          bk.booking_status,
+          p.total_charges as total_amount,
+          COALESCE(p.amount_paid, 0) as amount_paid,
+          (p.total_charges - COALESCE(p.amount_paid, 0)) as unpaid_balance,
+          p.payment_method,
+          p.payment_date,
+          CASE 
+            WHEN p.amount_paid IS NULL THEN 'UNPAID'
+            WHEN p.amount_paid < p.total_charges THEN 'PARTIALLY_PAID'
+            WHEN p.amount_paid >= p.total_charges THEN 'FULLY_PAID'
+            ELSE 'UNPAID'
+          END as payment_status
+        FROM booking bk
+        JOIN users u ON bk.user_id = u.user_id
+        JOIN rooms r ON bk.room_id = r.room_id
+        JOIN hotel_branches b ON r.branch_id = b.branch_id
+        LEFT JOIN payments p ON bk.booking_id = p.booking_id
+        WHERE bk.booking_status IN ('CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT')
+        ${branchFilter}
+        ORDER BY 
+          CASE 
+            WHEN p.amount_paid IS NULL THEN 0
+            WHEN p.amount_paid < p.total_charges THEN 1
+            ELSE 2
+          END,
+          bk.created_at DESC`,
+        queryParams
+      );
+
+      // Calculate summary statistics
+      const [summaryStats] = await db.execute<RowDataPacket[]>(
+        `SELECT 
+          COUNT(DISTINCT bk.booking_id) as total_bookings,
+          SUM(p.total_charges) as total_billed,
+          SUM(COALESCE(p.amount_paid, 0)) as total_paid,
+          SUM(p.total_charges - COALESCE(p.amount_paid, 0)) as total_unpaid,
+          COUNT(CASE WHEN p.amount_paid IS NULL THEN 1 END) as unpaid_count,
+          COUNT(CASE WHEN p.amount_paid < p.total_charges THEN 1 END) as partially_paid_count,
+          COUNT(CASE WHEN p.amount_paid >= p.total_charges THEN 1 END) as fully_paid_count
+        FROM booking bk
+        JOIN rooms r ON bk.room_id = r.room_id
+        JOIN hotel_branches b ON r.branch_id = b.branch_id
+        LEFT JOIN payments p ON bk.booking_id = p.booking_id
+        WHERE bk.booking_status IN ('CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT')
+        ${branchFilter}`,
+        queryParams
+      );
+
+      res.status(200).json({
+        success: true,
+        message: 'Guest billing summary retrieved successfully',
+        data: {
+          billingData,
+          summary: summaryStats[0]
+        }
+      } as ApiResponse);
+    } catch (error) {
+      console.error('Get guest billing summary error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve guest billing summary'
+      } as ApiResponse);
+    }
+  }
+
+  /**
+   * Get Service Usage Breakdown report
+   * Filterable by room and service type
+   */
+  async getServiceUsageBreakdown(req: Request, res: Response): Promise<void> {
+    try {
+      const authReq = req as AuthenticatedRequest;
+      const userRole = authReq.user?.role;
+      const userBranchId = authReq.user?.branch_id;
+      const { roomId, serviceType, branchId } = req.query;
+      
+      let filters = [];
+      const queryParams: any[] = [];
+      
+      // Branch filtering
+      if (userRole === 'MANAGER' && userBranchId) {
+        filters.push('b.branch_id = ?');
+        queryParams.push(userBranchId);
+      } else if (branchId) {
+        filters.push('b.branch_id = ?');
+        queryParams.push(branchId);
+      }
+      
+      // Room filtering
+      if (roomId) {
+        filters.push('r.room_id = ?');
+        queryParams.push(roomId);
+      }
+      
+      // Service type filtering
+      if (serviceType) {
+        filters.push('s.service_type = ?');
+        queryParams.push(serviceType);
+      }
+      
+      const whereClause = filters.length > 0 ? 'WHERE ' + filters.join(' AND ') : '';
+
+      const [serviceUsageData] = await db.execute<RowDataPacket[]>(
+        `SELECT 
+          bs.service_id,
+          s.service_name,
+          s.service_type,
+          s.charge as service_charge,
+          b.branch_name,
+          r.room_no,
+          bk.booking_id,
+          u.name as guest_name,
+          bs.quantity,
+          bs.date_time as usage_date,
+          (s.charge * bs.quantity) as total_charge
+        FROM booking_service bs
+        JOIN services s ON bs.service_id = s.service_id
+        JOIN booking bk ON bs.booking_id = bk.booking_id
+        JOIN rooms r ON bk.room_id = r.room_id
+        JOIN hotel_branches b ON r.branch_id = b.branch_id
+        JOIN users u ON bk.user_id = u.user_id
+        ${whereClause}
+        ORDER BY bs.date_time DESC`,
+        queryParams
+      );
+
+      // Get service usage statistics
+      const [usageStats] = await db.execute<RowDataPacket[]>(
+        `SELECT 
+          s.service_type,
+          COUNT(bs.service_id) as usage_count,
+          SUM(bs.quantity) as total_quantity,
+          SUM(s.charge * bs.quantity) as total_revenue
+        FROM booking_service bs
+        JOIN services s ON bs.service_id = s.service_id
+        JOIN booking bk ON bs.booking_id = bk.booking_id
+        JOIN rooms r ON bk.room_id = r.room_id
+        JOIN hotel_branches b ON r.branch_id = b.branch_id
+        ${whereClause}
+        GROUP BY s.service_type
+        ORDER BY total_revenue DESC`,
+        queryParams
+      );
+
+      res.status(200).json({
+        success: true,
+        message: 'Service usage breakdown retrieved successfully',
+        data: {
+          serviceUsageData,
+          usageStats
+        }
+      } as ApiResponse);
+    } catch (error) {
+      console.error('Get service usage breakdown error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve service usage breakdown'
+      } as ApiResponse);
+    }
+  }
+
+  /**
+   * Get Monthly Revenue Per Branch
+   * Sum of room and service charges
+   */
+  async getMonthlyRevenuePerBranch(req: Request, res: Response): Promise<void> {
+    try {
+      const authReq = req as AuthenticatedRequest;
+      const userRole = authReq.user?.role;
+      const userBranchId = authReq.user?.branch_id;
+      const { year, month, branchId } = req.query;
+      
+      // Default to current year and month if not provided
+      const targetYear = year || new Date().getFullYear();
+      const targetMonth = month || new Date().getMonth() + 1;
+      
+      let branchFilter = '';
+      const queryParams: any[] = [targetYear, targetMonth];
+      
+      if (userRole === 'MANAGER' && userBranchId) {
+        branchFilter = 'AND b.branch_id = ?';
+        queryParams.push(userBranchId);
+      } else if (branchId) {
+        branchFilter = 'AND b.branch_id = ?';
+        queryParams.push(branchId);
+      }
+
+      const [revenueData] = await db.execute<RowDataPacket[]>(
+        `SELECT 
+          b.branch_id,
+          b.branch_name,
+          b.address,
+          COUNT(DISTINCT bk.booking_id) as total_bookings,
+          SUM(p.room_charges) as room_revenue,
+          SUM(p.service_charges) as service_revenue,
+          SUM(p.total_charges) as total_revenue,
+          AVG(p.total_charges) as avg_booking_value
+        FROM hotel_branches b
+        LEFT JOIN rooms r ON b.branch_id = r.branch_id
+        LEFT JOIN booking bk ON r.room_id = bk.room_id
+          AND YEAR(bk.created_at) = ?
+          AND MONTH(bk.created_at) = ?
+          AND bk.booking_status IN ('CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT')
+        LEFT JOIN payments p ON bk.booking_id = p.booking_id
+        WHERE 1=1 ${branchFilter}
+        GROUP BY b.branch_id, b.branch_name, b.address
+        ORDER BY total_revenue DESC`,
+        queryParams
+      );
+
+      // Get month-over-month comparison
+      const prevMonth = targetMonth === 1 ? 12 : Number(targetMonth) - 1;
+      const prevYear = targetMonth === 1 ? Number(targetYear) - 1 : targetYear;
+      
+      const [previousMonthData] = await db.execute<RowDataPacket[]>(
+        `SELECT 
+          b.branch_id,
+          SUM(p.total_charges) as prev_month_revenue
+        FROM hotel_branches b
+        LEFT JOIN rooms r ON b.branch_id = r.branch_id
+        LEFT JOIN booking bk ON r.room_id = bk.room_id
+          AND YEAR(bk.created_at) = ?
+          AND MONTH(bk.created_at) = ?
+          AND bk.booking_status IN ('CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT')
+        LEFT JOIN payments p ON bk.booking_id = p.booking_id
+        WHERE 1=1 ${branchFilter}
+        GROUP BY b.branch_id`,
+        [prevYear, prevMonth, ...(branchFilter ? [queryParams[2]] : [])]
+      );
+
+      // Merge current and previous month data
+      const mergedData = revenueData.map((current: any) => {
+        const previous = previousMonthData.find((p: any) => p.branch_id === current.branch_id);
+        const prevRevenue = previous?.prev_month_revenue || 0;
+        const currentRevenue = current.total_revenue || 0;
+        const growth = prevRevenue > 0 ? ((currentRevenue - prevRevenue) / prevRevenue * 100).toFixed(2) : null;
+        
+        return {
+          ...current,
+          previous_month_revenue: prevRevenue,
+          revenue_growth_percent: growth
+        };
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Monthly revenue per branch retrieved successfully',
+        data: {
+          period: { year: targetYear, month: targetMonth },
+          revenueData: mergedData
+        }
+      } as ApiResponse);
+    } catch (error) {
+      console.error('Get monthly revenue per branch error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve monthly revenue per branch'
+      } as ApiResponse);
+    }
+  }
+
+  /**
+   * Get Top-Used Services and customer preference trends
+   * Admin - all branches, Manager - data from every branch
+   */
+  async getTopUsedServices(req: Request, res: Response): Promise<void> {
+    try {
+      const { startDate, endDate, limit } = req.query;
+      const topLimit = limit ? Number(limit) : 10;
+      
+      let dateFilter = '';
+      const queryParams: any[] = [];
+      
+      if (startDate && endDate) {
+        dateFilter = 'AND bs.date_time BETWEEN ? AND ?';
+        queryParams.push(startDate, endDate);
+      }
+
+      // Get top services by usage count
+      const [topServicesByUsage] = await db.execute<RowDataPacket[]>(
+        `SELECT 
+          s.service_id,
+          s.service_name,
+          s.service_type,
+          s.charge,
+          COUNT(bs.booking_id) as usage_count,
+          SUM(bs.quantity) as total_quantity,
+          SUM(s.charge * bs.quantity) as total_revenue,
+          COUNT(DISTINCT bk.user_id) as unique_customers,
+          AVG(bs.quantity) as avg_quantity_per_booking
+        FROM services s
+        LEFT JOIN booking_service bs ON s.service_id = bs.service_id
+        LEFT JOIN booking bk ON bs.booking_id = bk.booking_id
+        WHERE 1=1 ${dateFilter}
+        GROUP BY s.service_id, s.service_name, s.service_type, s.charge
+        ORDER BY usage_count DESC, total_revenue DESC
+        LIMIT ?`,
+        [...queryParams, topLimit]
+      );
+
+      // Get top services by revenue
+      const [topServicesByRevenue] = await db.execute<RowDataPacket[]>(
+        `SELECT 
+          s.service_id,
+          s.service_name,
+          s.service_type,
+          s.charge,
+          SUM(s.charge * bs.quantity) as total_revenue,
+          COUNT(bs.booking_id) as usage_count
+        FROM services s
+        LEFT JOIN booking_service bs ON s.service_id = bs.service_id
+        WHERE 1=1 ${dateFilter}
+        GROUP BY s.service_id, s.service_name, s.service_type, s.charge
+        ORDER BY total_revenue DESC
+        LIMIT ?`,
+        [...queryParams, topLimit]
+      );
+
+      // Get service usage trends by branch
+      const [serviceUsageByBranch] = await db.execute<RowDataPacket[]>(
+        `SELECT 
+          b.branch_id,
+          b.branch_name,
+          s.service_type,
+          COUNT(bs.booking_id) as usage_count,
+          SUM(bs.quantity) as total_quantity,
+          SUM(s.charge * bs.quantity) as total_revenue
+        FROM hotel_branches b
+        JOIN rooms r ON b.branch_id = r.branch_id
+        JOIN booking bk ON r.room_id = bk.room_id
+        JOIN booking_service bs ON bk.booking_id = bs.booking_id
+        JOIN services s ON bs.service_id = s.service_id
+        WHERE 1=1 ${dateFilter}
+        GROUP BY b.branch_id, b.branch_name, s.service_type
+        ORDER BY b.branch_name, total_revenue DESC`,
+        queryParams
+      );
+
+      // Get service type preferences
+      const [serviceTypePreferences] = await db.execute<RowDataPacket[]>(
+        `SELECT 
+          s.service_type,
+          COUNT(DISTINCT bs.booking_id) as booking_count,
+          COUNT(DISTINCT bk.user_id) as customer_count,
+          SUM(bs.quantity) as total_quantity,
+          SUM(s.charge * bs.quantity) as total_revenue,
+          ROUND(COUNT(DISTINCT bs.booking_id) * 100.0 / 
+            (SELECT COUNT(DISTINCT booking_id) FROM booking_service), 2) as usage_percentage
+        FROM services s
+        LEFT JOIN booking_service bs ON s.service_id = bs.service_id
+        LEFT JOIN booking bk ON bs.booking_id = bk.booking_id
+        WHERE 1=1 ${dateFilter}
+        GROUP BY s.service_type
+        ORDER BY total_revenue DESC`,
+        queryParams
+      );
+
+      res.status(200).json({
+        success: true,
+        message: 'Top-used services and trends retrieved successfully',
+        data: {
+          period: startDate && endDate ? { startDate, endDate } : { period: 'All Time' },
+          topServicesByUsage,
+          topServicesByRevenue,
+          serviceUsageByBranch,
+          serviceTypePreferences
+        }
+      } as ApiResponse);
+    } catch (error) {
+      console.error('Get top-used services error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve top-used services'
+      } as ApiResponse);
+    }
+  }
 }
 
 export default new DashboardController();
