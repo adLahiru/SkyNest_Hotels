@@ -216,9 +216,12 @@ export class BranchController {
   // Get all branches
   public getBranches = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
+      console.log('Attempting to get database connection...');
       const connection = await db.getConnection();
+      console.log('Database connection obtained successfully');
 
       try {
+        console.log('Executing query to fetch branches...');
         const [rows] = await connection.execute<DatabaseBranchRow[]>(
           `SELECT hb.branch_id, hb.branch_name, hb.address, hb.email, hb.phone, 
                   hb.manager_id, hb.photo, hb.created_at, hb.updated_at,
@@ -228,6 +231,7 @@ export class BranchController {
            ORDER BY hb.created_at DESC`
         );
 
+        console.log('Query executed successfully, processing results...');
         const branches = rows.map(branch => ({
           branch_id: branch.branch_id,
           branch_name: branch.branch_name,
@@ -235,11 +239,6 @@ export class BranchController {
           email: branch.email,
           phone: branch.phone,
           manager_id: branch.manager_id,
-          manager_name: branch.manager_name,
-          manager_username: branch.manager_username,
-          photo: branch.photo 
-            ? `data:image/jpeg;base64,${branch.photo.toString('base64')}`
-            : null,
           created_at: branch.created_at,
           updated_at: branch.updated_at
         }));
@@ -256,9 +255,14 @@ export class BranchController {
 
     } catch (error) {
       console.error('Error retrieving branches:', error);
+      if (error instanceof Error) {
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+      }
       res.status(500).json({
         success: false,
-        message: 'Internal server error while retrieving branches'
+        message: 'Internal server error while retrieving branches',
+        error: error instanceof Error ? error.message : 'Unknown error'
       } as ApiResponse);
     }
   };

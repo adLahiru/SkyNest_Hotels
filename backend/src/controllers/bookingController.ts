@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
+import { v4 as uuidv4 } from 'uuid';
 import { db } from '../config/db';
 import { UserRole, AuthenticatedRequest } from '../types/auth.types';
 
@@ -239,12 +240,15 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
     const dailyRate = room.daily_rate ? parseFloat(room.daily_rate.toString()) : 0;
     const totalCost = calculateTotalCost(dailyRate, totalDays);
 
+    // Generate UUID for booking
+    const booking_id = uuidv4();
+
     // Create the booking
-    const [result] = await connection.query<ResultSetHeader>(
+    await connection.query<ResultSetHeader>(
       `INSERT INTO booking 
-       (user_id, room_id, staff_id, checking_datetime, checkout_datetime, booking_status, booking_date, branch_id) 
-       VALUES (?, ?, ?, ?, ?, ?, CURDATE(), ?)`,
-      [user_id, room_id, staff_id || null, checking_datetime, checkout_datetime, BookingStatus.CONFIRMED, room.branch_id]
+       (booking_id, user_id, room_id, staff_id, checking_datetime, checkout_datetime, booking_status, booking_date, branch_id) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE(), ?)`,
+      [booking_id, user_id, room_id, staff_id || null, checking_datetime, checkout_datetime, BookingStatus.CONFIRMED, room.branch_id]
     );
 
     // Fetch the created booking with joined data
@@ -261,7 +265,7 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
        LEFT JOIN hotel_branches hb ON b.branch_id = hb.branch_id
        LEFT JOIN staff s ON b.staff_id = s.staff_id
        WHERE b.booking_id = ?`,
-      [result.insertId]
+      [booking_id]
     );
 
     // Update room state to occupied (optional - can be done at check-in)
@@ -325,17 +329,17 @@ export const getBookings = async (req: AuthenticatedRequest, res: Response): Pro
     const { status, room_id, branch_id, user_id } = req.query;
 
     let query = `SELECT b.*, 
-                        u.fname as user_name, u.email as user_email,
-                        r.room_no, rt.type as room_type, rt.daily_rate,
-                        hb.branch_name,
-                        s.fname as staff_name
-                 FROM booking b
-                 LEFT JOIN users u ON b.user_id = u.user_id
-                 LEFT JOIN rooms r ON b.room_id = r.room_id
-                 LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
-                 LEFT JOIN hotel_branches hb ON b.branch_id = hb.branch_id
-                 LEFT JOIN staff s ON b.staff_id = s.staff_id
-                 WHERE 1=1`;
+         u.fname as user_name, u.email as user_email,
+         r.room_no, rt.type as room_type, rt.daily_rate,
+         hb.branch_name,
+         s.fname as staff_name
+       FROM booking b
+       LEFT JOIN users u ON b.user_id = u.user_id
+       LEFT JOIN rooms r ON b.room_id = r.room_id
+       LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
+       LEFT JOIN hotel_branches hb ON b.branch_id = hb.branch_id
+       LEFT JOIN staff s ON b.staff_id = s.staff_id
+       WHERE 1=1`;
     const params: any[] = [];
 
     // Apply access control
@@ -445,7 +449,7 @@ export const getBookingById = async (req: AuthenticatedRequest, res: Response): 
     const { booking_id } = req.params;
 
     const [bookings] = await db.query<Booking[]>(
-      `SELECT b.*, 
+      `SELECT b*, 
               u.fname as user_name, u.email as user_email, u.phone as user_phone,
               r.room_no, rt.type as room_type, rt.daily_rate, rt.capacity,
               hb.branch_name, hb.address as branch_address,
@@ -922,15 +926,15 @@ export const getMyBookings = async (req: AuthenticatedRequest, res: Response): P
     const { status } = req.query;
 
     let query = `SELECT b.*, 
-                        r.room_no, rt.type as room_type, rt.daily_rate,
-                        hb.branch_name,
-                        s.fname as staff_name
-                 FROM booking b
-                 LEFT JOIN rooms r ON b.room_id = r.room_id
-                 LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
-                 LEFT JOIN hotel_branches hb ON b.branch_id = hb.branch_id
-                 LEFT JOIN staff s ON b.staff_id = s.staff_id
-                 WHERE b.user_id = ?`;
+         r.room_no, rt.type as room_type, rt.daily_rate,
+         hb.branch_name,
+         s.fname as staff_name
+       FROM booking b
+       LEFT JOIN rooms r ON b.room_id = r.room_id
+       LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
+       LEFT JOIN hotel_branches hb ON b.branch_id = hb.branch_id
+       LEFT JOIN staff s ON b.staff_id = s.staff_id
+       WHERE b.user_id = ?`;
     const params: any[] = [user_id];
 
     if (status) {

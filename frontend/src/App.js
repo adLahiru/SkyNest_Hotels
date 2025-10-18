@@ -124,6 +124,7 @@ const App = () => {
         return (
           <BranchSelectionPage 
             onBranchSelect={handleBranchSelect}
+            setCurrentPage={setCurrentPage}
           />
         );
       

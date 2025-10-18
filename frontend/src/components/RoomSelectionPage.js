@@ -1,277 +1,57 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Users, Bed, Wifi, Coffee, Tv, Wind, Car, CheckCircle, XCircle, Calendar, Star } from 'lucide-react';
+import axios from 'axios';
+
+const API_URL = 'http://localhost:8084/api';
 
 const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isLoggedIn, onLoginRequired }) => {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [isVisible, setIsVisible] = useState({});
+  const [roomTypes, setRoomTypes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Mock room data - in real app, this would come from API based on selected branch
-  const getRoomsByBranch = (branchId) => {
-    const roomsData = {
-      colombo: [
-        {
-          id: 'col-std-001',
-          name: 'Standard City View',
-          type: 'Standard',
-          size: '35m²',
-          occupancy: 2,
-          beds: 1,
-          bedType: 'King Bed',
-          price: 150,
-          originalPrice: 200,
-          discount: 25,
-          image: '/Images/6256702-middle.png',
-          fallback: '/assets/images/external/home/standard-room.jpg',
-          amenities: [
-            { icon: Wifi, name: 'Free WiFi' },
-            { icon: Tv, name: 'Smart TV' },
-            { icon: Wind, name: 'AC' },
-            { icon: Coffee, name: 'Mini Bar' }
-          ],
-          features: ['City View', 'Work Desk', 'Safe', 'Hair Dryer'],
-          available: true,
-          lastBooked: '2 hours ago',
-          rating: 4.6,
-          description: 'Modern room with panoramic city views and contemporary amenities perfect for business travelers.'
-        },
-        {
-          id: 'col-dlx-002',
-          name: 'Deluxe Executive Suite',
-          type: 'Deluxe',
-          size: '65m²',
-          occupancy: 3,
-          beds: 1,
-          bedType: 'King + Sofa Bed',
-          price: 250,
-          originalPrice: 300,
-          discount: 17,
-          image: '/Images/f_a6ac69d2b315fc52106206940c54e2e36375e06e.jpg',
-          fallback: '/assets/images/external/home/deluxe-suite.jpg',
-          amenities: [
-            { icon: Wifi, name: 'Free WiFi' },
-            { icon: Tv, name: 'Smart TV' },
-            { icon: Wind, name: 'AC' },
-            { icon: Coffee, name: 'Premium Mini Bar' },
-            { icon: Car, name: 'Valet Parking' }
-          ],
-          features: ['Executive Lounge Access', 'Separate Living Area', 'Premium Toiletries', 'Butler Service'],
-          available: true,
-          lastBooked: '1 day ago',
-          rating: 4.8,
-          description: 'Spacious suite with separate living area, executive privileges and premium amenities.'
-        },
-        {
-          id: 'col-fam-003',
-          name: 'Family Connecting Rooms',
-          type: 'Family',
-          size: '80m²',
-          occupancy: 4,
-          beds: 2,
-          bedType: '2 Queen Beds',
-          price: 320,
-          originalPrice: 380,
-          discount: 16,
-          image: '/Images/istockphoto-1452529483-612x612.jpg',
-          fallback: '/assets/images/external/home/family-room.jpg',
-          amenities: [
-            { icon: Wifi, name: 'Free WiFi' },
-            { icon: Tv, name: '2 Smart TVs' },
-            { icon: Wind, name: 'AC' },
-            { icon: Coffee, name: 'Kitchenette' }
-          ],
-          features: ['Connecting Rooms', 'Child Safety Kit', 'Game Console', 'Balcony'],
-          available: false,
-          lastBooked: 'Currently occupied',
-          rating: 4.7,
-          description: 'Perfect for families with connecting rooms and child-friendly amenities.'
-        },
-        {
-          id: 'col-prs-004',
-          name: 'Presidential Suite',
-          type: 'Presidential',
-          size: '120m²',
-          occupancy: 4,
-          beds: 1,
-          bedType: 'California King',
-          price: 500,
-          originalPrice: 600,
-          discount: 17,
-          image: '/Images/park-hyatt-sydney.png',
-          fallback: '/assets/images/external/offers/honeymoon-package.jpg',
-          amenities: [
-            { icon: Wifi, name: 'Free WiFi' },
-            { icon: Tv, name: 'Premium Entertainment' },
-            { icon: Wind, name: 'Climate Control' },
-            { icon: Coffee, name: 'Premium Bar' },
-            { icon: Car, name: 'Chauffeur Service' }
-          ],
-          features: ['Private Terrace', 'Jacuzzi', 'Personal Concierge', 'Premium Location'],
-          available: true,
-          lastBooked: '3 days ago',
-          rating: 4.9,
-          description: 'Ultimate luxury experience with private terrace, jacuzzi and personalized service.'
+  // Fetch room types from the database
+  useEffect(() => {
+    const fetchRoomTypes = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('accessToken');
+        
+        if (!token) {
+          setError('Please login to view available rooms');
+          setLoading(false);
+          return;
         }
-      ],
-      kandy: [
-        {
-          id: 'kan-std-001',
-          name: 'Garden View Standard',
-          type: 'Standard',
-          size: '40m²',
-          occupancy: 2,
-          beds: 1,
-          bedType: 'Queen Bed',
-          price: 120,
-          originalPrice: 150,
-          discount: 20,
-          image: '/Images/6256702-middle.png',
-          fallback: '/assets/images/external/home/standard-room.jpg',
-          amenities: [
-            { icon: Wifi, name: 'Free WiFi' },
-            { icon: Tv, name: 'Cable TV' },
-            { icon: Wind, name: 'AC' },
-            { icon: Coffee, name: 'Tea/Coffee' }
-          ],
-          features: ['Garden View', 'Traditional Décor', 'Mountain Breeze', 'Cultural Touches'],
-          available: true,
-          lastBooked: '5 hours ago',
-          rating: 4.5,
-          description: 'Charming room with traditional Sri Lankan décor and beautiful garden views.'
-        },
-        {
-          id: 'kan-dlx-002',
-          name: 'Mountain View Deluxe',
-          type: 'Deluxe',
-          size: '55m²',
-          occupancy: 3,
-          beds: 1,
-          bedType: 'King Bed',
-          price: 200,
-          originalPrice: 240,
-          discount: 17,
-          image: '/Images/f_a6ac69d2b315fc52106206940c54e2e36375e06e.jpg',
-          fallback: '/assets/images/external/home/deluxe-suite.jpg',
-          amenities: [
-            { icon: Wifi, name: 'Free WiFi' },
-            { icon: Tv, name: 'Smart TV' },
-            { icon: Wind, name: 'AC' },
-            { icon: Coffee, name: 'Premium Amenities' }
-          ],
-          features: ['Mountain View', 'Private Balcony', 'Spa Access', 'Cultural Concierge'],
-          available: false,
-          lastBooked: 'Maintenance until Dec 15',
-          rating: 4.7,
-          description: 'Luxurious room with breathtaking mountain views and access to spa facilities.'
-        },
-        {
-          id: 'kan-spa-003',
-          name: 'Wellness Suite',
-          type: 'Wellness',
-          size: '70m²',
-          occupancy: 2,
-          beds: 1,
-          bedType: 'King Bed',
-          price: 280,
-          originalPrice: 350,
-          discount: 20,
-          image: '/Images/park-hyatt-sydney.png',
-          fallback: '/assets/images/external/home/luxury-spa.jpg',
-          amenities: [
-            { icon: Wifi, name: 'Free WiFi' },
-            { icon: Tv, name: 'Wellness TV' },
-            { icon: Wind, name: 'Air Purifier' },
-            { icon: Coffee, name: 'Herbal Bar' }
-          ],
-          features: ['In-room Spa', 'Meditation Corner', 'Yoga Mat', 'Aromatherapy'],
-          available: true,
-          lastBooked: '1 day ago',
-          rating: 4.8,
-          description: 'Specially designed for wellness enthusiasts with in-room spa facilities.'
+
+        const response = await axios.get(`${API_URL}/room-types`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.data.success) {
+          setRoomTypes(response.data.data || []);
+        } else {
+          setError('Failed to load room types');
         }
-      ],
-      galle: [
-        {
-          id: 'gal-std-001',
-          name: 'Ocean Breeze Standard',
-          type: 'Standard',
-          size: '42m²',
-          occupancy: 2,
-          beds: 1,
-          bedType: 'Queen Bed',
-          price: 180,
-          originalPrice: 220,
-          discount: 18,
-          image: '/Images/6256702-middle.png',
-          fallback: '/assets/images/external/home/standard-room.jpg',
-          amenities: [
-            { icon: Wifi, name: 'Free WiFi' },
-            { icon: Tv, name: 'Smart TV' },
-            { icon: Wind, name: 'Sea Breeze AC' },
-            { icon: Coffee, name: 'Tropical Bar' }
-          ],
-          features: ['Ocean Glimpse', 'Colonial Décor', 'Fort Access', 'Beach Gear'],
-          available: true,
-          lastBooked: '3 hours ago',
-          rating: 4.4,
-          description: 'Charming room with colonial touches and glimpses of the Indian Ocean.'
-        },
-        {
-          id: 'gal-ocn-002',
-          name: 'Oceanfront Deluxe',
-          type: 'Deluxe',
-          size: '60m²',
-          occupancy: 3,
-          beds: 1,
-          bedType: 'King Bed',
-          price: 300,
-          originalPrice: 360,
-          discount: 17,
-          image: '/Images/umbrella-pool-chair.jpg',
-          fallback: '/assets/images/external/home/swimming-pool.jpg',
-          amenities: [
-            { icon: Wifi, name: 'Free WiFi' },
-            { icon: Tv, name: 'Smart TV' },
-            { icon: Wind, name: 'AC' },
-            { icon: Coffee, name: 'Premium Bar' }
-          ],
-          features: ['Direct Ocean View', 'Private Beach Access', 'Sunset Terrace', 'Water Sports'],
-          available: true,
-          lastBooked: '2 days ago',
-          rating: 4.9,
-          description: 'Stunning oceanfront room with direct beach access and water sports included.'
-        },
-        {
-          id: 'gal-vip-003',
-          name: 'Historic Fort Suite',
-          type: 'Heritage',
-          size: '90m²',
-          occupancy: 4,
-          beds: 1,
-          bedType: 'King + Day Bed',
-          price: 450,
-          originalPrice: 550,
-          discount: 18,
-          image: '/Images/park-hyatt-sydney.png',
-          fallback: '/assets/images/external/offers/honeymoon-package.jpg',
-          amenities: [
-            { icon: Wifi, name: 'Free WiFi' },
-            { icon: Tv, name: 'Entertainment System' },
-            { icon: Wind, name: 'Climate Control' },
-            { icon: Coffee, name: 'Heritage Bar' }
-          ],
-          features: ['Historic Architecture', 'Fort Wall View', 'Private Courtyard', 'Cultural Guide'],
-          available: false,
-          lastBooked: 'Fully booked this month',
-          rating: 4.8,
-          description: 'Unique heritage suite within the historic Galle Fort with authentic colonial architecture.'
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching room types:', error);
+        if (error.response?.status === 401) {
+          setError('Your session has expired or is invalid. Please log in again.');
+          if (typeof onLoginRequired === 'function') {
+            onLoginRequired();
+          }
+        } else {
+          setError('Failed to load rooms. Please try again later.');
         }
-      ]
+        setLoading(false);
+      }
     };
 
-    return roomsData[branchId] || [];
-  };
-
-  const rooms = getRoomsByBranch(selectedBranch?.id);
+    fetchRoomTypes();
+  }, []);
 
   // Intersection Observer for animations
   useEffect(() => {
@@ -290,43 +70,74 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
     elements.forEach((el) => observer.observe(el));
 
     return () => observer.disconnect();
-  }, []);
+  }, [roomTypes]);
 
-  const handleRoomBooking = (room) => {
-    if (!room.available) return;
-    
+  const handleRoomBooking = (roomType) => {
     if (!isLoggedIn) {
-      onLoginRequired(room);
+      onLoginRequired(roomType);
       return;
     }
     
-    setSelectedRoom(room.id);
+    setSelectedRoom(roomType.room_type_id);
     setTimeout(() => {
-      onRoomSelect(room, selectedBranch);
+      onRoomSelect(roomType, selectedBranch);
     }, 300);
   };
 
-  const getAvailabilityStatus = (room) => {
-    if (room.available) {
-      return {
-        status: 'available',
-        text: 'Available Now',
-        icon: CheckCircle,
-        color: 'text-green-600',
-        bgColor: 'bg-green-50',
-        borderColor: 'border-green-200'
-      };
-    } else {
-      return {
-        status: 'unavailable',
-        text: 'Unavailable',
-        icon: XCircle,
-        color: 'text-red-600',
-        bgColor: 'bg-red-50',
-        borderColor: 'border-red-200'
-      };
+  // Parse amenities from JSON string
+  const parseAmenities = (amenitiesStr) => {
+    try {
+      const amenitiesArray = JSON.parse(amenitiesStr);
+      return amenitiesArray || [];
+    } catch {
+      return amenitiesStr ? amenitiesStr.split(',').map(a => a.trim()) : [];
     }
   };
+
+  // Convert amenities to icon components
+  const getAmenityIcon = (amenityName) => {
+    const lowerName = amenityName.toLowerCase();
+    if (lowerName.includes('wifi') || lowerName.includes('wi-fi')) return Wifi;
+    if (lowerName.includes('tv')) return Tv;
+    if (lowerName.includes('air') || lowerName.includes('ac')) return Wind;
+    if (lowerName.includes('bar') || lowerName.includes('coffee') || lowerName.includes('kitchen')) return Coffee;
+    if (lowerName.includes('parking') || lowerName.includes('valet')) return Car;
+    return Coffee; // default icon
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-amber-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading available rooms...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center p-8 bg-red-50 rounded-lg max-w-md">
+          <h2 className="text-2xl font-semibold text-red-800 mb-4">Error</h2>
+          <p className="text-red-600 mb-6">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 mr-4"
+          >
+            Retry
+          </button>
+          <button 
+            onClick={onBackToBranches}
+            className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+          >
+            Go Back
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-20 pt-32">
@@ -355,45 +166,42 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
 
         {/* Rooms Grid */}
         <div className="grid lg:grid-cols-2 gap-8">
-          {rooms.map((room, index) => {
-            const availability = getAvailabilityStatus(room);
-            const StatusIconComponent = availability.icon;
+          {roomTypes.map((roomType, index) => {
+            const amenitiesList = parseAmenities(roomType.amenities);
+            const isAvailable = roomType.room_count > 0;
             
             return (
               <div 
-                key={room.id}
-                className={`bg-white rounded-3xl overflow-hidden shadow-xl transition-all duration-500 reveal ${isVisible[`room-${room.id}`] ? 'active' : ''} ${selectedRoom === room.id ? 'ring-4 ring-amber-400 transform scale-105' : 'hover:shadow-2xl'}`}
-                id={`room-${room.id}`}
+                key={roomType.room_type_id}
+                className={`bg-white rounded-3xl overflow-hidden shadow-xl transition-all duration-500 reveal ${isVisible[`room-${roomType.room_type_id}`] ? 'active' : ''} ${selectedRoom === roomType.room_type_id ? 'ring-4 ring-amber-400 transform scale-105' : 'hover:shadow-2xl'}`}
+                id={`room-${roomType.room_type_id}`}
                 style={{ animationDelay: `${index * 0.2}s` }}
               >
                 {/* Room Image */}
                 <div className="relative h-64 overflow-hidden">
                   <img 
-                    src={room.image} 
-                    alt={room.name}
+                    src={roomType.photo || '/assets/images/external/home/hero-background.jpg'} 
+                    alt={roomType.type}
                     className="w-full h-full object-cover"
                     onError={(e) => {
-                      e.target.src = room.fallback;
+                      e.target.src = '/assets/images/external/home/hero-background.jpg';
                     }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>
                   
-                  {/* Discount Badge */}
-                  {room.discount > 0 && (
-                    <div className="absolute top-4 left-4 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-bold">
-                      {room.discount}% OFF
-                    </div>
-                  )}
-
                   {/* Availability Status */}
-                  <div className={`absolute top-4 right-4 ${availability.bgColor} ${availability.borderColor} ${availability.color} px-3 py-1 rounded-full text-sm font-semibold border flex items-center space-x-1`}>
-                    <StatusIconComponent className="w-4 h-4" />
-                    <span>{availability.text}</span>
+                  <div className={`absolute top-4 right-4 px-3 py-1 rounded-full text-sm font-semibold border flex items-center space-x-1 ${
+                    isAvailable 
+                      ? 'bg-green-50 border-green-200 text-green-600' 
+                      : 'bg-red-50 border-red-200 text-red-600'
+                  }`}>
+                    {isAvailable ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                    <span>{isAvailable ? 'Available' : 'Unavailable'}</span>
                   </div>
 
                   {/* Room Type Badge */}
                   <div className="absolute bottom-4 left-4 bg-amber-500 text-white px-4 py-2 rounded-full font-medium">
-                    {room.type}
+                    {roomType.type}
                   </div>
                 </div>
 
@@ -401,40 +209,32 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
                 <div className="p-8">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <h3 className="text-2xl font-semibold text-gray-800 mb-1">{room.name}</h3>
+                      <h3 className="text-2xl font-semibold text-gray-800 mb-1">{roomType.type}</h3>
                       <div className="flex items-center space-x-2 text-sm text-gray-500">
                         <Star className="w-4 h-4 text-amber-500 fill-current" />
-                        <span>{room.rating} rating</span>
+                        <span>4.5+ rating</span>
                         <span>•</span>
-                        <Calendar className="w-4 h-4" />
-                        <span>{room.lastBooked}</span>
+                        <span>{roomType.room_count} rooms available</span>
                       </div>
                     </div>
                     
                     <div className="text-right">
-                      {room.discount > 0 && (
-                        <div className="text-sm text-gray-400 line-through">${room.originalPrice}</div>
-                      )}
-                      <div className="text-2xl font-bold text-amber-600">${room.price}</div>
+                      <div className="text-2xl font-bold text-amber-600">${roomType.daily_rate}</div>
                       <div className="text-sm text-gray-500">per night</div>
                     </div>
                   </div>
 
-                  <p className="text-gray-600 mb-6 leading-relaxed">{room.description}</p>
+                  <p className="text-gray-600 mb-6 leading-relaxed">{roomType.description}</p>
 
                   {/* Room Stats */}
-                  <div className="grid grid-cols-3 gap-4 mb-6">
+                  <div className="grid grid-cols-2 gap-4 mb-6">
                     <div className="text-center p-3 bg-gray-50 rounded-lg">
                       <Users className="w-5 h-5 mx-auto mb-1 text-amber-600" />
-                      <div className="text-sm font-medium">{room.occupancy} Guests</div>
+                      <div className="text-sm font-medium">{roomType.capacity} Guests</div>
                     </div>
                     <div className="text-center p-3 bg-gray-50 rounded-lg">
                       <Bed className="w-5 h-5 mx-auto mb-1 text-amber-600" />
-                      <div className="text-sm font-medium">{room.bedType}</div>
-                    </div>
-                    <div className="text-center p-3 bg-gray-50 rounded-lg">
-                      <div className="text-lg font-bold text-amber-600">{room.size}</div>
-                      <div className="text-xs text-gray-500">Size</div>
+                      <div className="text-sm font-medium">Premium Bed</div>
                     </div>
                   </div>
 
@@ -442,49 +242,41 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
                   <div className="mb-6">
                     <h4 className="text-sm font-semibold text-gray-700 mb-3">Amenities</h4>
                     <div className="flex flex-wrap gap-2">
-                      {room.amenities.map((amenity, idx) => {
-                        const IconComponent = amenity.icon;
+                      {amenitiesList.slice(0, 6).map((amenity, idx) => {
+                        const IconComponent = getAmenityIcon(amenity);
                         return (
                           <div key={idx} className="flex items-center space-x-1 text-xs text-gray-600 bg-gray-50 px-3 py-1 rounded-full">
                             <IconComponent className="w-3 h-3" />
-                            <span>{amenity.name}</span>
+                            <span>{amenity}</span>
                           </div>
                         );
                       })}
-                    </div>
-                  </div>
-
-                  {/* Features */}
-                  <div className="mb-6">
-                    <h4 className="text-sm font-semibold text-gray-700 mb-3">Special Features</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      {room.features.map((feature, idx) => (
-                        <div key={idx} className="flex items-center space-x-2">
-                          <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
-                          <span className="text-sm text-gray-600">{feature}</span>
+                      {amenitiesList.length > 6 && (
+                        <div className="text-xs text-amber-600 px-3 py-1">
+                          +{amenitiesList.length - 6} more
                         </div>
-                      ))}
+                      )}
                     </div>
                   </div>
 
                   {/* Booking Button */}
                   <button 
-                    onClick={() => handleRoomBooking(room)}
-                    disabled={!room.available}
+                    onClick={() => handleRoomBooking(roomType)}
+                    disabled={!isAvailable}
                     className={`w-full py-3 rounded-xl font-semibold transition-all duration-300 ${
-                      !room.available 
+                      !isAvailable 
                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                        : selectedRoom === room.id
+                        : selectedRoom === roomType.room_type_id
                           ? 'bg-amber-500 text-white transform scale-105'
                           : 'btn-primary hover:shadow-xl'
                     }`}
                   >
-                    {!room.available ? 'Room Unavailable' : 
-                     selectedRoom === room.id ? 'Processing...' : 
+                    {!isAvailable ? 'Room Unavailable' : 
+                     selectedRoom === roomType.room_type_id ? 'Processing...' : 
                      isLoggedIn ? 'Book This Room' : 'Login to Book'}
                   </button>
 
-                  {!isLoggedIn && room.available && (
+                  {!isLoggedIn && isAvailable && (
                     <p className="text-center text-sm text-gray-500 mt-2">
                       Please login to proceed with booking
                     </p>

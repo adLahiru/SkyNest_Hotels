@@ -6,6 +6,10 @@ import { UserRole } from '../types/auth.types';
 
 const router: Router = Router();
 
+// Get all branches (public access)
+// GET /api/branches/public
+router.get('/public', branchController.getBranches);
+
 // Create a new branch
 // POST /api/branches
 // Accessible by: ADMIN only
