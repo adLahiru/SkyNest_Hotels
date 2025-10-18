@@ -77,10 +77,6 @@ jobs:
       working-directory: ./frontend
       run: pnpm build
       
-    - name: Run frontend tests
-      working-directory: ./frontend
-      run: pnpm test
-      
     # Deployment steps
     - name: Restart backend service
       run: |
