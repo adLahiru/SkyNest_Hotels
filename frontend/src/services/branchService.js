@@ -7,7 +7,29 @@ import apiClient from '../config/api';
 
 const branchService = {
   /**
-   * Get all branches
+   * Get all branches (Public - No auth required)
+   * @returns {Promise} Response with list of branches
+   */
+  getAllBranchesPublic: async () => {
+    try {
+      const response = await apiClient.get('/branches/public');
+      return {
+        success: response.data.success,
+        branches: response.data.data || [],
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.error('Get all branches (public) error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to fetch branches',
+        error,
+      };
+    }
+  },
+
+  /**
+   * Get all branches (Authenticated)
    * @returns {Promise} Response with list of branches
    */
   getAllBranches: async () => {
@@ -29,7 +51,30 @@ const branchService = {
   },
 
   /**
-   * Get branch by ID
+   * Get branch by ID (Public - No auth required)
+   * @param {string} branchId - Branch ID
+   * @returns {Promise} Response with branch details
+   */
+  getBranchByIdPublic: async (branchId) => {
+    try {
+      const response = await apiClient.get(`/branches/public/${branchId}`);
+      return {
+        success: response.data.success,
+        branch: response.data.data,
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.error('Get branch by ID (public) error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to fetch branch details',
+        error,
+      };
+    }
+  },
+
+  /**
+   * Get branch by ID (Authenticated)
    * @param {string} branchId - Branch ID
    * @returns {Promise} Response with branch details
    */

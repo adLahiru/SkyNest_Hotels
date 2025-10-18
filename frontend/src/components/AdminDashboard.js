@@ -203,8 +203,9 @@ const AdminDashboard = ({ user }) => {
     if (roomFloorFilter) filters.floor_no = roomFloorFilter;
     
     const result = await roomService.getAllRooms(filters);
+    console.log('Fetched rooms result:', result); // Debug log
     if (result.success) {
-      let filteredRooms = result.rooms.rooms || [];
+      let filteredRooms = result.rooms || []; // Fixed: result.rooms NOT result.rooms.rooms
       
       // Apply search filter on room number
       if (roomSearchQuery) {
@@ -213,6 +214,7 @@ const AdminDashboard = ({ user }) => {
         );
       }
       
+      console.log('Filtered rooms:', filteredRooms); // Debug log
       setRooms(filteredRooms);
     } else {
       console.error('Failed to fetch rooms:', result.message);

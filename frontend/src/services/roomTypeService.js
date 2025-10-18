@@ -7,7 +7,29 @@ import apiClient from '../config/api';
 
 const roomTypeService = {
   /**
-   * Get all room types
+   * Get all room types (Public - No auth required)
+   * @returns {Promise} Response with list of room types
+   */
+  getAllRoomTypesPublic: async () => {
+    try {
+      const response = await apiClient.get('/room-types/public');
+      return {
+        success: response.data.success,
+        roomTypes: response.data.data || [],
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.error('Get all room types (public) error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to fetch room types',
+        error,
+      };
+    }
+  },
+
+  /**
+   * Get all room types (Authenticated)
    * @returns {Promise} Response with list of room types
    */
   getAllRoomTypes: async () => {
@@ -29,7 +51,30 @@ const roomTypeService = {
   },
 
   /**
-   * Get room type by ID
+   * Get room type by ID (Public - No auth required)
+   * @param {string} roomTypeId - Room Type ID
+   * @returns {Promise} Response with room type details
+   */
+  getRoomTypeByIdPublic: async (roomTypeId) => {
+    try {
+      const response = await apiClient.get(`/room-types/public/${roomTypeId}`);
+      return {
+        success: response.data.success,
+        roomType: response.data.data,
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.error('Get room type by ID (public) error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to fetch room type details',
+        error,
+      };
+    }
+  },
+
+  /**
+   * Get room type by ID (Authenticated)
    * @param {string} roomTypeId - Room Type ID
    * @returns {Promise} Response with room type details
    */

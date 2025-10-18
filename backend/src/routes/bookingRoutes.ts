@@ -32,7 +32,12 @@ router.get('/', authenticateToken, getBookings);
 router.get('/:booking_id', authenticateToken, getBookingById);
 
 // Create new booking (all authenticated users)
-router.post('/', authenticateToken, createBooking);
+router.post('/', authenticateToken, (req: any, res, next) => {
+  console.log('=== BOOKING ROUTE HIT ===');
+  console.log('Body:', req.body);
+  console.log('User:', req.user);
+  next();
+}, createBooking);
 
 // Update booking (access-controlled)
 router.put('/:booking_id', authenticateToken, updateBooking);

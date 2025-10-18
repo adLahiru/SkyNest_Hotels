@@ -114,7 +114,7 @@ const HomePage = ({ setCurrentPage }) => {
         <div 
           className="absolute inset-0 bg-cover bg-center parallax"
           style={{
-            backgroundImage: `url('/Figmaimages/Home.png'), url('/assets/images/external/home/hero-background.jpg')`
+            backgroundImage: `url('/Figmaimages/Home.png'), url('/assets/images/external/home/Flux_Dev_A_hyperrealistic_luxurious_modern_resort_hotel_at_twi_3.jpg')`
           }}
         ></div>
         
@@ -142,7 +142,7 @@ const HomePage = ({ setCurrentPage }) => {
             SKY NEST HOTELS
           </h1>
           
-          <p className="text-xl md:text-2xl font-light mb-8 tracking-wide gradient-text">
+          <p className="text-xl md:text-2xl font-medium mb-8 tracking-wide text-amber-400">
             Where Comfort Meets Elegance
           </p>
           
