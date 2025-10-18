@@ -1,5 +1,5 @@
-# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs
+# SkyNest Hotels CI/CD
+# Builds backend + frontend and deploys both automatically on push to main
 
 name: SkyNest Hotels CI/CD
 
@@ -42,7 +42,9 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-pnpm-store-
           
-    # Backend deployment
+    # =========================
+    # Backend Deployment
+    # =========================
     - name: Install backend dependencies
       working-directory: ./backend
       run: pnpm install
@@ -58,11 +60,13 @@ jobs:
       working-directory: ./backend
       run: pnpm build
       
-    # - name: Run database migrations
-    #   working-directory: ./backend
-    #   run: pnpm migrate:prod
+    - name: Run database migrations
+      working-directory: ./backend
+      run: pnpm migrate:prod
       
-    # Frontend deployment
+    # =========================
+    # Frontend Deployment
+    # =========================
     - name: Setup frontend environment
       working-directory: ./frontend
       run: |
@@ -76,17 +80,28 @@ jobs:
       working-directory: ./frontend
       run: pnpm build
       
-    # Deployment steps
+    # =========================
+    # Deploy to Server
+    # =========================
     - name: Restart backend service
       run: |
-        pm2 reload backend || pm2 start ./backend/dist/index.js --name backend
-        
+        cd /home/ubuntu/Applications/actions-runner/_work/SkyNest_Hotels/SkyNest_Hotels
+        if pm2 list | grep -q "backend"; then
+          echo "Reloading existing backend process..."
+          pm2 reload backend --update-env
+        else
+          echo "Starting new backend process..."
+          pm2 start ./backend/dist/index.js --name backend --update-env
+        fi
+        pm2 save
+      
     - name: Deploy frontend to Nginx
       run: |
-        # Backup existing deployment
+        echo "Deploying frontend build to /var/www/html..."
         sudo rm -rf /var/www/html/*
         sudo cp -r /home/ubuntu/Applications/actions-runner/_work/SkyNest_Hotels/SkyNest_Hotels/frontend/build/* /var/www/html/
         
     - name: Reload Nginx
       run: |
+        echo "Reloading Nginx..."
         sudo systemctl reload nginx || sudo systemctl restart nginx
