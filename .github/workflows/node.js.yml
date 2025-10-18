@@ -60,7 +60,7 @@ jobs:
       
     - name: Run database migrations
       working-directory: ./backend
-      run: pnpm db:migrate
+      run: pnpm migrate:prod
       
     - name: Restart service
       run: |
