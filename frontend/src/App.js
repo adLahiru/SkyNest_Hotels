@@ -100,6 +100,13 @@ const App = () => {
     setCurrentPage('login');
   };
 
+  const handleBranchLoginRequired = (branch) => {
+    // Save the selected branch and set return page
+    setSelectedBranch(branch);
+    setReturnToPage('branch-selection');
+    setCurrentPage('login');
+  };
+
   const handleBackToBranches = () => {
     setSelectedBranch(null);
     setSelectedRoom(null);
@@ -124,6 +131,7 @@ const App = () => {
         return (
           <BranchSelectionPage 
             onBranchSelect={handleBranchSelect}
+            onLoginRequired={handleBranchLoginRequired}
             setCurrentPage={setCurrentPage}
           />
         );

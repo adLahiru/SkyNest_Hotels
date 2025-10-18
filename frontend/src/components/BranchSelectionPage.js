@@ -3,7 +3,7 @@ import { MapPin, Star, LogIn } from 'lucide-react';
 import branchService from '../services/branchService';
 
 
-const BranchSelectionPage = ({ onBranchSelect, setCurrentPage }) => {
+const BranchSelectionPage = ({ onBranchSelect, onLoginRequired, setCurrentPage }) => {
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -49,8 +49,10 @@ const BranchSelectionPage = ({ onBranchSelect, setCurrentPage }) => {
 
   const handleBranchSelect = (branch) => {
     if (!isAuthenticated) {
-      // Navigate to login page using setCurrentPage
-      if (setCurrentPage) {
+      // Save branch and redirect to login, then return to branch-selection
+      if (onLoginRequired) {
+        onLoginRequired(branch);
+      } else if (setCurrentPage) {
         setCurrentPage('login');
       }
       return;
@@ -126,7 +128,16 @@ const BranchSelectionPage = ({ onBranchSelect, setCurrentPage }) => {
                 {/* Location Badge */}
                 <div className="absolute bottom-4 left-4 bg-amber-500 text-white px-4 py-2 rounded-full flex items-center space-x-2">
                   <MapPin className="w-4 h-4" />
-                  <span className="font-medium">{branch.branch_name.split(' ')[2] || 'Unknown'}</span>
+                  <span className="font-medium">
+                    {(() => {
+                      // Prefer city from address (last comma-separated segment), else fallback to full branch name
+                      if (branch?.address && typeof branch.address === 'string') {
+                        const parts = branch.address.split(',').map(s => s.trim()).filter(Boolean);
+                        if (parts.length) return parts[parts.length - 1];
+                      }
+                      return branch?.branch_name || 'SkyNest';
+                    })()}
+                  </span>
                 </div>
               </div>
 
