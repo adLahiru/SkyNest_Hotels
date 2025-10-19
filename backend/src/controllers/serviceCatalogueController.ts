@@ -570,3 +570,159 @@ export const getServiceCategories = async (req: AuthenticatedRequest, res: Respo
     });
   }
 };
+
+/**
+ * Add service to a booking (create service usage record)
+ * Staff can add services to bookings in their branch
+ * POST /api/service-usage
+ */
+export const addServiceToBooking = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const connection = await db.getConnection();
+  
+  try {
+    const { booking_id, service_id, quantity } = req.body;
+    const staffId = req.user?.staff_id || req.user?.user_id;
+    
+    // Validation
+    if (!booking_id) {
+      res.status(400).json({ 
+        success: false,
+        error: 'Booking ID is required' 
+      });
+      return;
+    }
+    
+    if (!service_id) {
+      res.status(400).json({ 
+        success: false,
+        error: 'Service ID is required' 
+      });
+      return;
+    }
+    
+    if (!quantity || parseInt(quantity) <= 0) {
+      res.status(400).json({ 
+        success: false,
+        error: 'Valid quantity is required' 
+      });
+      return;
+    }
+    
+    await connection.beginTransaction();
+    
+    // Check if booking exists
+    const [bookings] = await connection.query<RowDataPacket[]>(
+      `SELECT booking_id, booking_status FROM booking WHERE booking_id = ?`,
+      [booking_id]
+    );
+    
+    if (bookings.length === 0) {
+      await connection.rollback();
+      res.status(404).json({ 
+        success: false,
+        error: 'Booking not found' 
+      });
+      return;
+    }
+    
+    // Check if service exists and get unit price
+    const [services] = await connection.query<ServiceCatalogue[]>(
+      `SELECT * FROM service_catalogue WHERE service_id = ? AND is_active = 1`,
+      [service_id]
+    );
+    
+    if (services.length === 0) {
+      await connection.rollback();
+      res.status(404).json({ 
+        success: false,
+        error: 'Service not found or not active' 
+      });
+      return;
+    }
+    
+    const service = services[0];
+    const unitPrice = parseFloat(service.unit_price.toString());
+    const total = unitPrice * parseInt(quantity);
+    
+    // Create service usage record
+    const usage_id = require('uuid').v4();
+    await connection.query(
+      `INSERT INTO service_usage (
+        usage_id, service_id, booking_id, usage_date, usage_time, quantity, total
+      ) VALUES (?, ?, ?, CURDATE(), CURTIME(), ?, ?)`,
+      [usage_id, service_id, booking_id, quantity, total]
+    );
+    
+    await connection.commit();
+    
+    // Fetch the created record with service details
+    const [createdUsage] = await connection.query<RowDataPacket[]>(
+      `SELECT su.*, sc.service_name, sc.category, sc.unit_price
+       FROM service_usage su
+       JOIN service_catalogue sc ON su.service_id = sc.service_id
+       WHERE su.usage_id = ?`,
+      [usage_id]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Service added to booking successfully',
+      data: {
+        usage: createdUsage[0]
+      }
+    });
+    
+  } catch (error) {
+    await connection.rollback();
+    console.error('Add service to booking error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to add service to booking',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  } finally {
+    connection.release();
+  }
+};
+
+/**
+ * Get service usage for a booking
+ * GET /api/service-usage/booking/:booking_id
+ */
+export const getBookingServices = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { booking_id } = req.params;
+    
+    const [services] = await db.query<RowDataPacket[]>(
+      `SELECT su.*, sc.service_name, sc.category, sc.unit_price
+       FROM service_usage su
+       JOIN service_catalogue sc ON su.service_id = sc.service_id
+       WHERE su.booking_id = ?
+       ORDER BY su.usage_date DESC, su.usage_time DESC`,
+      [booking_id]
+    );
+    
+    const totalServicesCharges = services.reduce(
+      (sum: number, s: any) => sum + parseFloat(s.total || '0'),
+      0
+    );
+    
+    res.json({
+      success: true,
+      message: 'Booking services retrieved successfully',
+      data: {
+        services,
+        count: services.length,
+        totalCharges: totalServicesCharges
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get booking services error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch booking services',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};

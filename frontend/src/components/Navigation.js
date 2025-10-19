@@ -13,6 +13,7 @@ const Navigation = ({ currentPage, setCurrentPage, isLoggedIn, user, onLogout })
     ? [
         { id: 'dashboard', label: 'Dashboard' },
         { id: 'booking', label: 'Bookings' },
+        { id: 'services', label: 'Services' },
         { id: 'offers', label: 'Offers' }
       ]
     : [

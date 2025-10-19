@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { UserCheck, UserX, Clock, Home, Users, DoorOpen, CheckCircle, XCircle } from 'lucide-react';
+import { UserCheck, UserX, Clock, Home, Users, DoorOpen, CheckCircle, XCircle, ClipboardList } from 'lucide-react';
 import dashboardService from '../services/dashboardService';
+import PendingGuestsManager from './PendingGuestsManager';
+import CurrentGuestsManager from './CurrentGuestsManager';
 
 const ReceptionistDashboard = ({ user }) => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [activeView, setActiveView] = useState('dashboard'); // 'dashboard', 'pending', or 'current'
 
   useEffect(() => {
     fetchDashboardStats();
@@ -37,13 +40,43 @@ const ReceptionistDashboard = ({ user }) => {
     );
   }
 
+  // Show Pending Guests view
+  if (activeView === 'pending') {
+    return <PendingGuestsManager user={user} onBack={() => setActiveView('dashboard')} />;
+  }
+
+  // Show Current Guests view
+  if (activeView === 'current') {
+    return <CurrentGuestsManager user={user} onBack={() => setActiveView('dashboard')} />;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 pt-28 px-8 pb-16">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Receptionist Dashboard</h1>
-          <p className="text-gray-600">Welcome back, {user?.name}! Here's today's operations.</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-bold text-gray-900 mb-2">Receptionist Dashboard</h1>
+              <p className="text-gray-600">Welcome back, {user?.name}! Here's today's operations.</p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setActiveView('pending')}
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all transform hover:scale-105 font-medium"
+              >
+                <ClipboardList className="w-5 h-5" />
+                Pending Guests
+              </button>
+              <button
+                onClick={() => setActiveView('current')}
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-lg hover:from-green-700 hover:to-teal-700 shadow-lg hover:shadow-xl transition-all transform hover:scale-105 font-medium"
+              >
+                <Users className="w-5 h-5" />
+                Current Guests
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Quick Stats */}

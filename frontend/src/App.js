@@ -10,6 +10,7 @@ import ContactPage from './components/ContactPage';
 import LoginPage from './components/LoginPage';
 import UserProfilePage from './components/UserProfilePage';
 import Dashboard from './components/Dashboard';
+import ServicesPage from './components/ServicesPage';
 import Footer from './components/Footer';
 import authService from './services/authService';
 import './styles/App.css';
@@ -150,6 +151,9 @@ const App = () => {
         
       case 'offers':
         return <OffersPage setCurrentPage={setCurrentPage} />;
+        
+      case 'services':
+        return <ServicesPage user={user} />;
         
       case 'contact':
         return <ContactPage />;

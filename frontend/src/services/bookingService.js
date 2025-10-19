@@ -32,8 +32,10 @@ const bookingService = {
 
   /**
    * Get all bookings (with optional filters)
-   * @param {Object} filters - Filter options (user_id, branch_id, status, etc.)
-   * @returns {Promise} Response with list of bookings
+   * Backend automatically filters by branch for Managers/Receptionists
+   * Guests only see their own bookings
+   * @param {Object} filters - Filter options (status, room_id, etc.)
+   * @returns {Promise} Response with list of bookings (branch-filtered)
    */
   getAllBookings: async (filters = {}) => {
     try {
@@ -45,15 +47,27 @@ const bookingService = {
       });
       
       const response = await apiClient.get(`/bookings?${params.toString()}`);
+      
+      // Handle different response structures
+      let bookings = [];
+      if (response.data.data && Array.isArray(response.data.data.bookings)) {
+        bookings = response.data.data.bookings;
+      } else if (Array.isArray(response.data.data)) {
+        bookings = response.data.data;
+      } else if (Array.isArray(response.data.bookings)) {
+        bookings = response.data.bookings;
+      }
+      
       return {
         success: response.data.success,
-        bookings: response.data.data || [],
+        bookings: bookings,
         message: response.data.message,
       };
     } catch (error) {
       console.error('Get all bookings error:', error);
       return {
         success: false,
+        bookings: [],
         message: error.response?.data?.message || 'Failed to fetch bookings',
         error,
       };
@@ -178,23 +192,23 @@ const bookingService = {
   },
 
   /**
-   * Check-in booking
+   * Check-in booking (Staff only - Manager/Receptionist)
    * @param {string} bookingId - Booking ID
    * @returns {Promise} Response with checked-in booking
    */
   checkInBooking: async (bookingId) => {
     try {
-      const response = await apiClient.post(`/bookings/${bookingId}/check-in`);
+      const response = await apiClient.patch(`/bookings/${bookingId}/checkin`);
       return {
-        success: response.data.success,
-        booking: response.data.data,
+        success: response.data.success || true,
+        booking: response.data.booking || response.data.data,
         message: response.data.message || 'Check-in successful',
       };
     } catch (error) {
       console.error('Check-in booking error:', error);
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to check-in',
+        message: error.response?.data?.message || error.response?.data?.error || 'Failed to check-in',
         error,
       };
     }

@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Gift, Clock, Users, Percent, Star, Calendar } from 'lucide-react';
+import discountService from '../services/discountService';
 
 const OffersPage = ({ setCurrentPage }) => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isVisible, setIsVisible] = useState({});
+  const [backendOffers, setBackendOffers] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const categories = [
     { id: 'all', name: 'All Offers', icon: Gift },
@@ -106,11 +109,59 @@ const OffersPage = ({ setCurrentPage }) => {
     }
   ];
 
-  const filteredOffers = selectedCategory === 'all' 
-    ? offers 
-    : offers.filter(offer => offer.category === selectedCategory);
+  // Fetch backend offers on mount
+  useEffect(() => {
+    fetchBackendOffers();
+  }, []);
 
-  const featuredOffers = offers.filter(offer => offer.featured);
+  const fetchBackendOffers = async () => {
+    setLoading(true);
+    try {
+      const result = await discountService.getAllDiscounts();
+      if (result.success && Array.isArray(result.discounts)) {
+        // Transform backend discounts to match offers format
+        const transformedOffers = result.discounts.map((discount, index) => ({
+          id: `backend-${discount.discount_id}`,
+          category: discount.applies_to === 'ROOMS' ? 'seasonal' : 
+                   discount.applies_to === 'SERVICES' ? 'premium' : 'advance',
+          title: discount.discount_name,
+          discount: discount.type === 'rate' ? `${discount.discount_value}% OFF` : `$${discount.discount_value} OFF`,
+          description: `Enjoy ${discount.type === 'rate' ? discount.discount_value + '%' : '$' + discount.discount_value} discount on ${
+            discount.applies_to === 'SERVICES_AND_ROOMS' ? 'all services and rooms' :
+            discount.applies_to === 'SERVICES' ? 'selected services' : 'room bookings'
+          }. Limited time offer!`,
+          code: `SAVE${discount.discount_value}`,
+          validUntil: discount.end_date || '2026-12-31',
+          terms: [
+            `Valid ${discount.applies_to === 'SERVICES_AND_ROOMS' ? 'for all services and rooms' : 
+                    discount.applies_to === 'SERVICES' ? 'for services only' : 'for room bookings only'}`,
+            discount.start_date ? `Valid from ${new Date(discount.start_date).toLocaleDateString()}` : 'No start date restriction',
+            discount.end_date ? `Valid until ${new Date(discount.end_date).toLocaleDateString()}` : 'No expiry date'
+          ],
+          image: '/Images/umbrella-pool-chair.jpg',
+          fallback: '/Images/umbrella-pool-chair.jpg',
+          originalPrice: 200,
+          discountedPrice: discount.type === 'rate' ? 200 * (1 - discount.discount_value / 100) : 200 - discount.discount_value,
+          featured: index < 3,
+          isBackend: true
+        }));
+        setBackendOffers(transformedOffers);
+      }
+    } catch (error) {
+      console.error('Error fetching backend offers:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Combine hardcoded and backend offers
+  const allOffers = [...backendOffers, ...offers];
+
+  const filteredOffers = selectedCategory === 'all' 
+    ? allOffers 
+    : allOffers.filter(offer => offer.category === selectedCategory);
+
+  const featuredOffers = allOffers.filter(offer => offer.featured);
 
   // Intersection Observer for animations
   useEffect(() => {

@@ -404,6 +404,127 @@ export const getOutstandingBalances = async (req: AuthenticatedRequest, res: Res
 };
 
 /**
+ * Mark payment (record a payment transaction)
+ * Staff can mark payments for their branch bookings
+ * POST /api/payments/mark-payment
+ */
+export const markPayment = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const connection = await db.getConnection();
+  
+  try {
+    const { booking_id, amount, payment_method } = req.body;
+    const staffId = req.user?.staff_id || req.user?.user_id;
+    
+    // Validation
+    if (!booking_id) {
+      res.status(400).json({ 
+        success: false,
+        error: 'Booking ID is required' 
+      });
+      return;
+    }
+    
+    if (!amount || parseFloat(amount) <= 0) {
+      res.status(400).json({ 
+        success: false,
+        error: 'Valid payment amount is required' 
+      });
+      return;
+    }
+    
+    if (!payment_method) {
+      res.status(400).json({ 
+        success: false,
+        error: 'Payment method is required' 
+      });
+      return;
+    }
+    
+    await connection.beginTransaction();
+    
+    // Check if payment record exists, if not create one
+    const [existingPayment] = await connection.query<RowDataPacket[]>(
+      `SELECT payment_id, total_charges, amount_paid, due_amount 
+       FROM payments 
+       WHERE booking_id = ?`,
+      [booking_id]
+    );
+    
+    let payment_id: string;
+    
+    if (existingPayment.length === 0) {
+      // Create payment record if it doesn't exist
+      payment_id = uuidv4();
+      await connection.query(
+        `INSERT INTO payments (
+          payment_id, booking_id, payment_date, payment_method,
+          total_charges, amount_paid, due_amount, payment_status, staff_id
+        ) VALUES (?, ?, CURDATE(), ?, 0, ?, ?, 'partial', ?)`,
+        [payment_id, booking_id, payment_method, amount, -parseFloat(amount as string), staffId]
+      );
+    } else {
+      payment_id = existingPayment[0].payment_id;
+      const currentAmountPaid = parseFloat(existingPayment[0].amount_paid || '0');
+      const totalCharges = parseFloat(existingPayment[0].total_charges || '0');
+      const newAmountPaid = currentAmountPaid + parseFloat(amount as string);
+      const newDueAmount = totalCharges - newAmountPaid;
+      const newStatus = newDueAmount <= 0 ? 'paid' : 'partial';
+      
+      // Update payment record
+      await connection.query(
+        `UPDATE payments 
+         SET amount_paid = ?,
+             due_amount = ?,
+             payment_status = ?,
+             payment_method = ?,
+             payment_date = CURDATE(),
+             staff_id = ?
+         WHERE payment_id = ?`,
+        [newAmountPaid, newDueAmount, newStatus, payment_method, staffId, payment_id]
+      );
+    }
+    
+    // Record payment transaction
+    const transaction_id = uuidv4();
+    await connection.query(
+      `INSERT INTO payment_transactions (
+        transaction_id, payment_id, booking_id, transaction_date,
+        amount, payment_method, processed_by_staff_id
+      ) VALUES (?, ?, ?, NOW(), ?, ?, ?)`,
+      [transaction_id, payment_id, booking_id, amount, payment_method, staffId]
+    );
+    
+    await connection.commit();
+    
+    // Fetch updated payment details
+    const [updatedPayment] = await connection.query<RowDataPacket[]>(
+      `SELECT * FROM payments WHERE payment_id = ?`,
+      [payment_id]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Payment recorded successfully',
+      data: {
+        payment: updatedPayment[0],
+        transaction_id
+      }
+    });
+    
+  } catch (error) {
+    await connection.rollback();
+    console.error('Mark payment error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to record payment',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  } finally {
+    connection.release();
+  }
+};
+
+/**
  * Get payment statistics
  * GET /api/payments/statistics
  */

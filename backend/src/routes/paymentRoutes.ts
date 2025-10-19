@@ -5,7 +5,8 @@ import {
   processPayment,
   getPaymentHistory,
   getOutstandingBalances,
-  getPaymentStatistics
+  getPaymentStatistics,
+  markPayment
 } from '../controllers/paymentController';
 import { authenticateToken } from '../middleware/authMiddleware';
 
@@ -28,6 +29,9 @@ router.get('/bill/:bookingId', authenticateToken, getBillDetails);
 
 // Process a payment (full or partial)
 router.post('/process', authenticateToken, processPayment);
+
+// Mark payment (record payment transaction) - for receptionist manual entry
+router.post('/mark-payment', authenticateToken, markPayment);
 
 // Get payment history for a booking
 router.get('/history/:bookingId', authenticateToken, getPaymentHistory);

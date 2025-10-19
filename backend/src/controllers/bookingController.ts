@@ -44,6 +44,19 @@ interface Booking extends RowDataPacket {
 }
 
 /**
+ * Convert JavaScript Date to MySQL datetime format
+ */
+const formatDateForMySQL = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
+
+/**
  * Calculate total days for a booking
  */
 const calculateTotalDays = (checkIn: Date, checkOut: Date): number => {
@@ -208,6 +221,10 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
     }
 
     // Check for conflicting bookings (room already booked for overlapping dates)
+    // Convert dates to MySQL format for comparison
+    const checkInForQuery = formatDateForMySQL(checkIn);
+    const checkOutForQuery = formatDateForMySQL(checkOut);
+    
     const [conflicts] = await connection.query<RowDataPacket[]>(
       `SELECT COUNT(*) as count FROM booking 
        WHERE room_id = ? 
@@ -217,7 +234,7 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
          (checking_datetime < ? AND checkout_datetime >= ?) OR
          (checking_datetime >= ? AND checkout_datetime <= ?)
        )`,
-      [room_id, checkOut, checkIn, checkOut, checkIn, checkIn, checkOut]
+      [room_id, checkOutForQuery, checkInForQuery, checkOutForQuery, checkInForQuery, checkInForQuery, checkOutForQuery]
     );
 
     const conflictCount = conflicts[0]?.count ?? 0;
@@ -260,20 +277,20 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
       user_id,
       room_id,
       staff_id: staff_id || null,
-      checking_datetime,
-      checkout_datetime,
+      checking_datetime: checkInForQuery,
+      checkout_datetime: checkOutForQuery,
       booking_status: BookingStatus.CONFIRMED,
       branch_id: room.branch_id,
       number_of_guests: number_of_guests || 1,
       special_requests: special_requests || null
     });
 
-    // Create the booking
+    // Create the booking (dates already formatted in conflict check)
     const [result] = await connection.query<ResultSetHeader>(
       `INSERT INTO booking 
        (booking_id, user_id, room_id, staff_id, checking_datetime, checkout_datetime, booking_status, booking_date, branch_id, number_of_guests, special_requests) 
        VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?)`,
-      [booking_id, user_id, room_id, staff_id || null, checking_datetime, checkout_datetime, BookingStatus.CONFIRMED, room.branch_id, number_of_guests || 1, special_requests || null]
+      [booking_id, user_id, room_id, staff_id || null, checkInForQuery, checkOutForQuery, BookingStatus.CONFIRMED, room.branch_id, number_of_guests || 1, special_requests || null]
     );
 
     // Fetch the created booking with joined data
@@ -660,6 +677,10 @@ export const updateBooking = async (req: AuthenticatedRequest, res: Response): P
 
       // Check for conflicts if dates are changing
       if (checking_datetime !== undefined || checkout_datetime !== undefined) {
+        // Convert dates to MySQL format for comparison
+        const newCheckInFormatted = formatDateForMySQL(newCheckIn);
+        const newCheckOutFormatted = formatDateForMySQL(newCheckOut);
+        
         const [conflicts] = await connection.query<RowDataPacket[]>(
           `SELECT COUNT(*) as count FROM booking 
            WHERE room_id = ? 
@@ -670,7 +691,7 @@ export const updateBooking = async (req: AuthenticatedRequest, res: Response): P
              (checking_datetime < ? AND checkout_datetime >= ?) OR
              (checking_datetime >= ? AND checkout_datetime <= ?)
            )`,
-          [existingBooking.room_id, booking_id, newCheckOut, newCheckIn, newCheckOut, newCheckIn, newCheckIn, newCheckOut]
+          [existingBooking.room_id, booking_id, newCheckOutFormatted, newCheckInFormatted, newCheckOutFormatted, newCheckInFormatted, newCheckInFormatted, newCheckOutFormatted]
         );
 
         const conflictCount = conflicts[0]?.count ?? 0;
@@ -687,11 +708,11 @@ export const updateBooking = async (req: AuthenticatedRequest, res: Response): P
 
       if (checking_datetime !== undefined) {
         updates.push('checking_datetime = ?');
-        values.push(checking_datetime);
+        values.push(formatDateForMySQL(newCheckIn));
       }
       if (checkout_datetime !== undefined) {
         updates.push('checkout_datetime = ?');
-        values.push(checkout_datetime);
+        values.push(formatDateForMySQL(newCheckOut));
       }
     }
 
@@ -1038,6 +1059,8 @@ export const getMyBookings = async (req: AuthenticatedRequest, res: Response): P
 
 /**
  * Check in a guest
+ * ONLY STAFF (Manager/Receptionist) can check in guests
+ * Guests CANNOT check themselves in - staff must do it
  * PATCH /api/bookings/:booking_id/checkin
  */
 export const checkInGuest = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -1046,6 +1069,19 @@ export const checkInGuest = async (req: AuthenticatedRequest, res: Response): Pr
   try {
     const { booking_id } = req.params;
     const staffId = req.user?.staff_id || req.user?.user_id;
+    
+    // CRITICAL: Only staff (Manager/Receptionist) can check in guests
+    // Guests cannot check themselves in
+    if (req.user?.role !== UserRole.ADMIN && 
+        req.user?.role !== UserRole.MANAGER && 
+        req.user?.role !== UserRole.RECEPTIONIST) {
+      res.status(403).json({ 
+        success: false,
+        error: 'Access denied',
+        message: 'Only hotel staff (Manager/Receptionist) can check in guests. Guests cannot check themselves in.'
+      });
+      return;
+    }
     
     if (!booking_id) {
       res.status(400).json({ error: 'Booking ID is required' });
@@ -1074,10 +1110,14 @@ export const checkInGuest = async (req: AuthenticatedRequest, res: Response): Pr
       return;
     }
     
-    // Check if user has access
+    // Check if user has access to this branch
     if (!canAccessBooking(req, booking)) {
       await connection.rollback();
-      res.status(403).json({ error: 'Access denied' });
+      res.status(403).json({ 
+        success: false,
+        error: 'Access denied',
+        message: 'You can only check in guests in your branch.'
+      });
       return;
     }
     

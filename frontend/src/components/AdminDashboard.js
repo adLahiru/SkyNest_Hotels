@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2, Search, Filter, X, Eye, EyeOff, Home, Bed, Upload, FileText } from 'lucide-react';
+import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2, Search, Filter, X, Eye, EyeOff, Home, Bed, Upload, FileText, ShoppingBag, Tag, Gift, Percent } from 'lucide-react';
 import dashboardService from '../services/dashboardService';
 import userService from '../services/userService';
 import branchService from '../services/branchService';
 import roomService from '../services/roomService';
 import roomTypeService from '../services/roomTypeService';
+import serviceCatalogueService from '../services/serviceCatalogueService';
+import discountService from '../services/discountService';
 import ReportsMain from './Reports/ReportsMain';
 
 const AdminDashboard = ({ user }) => {
@@ -108,6 +110,44 @@ const AdminDashboard = ({ user }) => {
   const [branchIsDragging, setBranchIsDragging] = useState(false);
   const [branchPhotoPreview, setBranchPhotoPreview] = useState(null);
 
+  // Service management states
+  const [services, setServices] = useState([]);
+  const [loadingServices, setLoadingServices] = useState(false);
+  const [serviceSearchQuery, setServiceSearchQuery] = useState('');
+  const [serviceCategoryFilter, setServiceCategoryFilter] = useState('');
+  const [showAddServiceModal, setShowAddServiceModal] = useState(false);
+  const [showEditServiceModal, setShowEditServiceModal] = useState(false);
+  const [showDeleteServiceConfirmModal, setShowDeleteServiceConfirmModal] = useState(false);
+  const [selectedService, setSelectedService] = useState(null);
+  const [serviceFormData, setServiceFormData] = useState({
+    service_name: '',
+    category: '',
+    unit_price: '',
+    is_active: true
+  });
+  const [serviceFormErrors, setServiceFormErrors] = useState({});
+  const [serviceSubmitMessage, setServiceSubmitMessage] = useState({ type: '', text: '' });
+
+  // Discount/Offers management states
+  const [discounts, setDiscounts] = useState([]);
+  const [loadingDiscounts, setLoadingDiscounts] = useState(false);
+  const [discountSearchQuery, setDiscountSearchQuery] = useState('');
+  const [discountCategoryFilter, setDiscountCategoryFilter] = useState('');
+  const [showAddDiscountModal, setShowAddDiscountModal] = useState(false);
+  const [showEditDiscountModal, setShowEditDiscountModal] = useState(false);
+  const [showDeleteDiscountConfirmModal, setShowDeleteDiscountConfirmModal] = useState(false);
+  const [selectedDiscount, setSelectedDiscount] = useState(null);
+  const [discountFormData, setDiscountFormData] = useState({
+    discount_name: '',
+    type: 'rate',
+    discount_value: '',
+    applies_to: 'SERVICES_AND_ROOMS',
+    start_date: '',
+    end_date: ''
+  });
+  const [discountFormErrors, setDiscountFormErrors] = useState({});
+  const [discountSubmitMessage, setDiscountSubmitMessage] = useState({ type: '', text: '' });
+
   useEffect(() => {
     fetchDashboardStats();
     fetchBranches();
@@ -123,8 +163,12 @@ const AdminDashboard = ({ user }) => {
       fetchRoomTypes();
     } else if (activeTab === 'branches') {
       fetchBranches();
+    } else if (activeTab === 'services') {
+      fetchServices();
+    } else if (activeTab === 'offers') {
+      fetchDiscounts();
     }
-  }, [activeTab, searchQuery, roleFilter, roomSearchQuery, roomStateFilter, roomTypeFilter, roomBranchFilter, roomFloorFilter, roomTypeSearchQuery, minCapacityFilter, maxCapacityFilter, minPriceFilter, maxPriceFilter, branchSearchQuery]);
+  }, [activeTab, searchQuery, roleFilter, roomSearchQuery, roomStateFilter, roomTypeFilter, roomBranchFilter, roomFloorFilter, roomTypeSearchQuery, minCapacityFilter, maxCapacityFilter, minPriceFilter, maxPriceFilter, branchSearchQuery, serviceSearchQuery, serviceCategoryFilter, discountSearchQuery, discountCategoryFilter]);
 
   const fetchDashboardStats = async () => {
     setLoading(true);
@@ -1104,6 +1148,350 @@ const AdminDashboard = ({ user }) => {
     setSelectedBranch(null);
   };
 
+  // ========== SERVICE MANAGEMENT FUNCTIONS ==========
+  
+  const fetchServices = async () => {
+    setLoadingServices(true);
+    const filters = {};
+    if (serviceCategoryFilter) filters.category = serviceCategoryFilter;
+    
+    const result = await serviceCatalogueService.getAllServices(filters);
+    if (result.success) {
+      const servicesData = Array.isArray(result.services) ? result.services : [];
+      setServices(servicesData);
+    } else {
+      console.error('Failed to fetch services:', result.message);
+      setServices([]);
+    }
+    setLoadingServices(false);
+  };
+
+  const handleAddServiceClick = () => {
+    setServiceFormData({
+      service_name: '',
+      category: '',
+      unit_price: '',
+      is_active: true
+    });
+    setServiceFormErrors({});
+    setServiceSubmitMessage({ type: '', text: '' });
+    setShowAddServiceModal(true);
+  };
+
+  const handleEditServiceClick = (service) => {
+    setSelectedService(service);
+    setServiceFormData({
+      service_name: service.service_name,
+      category: service.category,
+      unit_price: service.unit_price,
+      is_active: service.is_active
+    });
+    setServiceFormErrors({});
+    setServiceSubmitMessage({ type: '', text: '' });
+    setShowEditServiceModal(true);
+  };
+
+  const handleServiceFormChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setServiceFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+    if (serviceFormErrors[name]) {
+      setServiceFormErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const validateServiceForm = () => {
+    const errors = {};
+    
+    if (!serviceFormData.service_name.trim()) {
+      errors.service_name = 'Service name is required';
+    }
+    
+    if (!serviceFormData.category.trim()) {
+      errors.category = 'Category is required';
+    }
+    
+    if (!serviceFormData.unit_price || parseFloat(serviceFormData.unit_price) <= 0) {
+      errors.unit_price = 'Valid unit price is required';
+    }
+    
+    setServiceFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmitAddService = async (e) => {
+    e.preventDefault();
+    
+    if (!validateServiceForm()) {
+      return;
+    }
+
+    setLoadingServices(true);
+    setServiceSubmitMessage({ type: '', text: '' });
+    
+    const serviceData = {
+      service_name: serviceFormData.service_name.trim(),
+      category: serviceFormData.category.trim(),
+      unit_price: parseFloat(serviceFormData.unit_price),
+      is_active: serviceFormData.is_active
+    };
+
+    const result = await serviceCatalogueService.createService(serviceData);
+    
+    if (result.success) {
+      setServiceSubmitMessage({ type: 'success', text: 'Service created successfully!' });
+      setTimeout(() => {
+        setShowAddServiceModal(false);
+        fetchServices();
+      }, 1500);
+    } else {
+      setServiceSubmitMessage({ type: 'error', text: result.message || 'Failed to create service' });
+    }
+    
+    setLoadingServices(false);
+  };
+
+  const handleSubmitEditService = async (e) => {
+    e.preventDefault();
+    
+    if (!validateServiceForm() || !selectedService) {
+      return;
+    }
+
+    setLoadingServices(true);
+    setServiceSubmitMessage({ type: '', text: '' });
+    
+    const serviceData = {
+      service_name: serviceFormData.service_name.trim(),
+      category: serviceFormData.category.trim(),
+      unit_price: parseFloat(serviceFormData.unit_price),
+      is_active: serviceFormData.is_active
+    };
+
+    const result = await serviceCatalogueService.updateService(selectedService.service_id, serviceData);
+    
+    if (result.success) {
+      setServiceSubmitMessage({ type: 'success', text: 'Service updated successfully!' });
+      setTimeout(() => {
+        setShowEditServiceModal(false);
+        setSelectedService(null);
+        fetchServices();
+      }, 1500);
+    } else {
+      setServiceSubmitMessage({ type: 'error', text: result.message || 'Failed to update service' });
+    }
+    
+    setLoadingServices(false);
+  };
+
+  const handleDeleteServiceClick = (service) => {
+    setSelectedService(service);
+    setShowDeleteServiceConfirmModal(true);
+  };
+
+  const handleConfirmDeleteService = async () => {
+    if (!selectedService) return;
+
+    setLoadingServices(true);
+    
+    const result = await serviceCatalogueService.deleteService(selectedService.service_id);
+    
+    if (result.success) {
+      setShowDeleteServiceConfirmModal(false);
+      setSelectedService(null);
+      setTimeout(() => {
+        fetchServices();
+      }, 500);
+    } else {
+      setServiceSubmitMessage({ type: 'error', text: result.message || 'Failed to delete service' });
+    }
+    
+    setLoadingServices(false);
+  };
+
+  const handleCancelDeleteService = () => {
+    setShowDeleteServiceConfirmModal(false);
+    setSelectedService(null);
+  };
+
+  // ========== DISCOUNT/OFFERS MANAGEMENT FUNCTIONS ==========
+  
+  const fetchDiscounts = async () => {
+    setLoadingDiscounts(true);
+    const filters = {};
+    if (discountCategoryFilter) filters.applies_to = discountCategoryFilter;
+    
+    const result = await discountService.getAllDiscounts(filters);
+    if (result.success) {
+      const discountsData = Array.isArray(result.discounts) ? result.discounts : [];
+      setDiscounts(discountsData);
+    } else {
+      console.error('Failed to fetch discounts:', result.message);
+      setDiscounts([]);
+    }
+    setLoadingDiscounts(false);
+  };
+
+  const handleAddDiscountClick = () => {
+    setDiscountFormData({
+      discount_name: '',
+      type: 'rate',
+      discount_value: '',
+      applies_to: 'SERVICES_AND_ROOMS',
+      start_date: '',
+      end_date: ''
+    });
+    setDiscountFormErrors({});
+    setDiscountSubmitMessage({ type: '', text: '' });
+    setShowAddDiscountModal(true);
+  };
+
+  const handleEditDiscountClick = (discount) => {
+    setSelectedDiscount(discount);
+    setDiscountFormData({
+      discount_name: discount.discount_name,
+      type: discount.type,
+      discount_value: discount.discount_value,
+      applies_to: discount.applies_to,
+      start_date: discount.start_date ? discount.start_date.split('T')[0] : '',
+      end_date: discount.end_date ? discount.end_date.split('T')[0] : ''
+    });
+    setDiscountFormErrors({});
+    setDiscountSubmitMessage({ type: '', text: '' });
+    setShowEditDiscountModal(true);
+  };
+
+  const handleDiscountFormChange = (e) => {
+    const { name, value } = e.target;
+    setDiscountFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    if (discountFormErrors[name]) {
+      setDiscountFormErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const validateDiscountForm = () => {
+    const errors = {};
+    
+    if (!discountFormData.discount_name.trim()) {
+      errors.discount_name = 'Discount name is required';
+    }
+    
+    if (!discountFormData.discount_value || parseFloat(discountFormData.discount_value) <= 0) {
+      errors.discount_value = 'Valid discount value is required';
+    }
+
+    if (discountFormData.type === 'rate' && parseFloat(discountFormData.discount_value) > 100) {
+      errors.discount_value = 'Percentage discount cannot exceed 100%';
+    }
+    
+    setDiscountFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmitAddDiscount = async (e) => {
+    e.preventDefault();
+    
+    if (!validateDiscountForm()) {
+      return;
+    }
+
+    setLoadingDiscounts(true);
+    setDiscountSubmitMessage({ type: '', text: '' });
+    
+    const discountData = {
+      discount_name: discountFormData.discount_name.trim(),
+      type: discountFormData.type,
+      discount_value: parseFloat(discountFormData.discount_value),
+      applies_to: discountFormData.applies_to,
+      start_date: discountFormData.start_date || null,
+      end_date: discountFormData.end_date || null
+    };
+
+    const result = await discountService.createDiscount(discountData);
+    
+    if (result.success) {
+      setDiscountSubmitMessage({ type: 'success', text: 'Offer created successfully!' });
+      setTimeout(() => {
+        setShowAddDiscountModal(false);
+        fetchDiscounts();
+      }, 1500);
+    } else {
+      setDiscountSubmitMessage({ type: 'error', text: result.message || 'Failed to create offer' });
+    }
+    
+    setLoadingDiscounts(false);
+  };
+
+  const handleSubmitEditDiscount = async (e) => {
+    e.preventDefault();
+    
+    if (!validateDiscountForm() || !selectedDiscount) {
+      return;
+    }
+
+    setLoadingDiscounts(true);
+    setDiscountSubmitMessage({ type: '', text: '' });
+    
+    const discountData = {
+      discount_name: discountFormData.discount_name.trim(),
+      type: discountFormData.type,
+      discount_value: parseFloat(discountFormData.discount_value),
+      applies_to: discountFormData.applies_to,
+      start_date: discountFormData.start_date || null,
+      end_date: discountFormData.end_date || null
+    };
+
+    const result = await discountService.updateDiscount(selectedDiscount.discount_id, discountData);
+    
+    if (result.success) {
+      setDiscountSubmitMessage({ type: 'success', text: 'Offer updated successfully!' });
+      setTimeout(() => {
+        setShowEditDiscountModal(false);
+        setSelectedDiscount(null);
+        fetchDiscounts();
+      }, 1500);
+    } else {
+      setDiscountSubmitMessage({ type: 'error', text: result.message || 'Failed to update offer' });
+    }
+    
+    setLoadingDiscounts(false);
+  };
+
+  const handleDeleteDiscountClick = (discount) => {
+    setSelectedDiscount(discount);
+    setShowDeleteDiscountConfirmModal(true);
+  };
+
+  const handleConfirmDeleteDiscount = async () => {
+    if (!selectedDiscount) return;
+
+    setLoadingDiscounts(true);
+    
+    const result = await discountService.deleteDiscount(selectedDiscount.discount_id);
+    
+    if (result.success) {
+      setShowDeleteDiscountConfirmModal(false);
+      setSelectedDiscount(null);
+      setTimeout(() => {
+        fetchDiscounts();
+      }, 500);
+    } else {
+      setDiscountSubmitMessage({ type: 'error', text: result.message || 'Failed to delete offer' });
+    }
+    
+    setLoadingDiscounts(false);
+  };
+
+  const handleCancelDeleteDiscount = () => {
+    setShowDeleteDiscountConfirmModal(false);
+    setSelectedDiscount(null);
+  };
+
   const getRoleBadgeColor = (role) => {
     switch(role) {
       case 'ADMIN': return 'bg-purple-100 text-purple-800';
@@ -1267,6 +1655,28 @@ const AdminDashboard = ({ user }) => {
               >
                 <Users className="w-5 h-5 inline-block mr-2" />
                 Users
+              </button>
+              <button
+                onClick={() => setActiveTab('services')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'services'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <ShoppingBag className="w-5 h-5 inline-block mr-2" />
+                Services
+              </button>
+              <button
+                onClick={() => setActiveTab('offers')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'offers'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <Gift className="w-5 h-5 inline-block mr-2" />
+                Offers
               </button>
               <button
                 onClick={() => setActiveTab('financial')}
@@ -2128,6 +2538,291 @@ const AdminDashboard = ({ user }) => {
                     </table>
                     <div className="mt-4 text-sm text-gray-600 text-center">
                       Showing {users.length} user{users.length !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Services Tab */}
+            {activeTab === 'services' && (
+              <div className="space-y-6">
+                {/* Header with search and filters */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <h3 className="text-2xl font-bold text-gray-900">Service Catalogue</h3>
+                  {user?.role === 'ADMIN' && (
+                    <button
+                      onClick={handleAddServiceClick}
+                      className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <Plus className="w-5 h-5 mr-2" />
+                      Add Service
+                    </button>
+                  )}
+                </div>
+
+                {/* Search and Filter Bar */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      placeholder="Search services..."
+                      value={serviceSearchQuery}
+                      onChange={(e) => setServiceSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <select
+                      value={serviceCategoryFilter}
+                      onChange={(e) => setServiceCategoryFilter(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">All Categories</option>
+                      {Array.isArray(services) && [...new Set(services.map(s => s.category))].filter(Boolean).map((category) => (
+                        <option key={category} value={category}>{category}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Services Table */}
+                {loadingServices ? (
+                  <div className="text-center py-12">
+                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+                    <p className="mt-4 text-gray-600">Loading services...</p>
+                  </div>
+                ) : (Array.isArray(services) ? services : []).filter(service => {
+                  const matchesSearch = !serviceSearchQuery || 
+                    service.service_name.toLowerCase().includes(serviceSearchQuery.toLowerCase()) ||
+                    service.category?.toLowerCase().includes(serviceSearchQuery.toLowerCase());
+                  return matchesSearch;
+                }).length === 0 ? (
+                  <div className="text-center py-12 bg-gray-50 rounded-lg">
+                    <ShoppingBag className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500 text-lg">No services found</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto bg-white rounded-lg shadow">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Service Name</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {(Array.isArray(services) ? services : []).filter(service => {
+                          const matchesSearch = !serviceSearchQuery || 
+                            service.service_name.toLowerCase().includes(serviceSearchQuery.toLowerCase()) ||
+                            service.category?.toLowerCase().includes(serviceSearchQuery.toLowerCase());
+                          return matchesSearch;
+                        }).map((service) => (
+                          <tr key={service.service_id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900">{service.service_name}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center text-sm text-gray-600">
+                                <Tag className="w-4 h-4 mr-1" />
+                                {service.category}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-semibold text-green-600">
+                                ${Number(service.unit_price).toFixed(2)}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                service.is_active 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : 'bg-gray-100 text-gray-800'
+                              }`}>
+                                {service.is_active ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                              <button
+                                onClick={() => handleEditServiceClick(service)}
+                                className="text-blue-600 hover:text-blue-900"
+                                title="Edit Service"
+                              >
+                                <Edit className="w-4 h-4 inline" />
+                              </button>
+                              {user?.role === 'ADMIN' && (
+                                <button
+                                  onClick={() => handleDeleteServiceClick(service)}
+                                  className="text-red-600 hover:text-red-900"
+                                  title="Delete Service"
+                                >
+                                  <Trash2 className="w-4 h-4 inline" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="mt-4 px-6 py-3 text-sm text-gray-600 text-center bg-gray-50">
+                      {(() => {
+                        const filteredCount = (Array.isArray(services) ? services : []).filter(service => {
+                          const matchesSearch = !serviceSearchQuery || 
+                            service.service_name.toLowerCase().includes(serviceSearchQuery.toLowerCase()) ||
+                            service.category?.toLowerCase().includes(serviceSearchQuery.toLowerCase());
+                          return matchesSearch;
+                        }).length;
+                        return `Showing ${filteredCount} service${filteredCount !== 1 ? 's' : ''}`;
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Offers Tab */}
+            {activeTab === 'offers' && (
+              <div className="space-y-6">
+                {/* Header with search and filters */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <h3 className="text-2xl font-bold text-gray-900">Offers & Discounts</h3>
+                  {user?.role === 'ADMIN' && (
+                    <button
+                      onClick={handleAddDiscountClick}
+                      className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <Plus className="w-5 h-5 mr-2" />
+                      Add Offer
+                    </button>
+                  )}
+                </div>
+
+                {/* Search and Filter Bar */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      placeholder="Search offers..."
+                      value={discountSearchQuery}
+                      onChange={(e) => setDiscountSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <select
+                      value={discountCategoryFilter}
+                      onChange={(e) => setDiscountCategoryFilter(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">All Categories</option>
+                      <option value="SERVICES">Services Only</option>
+                      <option value="ROOMS">Rooms Only</option>
+                      <option value="SERVICES_AND_ROOMS">Services & Rooms</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Offers Table */}
+                {loadingDiscounts ? (
+                  <div className="text-center py-12">
+                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+                    <p className="mt-4 text-gray-600">Loading offers...</p>
+                  </div>
+                ) : (Array.isArray(discounts) ? discounts : []).filter(discount => {
+                  const matchesSearch = !discountSearchQuery || 
+                    discount.discount_name.toLowerCase().includes(discountSearchQuery.toLowerCase());
+                  return matchesSearch;
+                }).length === 0 ? (
+                  <div className="text-center py-12 bg-gray-50 rounded-lg">
+                    <Gift className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500 text-lg">No offers found</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto bg-white rounded-lg shadow">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Offer Name</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Applies To</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valid Period</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {(Array.isArray(discounts) ? discounts : []).filter(discount => {
+                          const matchesSearch = !discountSearchQuery || 
+                            discount.discount_name.toLowerCase().includes(discountSearchQuery.toLowerCase());
+                          return matchesSearch;
+                        }).map((discount) => (
+                          <tr key={discount.discount_id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900">{discount.discount_name}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                discount.type === 'rate' 
+                                  ? 'bg-blue-100 text-blue-800' 
+                                  : 'bg-green-100 text-green-800'
+                              }`}>
+                                {discount.type === 'rate' ? 'Percentage' : 'Fixed Amount'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center text-sm font-semibold text-amber-600">
+                                <Percent className="w-4 h-4 mr-1" />
+                                {discount.type === 'rate' ? `${discount.discount_value}%` : `$${discount.discount_value}`}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-600">
+                                {discount.applies_to === 'SERVICES_AND_ROOMS' ? 'Services & Rooms' : 
+                                 discount.applies_to === 'SERVICES' ? 'Services' : 'Rooms'}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-xs text-gray-600">
+                                {discount.start_date ? new Date(discount.start_date).toLocaleDateString() : 'No start'} - 
+                                {discount.end_date ? new Date(discount.end_date).toLocaleDateString() : 'No end'}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                              <button
+                                onClick={() => handleEditDiscountClick(discount)}
+                                className="text-blue-600 hover:text-blue-900"
+                                title="Edit Offer"
+                              >
+                                <Edit className="w-4 h-4 inline" />
+                              </button>
+                              {user?.role === 'ADMIN' && (
+                                <button
+                                  onClick={() => handleDeleteDiscountClick(discount)}
+                                  className="text-red-600 hover:text-red-900"
+                                  title="Delete Offer"
+                                >
+                                  <Trash2 className="w-4 h-4 inline" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="mt-4 px-6 py-3 text-sm text-gray-600 text-center bg-gray-50">
+                      {(() => {
+                        const filteredCount = (Array.isArray(discounts) ? discounts : []).filter(discount => {
+                          const matchesSearch = !discountSearchQuery || 
+                            discount.discount_name.toLowerCase().includes(discountSearchQuery.toLowerCase());
+                          return matchesSearch;
+                        }).length;
+                        return `Showing ${filteredCount} offer${filteredCount !== 1 ? 's' : ''}`;
+                      })()}
                     </div>
                   </div>
                 )}
@@ -4114,6 +4809,669 @@ const AdminDashboard = ({ user }) => {
                     className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 disabled:cursor-not-allowed flex items-center justify-center"
                   >
                     {loadingBranches ? (
+                      <>
+                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Service Modal */}
+        {showAddServiceModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">Add New Service</h2>
+                  <button
+                    onClick={() => setShowAddServiceModal(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {serviceSubmitMessage.text && (
+                  <div className={`mb-4 p-4 rounded-lg ${
+                    serviceSubmitMessage.type === 'success' 
+                      ? 'bg-green-50 text-green-800 border border-green-200' 
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}>
+                    {serviceSubmitMessage.text}
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmitAddService} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Service Name *
+                    </label>
+                    <input
+                      type="text"
+                      name="service_name"
+                      value={serviceFormData.service_name}
+                      onChange={handleServiceFormChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        serviceFormErrors.service_name ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="e.g., Room Service, Laundry"
+                    />
+                    {serviceFormErrors.service_name && (
+                      <p className="mt-1 text-sm text-red-600">{serviceFormErrors.service_name}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Category *
+                    </label>
+                    <input
+                      type="text"
+                      name="category"
+                      value={serviceFormData.category}
+                      onChange={handleServiceFormChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        serviceFormErrors.category ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="e.g., Dining, Housekeeping, Entertainment"
+                    />
+                    {serviceFormErrors.category && (
+                      <p className="mt-1 text-sm text-red-600">{serviceFormErrors.category}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Unit Price ($) *
+                    </label>
+                    <input
+                      type="number"
+                      name="unit_price"
+                      value={serviceFormData.unit_price}
+                      onChange={handleServiceFormChange}
+                      step="0.01"
+                      min="0"
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        serviceFormErrors.unit_price ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="e.g., 15.00"
+                    />
+                    {serviceFormErrors.unit_price && (
+                      <p className="mt-1 text-sm text-red-600">{serviceFormErrors.unit_price}</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="is_active"
+                      checked={serviceFormData.is_active}
+                      onChange={handleServiceFormChange}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label className="ml-2 text-sm font-medium text-gray-700">
+                      Service is active
+                    </label>
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddServiceModal(false)}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loadingServices}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center"
+                    >
+                      {loadingServices ? (
+                        <>
+                          <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                          Creating...
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create Service
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Service Modal */}
+        {showEditServiceModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">Edit Service</h2>
+                  <button
+                    onClick={() => setShowEditServiceModal(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {serviceSubmitMessage.text && (
+                  <div className={`mb-4 p-4 rounded-lg ${
+                    serviceSubmitMessage.type === 'success' 
+                      ? 'bg-green-50 text-green-800 border border-green-200' 
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}>
+                    {serviceSubmitMessage.text}
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmitEditService} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Service Name *
+                    </label>
+                    <input
+                      type="text"
+                      name="service_name"
+                      value={serviceFormData.service_name}
+                      onChange={handleServiceFormChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        serviceFormErrors.service_name ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                    />
+                    {serviceFormErrors.service_name && (
+                      <p className="mt-1 text-sm text-red-600">{serviceFormErrors.service_name}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Category *
+                    </label>
+                    <input
+                      type="text"
+                      name="category"
+                      value={serviceFormData.category}
+                      onChange={handleServiceFormChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        serviceFormErrors.category ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                    />
+                    {serviceFormErrors.category && (
+                      <p className="mt-1 text-sm text-red-600">{serviceFormErrors.category}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Unit Price ($) *
+                    </label>
+                    <input
+                      type="number"
+                      name="unit_price"
+                      value={serviceFormData.unit_price}
+                      onChange={handleServiceFormChange}
+                      step="0.01"
+                      min="0"
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        serviceFormErrors.unit_price ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                    />
+                    {serviceFormErrors.unit_price && (
+                      <p className="mt-1 text-sm text-red-600">{serviceFormErrors.unit_price}</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="is_active"
+                      checked={serviceFormData.is_active}
+                      onChange={handleServiceFormChange}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label className="ml-2 text-sm font-medium text-gray-700">
+                      Service is active
+                    </label>
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowEditServiceModal(false)}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loadingServices}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center"
+                    >
+                      {loadingServices ? (
+                        <>
+                          <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <Edit className="w-4 h-4 mr-2" />
+                          Update Service
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Service Confirmation Modal */}
+        {showDeleteServiceConfirmModal && selectedService && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+              <div className="p-6">
+                <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+                  Delete Service
+                </h3>
+                <p className="text-sm text-gray-600 text-center mb-6">
+                  Are you sure you want to delete "{selectedService.service_name}"? This action cannot be undone.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleCancelDeleteService}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleConfirmDeleteService}
+                    disabled={loadingServices}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    {loadingServices ? (
+                      <>
+                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Discount/Offer Modal */}
+        {showAddDiscountModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">Add New Offer</h2>
+                  <button
+                    onClick={() => setShowAddDiscountModal(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {discountSubmitMessage.text && (
+                  <div className={`mb-4 p-4 rounded-lg ${
+                    discountSubmitMessage.type === 'success' 
+                      ? 'bg-green-50 text-green-800 border border-green-200' 
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}>
+                    {discountSubmitMessage.text}
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmitAddDiscount} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Offer Name *
+                    </label>
+                    <input
+                      type="text"
+                      name="discount_name"
+                      value={discountFormData.discount_name}
+                      onChange={handleDiscountFormChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        discountFormErrors.discount_name ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="e.g., Summer Special, Weekend Getaway"
+                    />
+                    {discountFormErrors.discount_name && (
+                      <p className="mt-1 text-sm text-red-600">{discountFormErrors.discount_name}</p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Discount Type *
+                      </label>
+                      <select
+                        name="type"
+                        value={discountFormData.type}
+                        onChange={handleDiscountFormChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="rate">Percentage (%)</option>
+                        <option value="fixed">Fixed Amount ($)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Discount Value *
+                      </label>
+                      <input
+                        type="number"
+                        name="discount_value"
+                        value={discountFormData.discount_value}
+                        onChange={handleDiscountFormChange}
+                        step="0.01"
+                        min="0"
+                        max={discountFormData.type === 'rate' ? '100' : undefined}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          discountFormErrors.discount_value ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder={discountFormData.type === 'rate' ? 'e.g., 20' : 'e.g., 50.00'}
+                      />
+                      {discountFormErrors.discount_value && (
+                        <p className="mt-1 text-sm text-red-600">{discountFormErrors.discount_value}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Applies To *
+                    </label>
+                    <select
+                      name="applies_to"
+                      value={discountFormData.applies_to}
+                      onChange={handleDiscountFormChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="SERVICES_AND_ROOMS">Services & Rooms</option>
+                      <option value="SERVICES">Services Only</option>
+                      <option value="ROOMS">Rooms Only</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Start Date (Optional)
+                      </label>
+                      <input
+                        type="date"
+                        name="start_date"
+                        value={discountFormData.start_date}
+                        onChange={handleDiscountFormChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        End Date (Optional)
+                      </label>
+                      <input
+                        type="date"
+                        name="end_date"
+                        value={discountFormData.end_date}
+                        onChange={handleDiscountFormChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddDiscountModal(false)}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loadingDiscounts}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center"
+                    >
+                      {loadingDiscounts ? (
+                        <>
+                          <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                          Creating...
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create Offer
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Discount/Offer Modal */}
+        {showEditDiscountModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">Edit Offer</h2>
+                  <button
+                    onClick={() => setShowEditDiscountModal(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {discountSubmitMessage.text && (
+                  <div className={`mb-4 p-4 rounded-lg ${
+                    discountSubmitMessage.type === 'success' 
+                      ? 'bg-green-50 text-green-800 border border-green-200' 
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}>
+                    {discountSubmitMessage.text}
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmitEditDiscount} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Offer Name *
+                    </label>
+                    <input
+                      type="text"
+                      name="discount_name"
+                      value={discountFormData.discount_name}
+                      onChange={handleDiscountFormChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        discountFormErrors.discount_name ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                    />
+                    {discountFormErrors.discount_name && (
+                      <p className="mt-1 text-sm text-red-600">{discountFormErrors.discount_name}</p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Discount Type *
+                      </label>
+                      <select
+                        name="type"
+                        value={discountFormData.type}
+                        onChange={handleDiscountFormChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="rate">Percentage (%)</option>
+                        <option value="fixed">Fixed Amount ($)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Discount Value *
+                      </label>
+                      <input
+                        type="number"
+                        name="discount_value"
+                        value={discountFormData.discount_value}
+                        onChange={handleDiscountFormChange}
+                        step="0.01"
+                        min="0"
+                        max={discountFormData.type === 'rate' ? '100' : undefined}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          discountFormErrors.discount_value ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                      />
+                      {discountFormErrors.discount_value && (
+                        <p className="mt-1 text-sm text-red-600">{discountFormErrors.discount_value}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Applies To *
+                    </label>
+                    <select
+                      name="applies_to"
+                      value={discountFormData.applies_to}
+                      onChange={handleDiscountFormChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="SERVICES_AND_ROOMS">Services & Rooms</option>
+                      <option value="SERVICES">Services Only</option>
+                      <option value="ROOMS">Rooms Only</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Start Date (Optional)
+                      </label>
+                      <input
+                        type="date"
+                        name="start_date"
+                        value={discountFormData.start_date}
+                        onChange={handleDiscountFormChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        End Date (Optional)
+                      </label>
+                      <input
+                        type="date"
+                        name="end_date"
+                        value={discountFormData.end_date}
+                        onChange={handleDiscountFormChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowEditDiscountModal(false)}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loadingDiscounts}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center"
+                    >
+                      {loadingDiscounts ? (
+                        <>
+                          <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <Edit className="w-4 h-4 mr-2" />
+                          Update Offer
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Discount/Offer Confirmation Modal */}
+        {showDeleteDiscountConfirmModal && selectedDiscount && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+              <div className="p-6">
+                <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+                  Delete Offer
+                </h3>
+                <p className="text-sm text-gray-600 text-center mb-6">
+                  Are you sure you want to delete "{selectedDiscount.discount_name}"? This action cannot be undone.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleCancelDeleteDiscount}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleConfirmDeleteDiscount}
+                    disabled={loadingDiscounts}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    {loadingDiscounts ? (
                       <>
                         <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
                         Deleting...

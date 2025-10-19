@@ -59,6 +59,29 @@ const discountService = {
   },
 
   /**
+   * Get active discounts by category
+   * @param {string} category - Category (SERVICES, ROOMS, SERVICES_AND_ROOMS)
+   * @returns {Promise} Response with list of active discounts for category
+   */
+  getActiveDiscountsByCategory: async (category) => {
+    try {
+      const response = await apiClient.get(`/discounts/active/${category}`);
+      return {
+        success: response.data.success,
+        discounts: response.data.data || [],
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.error('Get active discounts by category error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to fetch discounts for category',
+        error,
+      };
+    }
+  },
+
+  /**
    * Get discount by ID
    * @param {string} discountId - Discount ID
    * @returns {Promise} Response with discount details
