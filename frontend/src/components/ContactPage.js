@@ -1,7 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Send, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import contactService from '../services/contactService';
-import userService from '../services/userService';
+import React, { useState } from 'react';
+import { MapPin, Phone, Mail, Clock, Send, CheckCircle, AlertCircle } from 'lucide-react';
 
 const ContactPage = () => {
   const [contactForm, setContactForm] = useState({
@@ -10,60 +8,42 @@ const ContactPage = () => {
     phone: '',
     subject: '',
     message: '',
-    inquiry_type: 'general'
+    location: 'general'
   });
 
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [submitError, setSubmitError] = useState('');
-  const [loadingUserData, setLoadingUserData] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // Fetch user data if logged in
-  useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        setLoadingUserData(true);
-        const token = localStorage.getItem('token');
-        
-        console.log('🔍 Contact Page - Checking for token:', token ? 'Token exists' : 'No token found');
-        
-        if (token) {
-          setIsLoggedIn(true);
-          console.log('✅ User is logged in, fetching profile...');
-          
-          const response = await userService.getCurrentUserProfile();
-          console.log('📦 API Response:', response);
-          
-          if (response.success && response.user) {
-            console.log('✅ User data loaded for contact form:', response.user);
-            console.log('📝 Setting form fields - Name:', response.user.name, 'Email:', response.user.email, 'Phone:', response.user.phone);
-            
-            setContactForm(prev => ({
-              ...prev,
-              name: response.user.name || '',
-              email: response.user.email || '',
-              phone: response.user.phone || ''
-            }));
-          } else {
-            console.warn('⚠️ API call succeeded but no user data:', response);
-          }
-        } else {
-          console.log('❌ No token found - user is guest');
-          setIsLoggedIn(false);
-        }
-      } catch (error) {
-        console.error('❌ Error fetching user data for contact form:', error);
-        setIsLoggedIn(false);
-      } finally {
-        setLoadingUserData(false);
-        console.log('✅ Loading complete. isLoggedIn:', isLoggedIn);
-      }
-    };
-
-    fetchUserData();
-  }, []);
+  const locations = [
+    {
+      id: 'colombo',
+      name: 'Colombo',
+      address: '123 Galle Road, Colombo 03, Sri Lanka',
+      phone: '+94 11 234 5678',
+      email: 'colombo@skynesthotels.com',
+      hours: '24/7 Reception',
+      coordinates: { lat: 6.9271, lng: 79.8612 }
+    },
+    {
+      id: 'kandy',
+      name: 'Kandy',
+      address: '456 Peradeniya Road, Kandy, Sri Lanka',
+      phone: '+94 81 234 5678',
+      email: 'kandy@skynesthotels.com',
+      hours: '24/7 Reception',
+      coordinates: { lat: 7.2906, lng: 80.6337 }
+    },
+    {
+      id: 'galle',
+      name: 'Galle',
+      address: '789 Beach Road, Galle Fort, Sri Lanka',
+      phone: '+94 91 234 5678',
+      email: 'galle@skynesthotels.com',
+      hours: '24/7 Reception',
+      coordinates: { lat: 6.0535, lng: 80.2210 }
+    }
+  ];
 
   const contactReasons = [
     { id: 'general', name: 'General Inquiry' },
@@ -94,12 +74,9 @@ const ContactPage = () => {
     if (!validateForm()) return;
     
     setIsSubmitting(true);
-    setSubmitError('');
     
-    // Submit to backend API
-    const result = await contactService.submitContactForm(contactForm);
-    
-    if (result.success) {
+    // Simulate API call
+    setTimeout(() => {
       setShowSuccess(true);
       setIsSubmitting(false);
       setContactForm({
@@ -108,17 +85,13 @@ const ContactPage = () => {
         phone: '',
         subject: '',
         message: '',
-        inquiry_type: 'general'
+        location: 'general'
       });
       setFormErrors({});
       
       // Hide success message after 5 seconds
       setTimeout(() => setShowSuccess(false), 5000);
-    } else {
-      setIsSubmitting(false);
-      setSubmitError(result.message || 'Failed to send message. Please try again.');
-      setTimeout(() => setSubmitError(''), 5000);
-    }
+    }, 2000);
   };
 
   return (
@@ -144,25 +117,53 @@ const ContactPage = () => {
           </div>
         )}
 
-        {/* Error Message */}
-        {submitError && (
-          <div className="max-w-2xl mx-auto mb-8">
-            <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-center text-red-600">
-              <AlertCircle className="w-5 h-5 mr-3" />
-              <span>{submitError}</span>
-            </div>
+        {/* Location Cards Row */}
+        <div className="mb-16">
+          <div className="text-center mb-12">
+            <h2 className="text-4xl font-light text-gray-800 mb-4">Our Locations</h2>
+            <div className="w-24 h-1 bg-gradient-to-r from-amber-400 to-amber-600 mx-auto"></div>
           </div>
-        )}
-
-        {/* Loading User Data */}
-        {loadingUserData && (
-          <div className="max-w-2xl mx-auto mb-8">
-            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-center text-blue-600">
-              <Loader2 className="w-5 h-5 mr-3 animate-spin" />
-              <span>Loading your information...</span>
-            </div>
+          
+          <div className="grid md:grid-cols-3 gap-8">
+            {locations.map((location, index) => (
+              <div key={location.id} className="bg-white rounded-2xl shadow-xl p-6 card-hover transform hover:scale-105 transition-all duration-300">
+                <div className="flex items-center justify-center mb-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center">
+                    <MapPin className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+                
+                <h3 className="text-2xl font-semibold text-gray-800 text-center mb-4">{location.name}</h3>
+                
+                <div className="space-y-3 text-center">
+                  <div className="flex items-center justify-center space-x-2">
+                    <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <span className="text-gray-600 text-sm">{location.address}</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-center space-x-2">
+                    <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <a href={`tel:${location.phone}`} className="text-amber-600 hover:text-amber-700 text-sm">
+                      {location.phone}
+                    </a>
+                  </div>
+                  
+                  <div className="flex items-center justify-center space-x-2">
+                    <Mail className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <a href={`mailto:${location.email}`} className="text-blue-600 hover:text-blue-700 text-sm">
+                      {location.email}
+                    </a>
+                  </div>
+                  
+                  <div className="flex items-center justify-center space-x-2">
+                    <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <span className="text-gray-600 text-sm">{location.hours}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-        )}
+        </div>
 
         {/* Contact Form Row */}
         <div className="max-w-4xl mx-auto">
@@ -182,8 +183,7 @@ const ContactPage = () => {
                     type="text"
                     value={contactForm.name}
                     onChange={(e) => setContactForm({...contactForm, name: e.target.value})}
-                    disabled={isLoggedIn}
-                    className={`form-input ${formErrors.name ? 'border-red-500' : ''} ${isLoggedIn ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    className={`form-input ${formErrors.name ? 'border-red-500' : ''}`}
                     placeholder="SkyNest"
                   />
                   {formErrors.name && (
@@ -191,9 +191,6 @@ const ContactPage = () => {
                       <AlertCircle className="w-4 h-4 mr-1" />
                       {formErrors.name}
                     </p>
-                  )}
-                  {isLoggedIn && (
-                    <p className="text-sm text-gray-500 mt-1">Auto-filled from your profile</p>
                   )}
                 </div>
 
@@ -205,8 +202,7 @@ const ContactPage = () => {
                     type="email"
                     value={contactForm.email}
                     onChange={(e) => setContactForm({...contactForm, email: e.target.value})}
-                    disabled={isLoggedIn}
-                    className={`form-input ${formErrors.email ? 'border-red-500' : ''} ${isLoggedIn ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    className={`form-input ${formErrors.email ? 'border-red-500' : ''}`}
                     placeholder="abc@gmail.com"
                   />
                   {formErrors.email && (
@@ -214,9 +210,6 @@ const ContactPage = () => {
                       <AlertCircle className="w-4 h-4 mr-1" />
                       {formErrors.email}
                     </p>
-                  )}
-                  {isLoggedIn && (
-                    <p className="text-sm text-gray-500 mt-1">Auto-filled from your profile</p>
                   )}
                 </div>
               </div>
@@ -229,13 +222,9 @@ const ContactPage = () => {
                   type="tel"
                   value={contactForm.phone}
                   onChange={(e) => setContactForm({...contactForm, phone: e.target.value})}
-                  disabled={isLoggedIn}
-                  className={`form-input ${isLoggedIn ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                  className="form-input"
                   placeholder="+94 123 456721"
                 />
-                {isLoggedIn && (
-                  <p className="text-sm text-gray-500 mt-1">Auto-filled from your profile</p>
-                )}
               </div>
 
               <div>
@@ -243,8 +232,8 @@ const ContactPage = () => {
                   Inquiry Type
                 </label>
                 <select
-                  value={contactForm.inquiry_type}
-                  onChange={(e) => setContactForm({...contactForm, inquiry_type: e.target.value})}
+                  value={contactForm.location}
+                  onChange={(e) => setContactForm({...contactForm, location: e.target.value})}
                   className="form-input"
                 >
                   {contactReasons.map(reason => (
