@@ -641,6 +641,14 @@ export const addServiceToBooking = async (req: AuthenticatedRequest, res: Respon
     }
     
     const service = services[0];
+    if (!service) {
+      await connection.rollback();
+      res.status(404).json({ 
+        success: false,
+        error: 'Service not found' 
+      });
+      return;
+    }
     const unitPrice = parseFloat(service.unit_price.toString());
     const total = unitPrice * parseInt(quantity);
     

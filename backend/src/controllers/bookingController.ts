@@ -380,7 +380,8 @@ export const getBookings = async (req: AuthenticatedRequest, res: Response): Pro
                         u.name as user_name, u.email as user_email,
                         r.room_no, rt.type as room_type, rt.daily_rate,
                         hb.branch_name,
-                        su.name as staff_name
+                        su.name as staff_name,
+                        p.payment_id, p.total_charges, p.amount_paid, p.due_amount, p.payment_status
                  FROM booking b
                  LEFT JOIN users u ON b.user_id = u.user_id
                  LEFT JOIN rooms r ON b.room_id = r.room_id
@@ -388,6 +389,7 @@ export const getBookings = async (req: AuthenticatedRequest, res: Response): Pro
                  LEFT JOIN hotel_branches hb ON b.branch_id = hb.branch_id
                  LEFT JOIN staff st ON b.staff_id = st.staff_id
                  LEFT JOIN users su ON st.staff_id = su.user_id
+                 LEFT JOIN payments p ON b.booking_id = p.booking_id
                  WHERE 1=1`;
     const params: any[] = [];
 
@@ -462,6 +464,11 @@ export const getBookings = async (req: AuthenticatedRequest, res: Response): Pro
         daily_rate: dailyRate,
         total_days: totalDays,
         total_cost: totalCost,
+        payment_id: (booking as any).payment_id,
+        total_charges: (booking as any).total_charges,
+        amount_paid: (booking as any).amount_paid,
+        due_amount: (booking as any).due_amount,
+        payment_status: (booking as any).payment_status,
         created_at: booking.created_at,
         updated_at: booking.updated_at
       };

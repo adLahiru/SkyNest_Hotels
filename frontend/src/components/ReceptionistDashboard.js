@@ -154,7 +154,7 @@ const ReceptionistDashboard = ({ user }) => {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Room Type</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check-in Time</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payment Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -176,11 +176,20 @@ const ReceptionistDashboard = ({ user }) => {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        {booking.status === 'CONFIRMED' && (
-                          <button className="flex items-center px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700">
-                            <CheckCircle className="w-4 h-4 mr-1" />
-                            Check In
-                          </button>
+                        {booking.payment_status ? (
+                          <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                            booking.payment_status === 'paid' ? 'bg-green-100 text-green-800' :
+                            booking.payment_status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {booking.payment_status === 'paid' ? 'Fully Paid' :
+                             booking.payment_status === 'partial' ? 'Partially Paid' :
+                             'Not Paid'}
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">
+                            No Payment
+                          </span>
                         )}
                       </td>
                     </tr>

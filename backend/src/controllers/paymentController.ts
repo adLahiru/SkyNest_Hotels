@@ -463,9 +463,18 @@ export const markPayment = async (req: AuthenticatedRequest, res: Response): Pro
         [payment_id, booking_id, payment_method, amount, -parseFloat(amount as string), staffId]
       );
     } else {
-      payment_id = existingPayment[0].payment_id;
-      const currentAmountPaid = parseFloat(existingPayment[0].amount_paid || '0');
-      const totalCharges = parseFloat(existingPayment[0].total_charges || '0');
+      const payment = existingPayment[0];
+      if (!payment) {
+        await connection.rollback();
+        res.status(500).json({ 
+          success: false,
+          error: 'Payment record error' 
+        });
+        return;
+      }
+      payment_id = payment.payment_id;
+      const currentAmountPaid = parseFloat(payment.amount_paid || '0');
+      const totalCharges = parseFloat(payment.total_charges || '0');
       const newAmountPaid = currentAmountPaid + parseFloat(amount as string);
       const newDueAmount = totalCharges - newAmountPaid;
       const newStatus = newDueAmount <= 0 ? 'paid' : 'partial';

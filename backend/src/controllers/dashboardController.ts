@@ -51,21 +51,28 @@ class DashboardController {
         FROM booking`
       );
       
-      // Get revenue statistics
+      // Get revenue statistics (actual collected revenue + outstanding)
       const [revenueStats] = await db.execute<RowDataPacket[]>(
         `SELECT 
           SUM(p.total_charges) as total_revenue,
+          SUM(p.amount_paid) as total_collected,
+          SUM(p.due_amount) as total_outstanding,
           SUM(CASE WHEN MONTH(p.payment_date) = MONTH(CURRENT_DATE()) 
               AND YEAR(p.payment_date) = YEAR(CURRENT_DATE()) 
               THEN p.total_charges ELSE 0 END) as monthly_revenue,
           SUM(CASE WHEN DATE(p.payment_date) = CURRENT_DATE() 
-              THEN p.total_charges ELSE 0 END) as daily_revenue
+              THEN p.total_charges ELSE 0 END) as daily_revenue,
+          SUM(CASE WHEN MONTH(p.payment_date) = MONTH(CURRENT_DATE()) 
+              AND YEAR(p.payment_date) = YEAR(CURRENT_DATE()) 
+              THEN p.amount_paid ELSE 0 END) as monthly_collected,
+          SUM(CASE WHEN DATE(p.payment_date) = CURRENT_DATE() 
+              THEN p.amount_paid ELSE 0 END) as daily_collected
         FROM booking bk
         LEFT JOIN payments p ON bk.booking_id = p.booking_id
         WHERE bk.booking_status IN ('CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT')`
       );
       
-      // Get branch-wise statistics
+      // Get branch-wise statistics with payment details
       const [branchWiseStats] = await db.execute<RowDataPacket[]>(
         `SELECT 
           b.branch_id,
@@ -74,16 +81,22 @@ class DashboardController {
           COUNT(DISTINCT r.room_id) as total_rooms,
           COUNT(DISTINCT bk.booking_id) as total_bookings,
           SUM(CASE WHEN bk.booking_status IN ('CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT') 
-              THEN p.total_charges ELSE 0 END) as revenue
+              THEN p.total_charges ELSE 0 END) as total_revenue,
+          SUM(CASE WHEN bk.booking_status IN ('CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT') 
+              THEN p.total_charges ELSE 0 END) as revenue,
+          SUM(CASE WHEN bk.booking_status IN ('CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT') 
+              THEN p.amount_paid ELSE 0 END) as collected_revenue,
+          SUM(CASE WHEN bk.booking_status IN ('CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT') 
+              THEN p.due_amount ELSE 0 END) as outstanding_revenue
         FROM hotel_branches b
         LEFT JOIN rooms r ON b.branch_id = r.branch_id
         LEFT JOIN booking bk ON r.room_id = bk.room_id
         LEFT JOIN payments p ON bk.booking_id = p.booking_id
         GROUP BY b.branch_id, b.branch_name, b.address
-        ORDER BY revenue DESC`
+        ORDER BY total_revenue DESC`
       );
       
-      // Get recent bookings grouped by branch
+      // Get recent bookings grouped by branch with payment details
       const [allRecentBookings] = await db.execute<RowDataPacket[]>(
         `SELECT 
           bk.booking_id,
@@ -91,6 +104,9 @@ class DashboardController {
           bk.checkout_datetime as check_out,
           bk.booking_status as status,
           p.total_charges as total_amount,
+          p.amount_paid,
+          p.due_amount,
+          p.payment_status,
           u.name as guest_name,
           b.branch_id,
           b.branch_name,
@@ -131,6 +147,9 @@ class DashboardController {
             check_out: booking.check_out,
             status: booking.status,
             total_amount: booking.total_amount,
+            amount_paid: booking.amount_paid,
+            due_amount: booking.due_amount,
+            payment_status: booking.payment_status,
             guest_name: booking.guest_name,
             room_number: booking.room_number,
             created_at: booking.created_at
@@ -145,6 +164,21 @@ class DashboardController {
 
       const recentBookingsByBranch = Object.values(bookingsByBranch);
       
+      // Also provide a flat list of recent bookings for simple display
+      const recentBookings = allRecentBookings.slice(0, 10).map((booking: any) => ({
+        booking_id: booking.booking_id,
+        check_in: booking.check_in,
+        check_out: booking.check_out,
+        status: booking.status,
+        total_amount: booking.total_amount,
+        amount_paid: booking.amount_paid,
+        due_amount: booking.due_amount,
+        payment_status: booking.payment_status,
+        guest_name: booking.guest_name,
+        branch_name: booking.branch_name,
+        room_number: booking.room_number
+      }));
+      
       res.status(200).json({
         success: true,
         message: 'Admin dashboard stats retrieved successfully',
@@ -155,7 +189,8 @@ class DashboardController {
           bookings: bookingStats[0],
           revenue: revenueStats[0],
           branchWiseStats,
-          recentBookingsByBranch
+          recentBookingsByBranch,
+          recentBookings
         }
       } as ApiResponse);
       
@@ -230,15 +265,17 @@ class DashboardController {
         [branchId]
       );
       
-      // Get revenue statistics for the branch
+      // Get revenue statistics for the branch (collected + outstanding)
       const [revenueStats] = await db.execute<RowDataPacket[]>(
         `SELECT 
           SUM(p.total_charges) as total_revenue,
+          SUM(p.amount_paid) as total_collected,
+          SUM(p.due_amount) as total_outstanding,
           SUM(CASE WHEN MONTH(p.payment_date) = MONTH(CURRENT_DATE()) 
               AND YEAR(p.payment_date) = YEAR(CURRENT_DATE()) 
-              THEN p.total_charges ELSE 0 END) as monthly_revenue,
+              THEN p.amount_paid ELSE 0 END) as monthly_collected,
           SUM(CASE WHEN DATE(p.payment_date) = CURRENT_DATE() 
-              THEN p.total_charges ELSE 0 END) as daily_revenue
+              THEN p.amount_paid ELSE 0 END) as daily_collected
         FROM booking bk
         JOIN rooms r ON bk.room_id = r.room_id
         LEFT JOIN payments p ON bk.booking_id = p.booking_id
@@ -253,7 +290,7 @@ class DashboardController {
         [branchId]
       );
       
-      // Get recent bookings for the branch
+      // Get recent bookings for the branch with payment details
       const [recentBookings] = await db.execute<RowDataPacket[]>(
         `SELECT 
           bk.booking_id,
@@ -261,6 +298,9 @@ class DashboardController {
           bk.checkout_datetime as check_out,
           bk.booking_status as status,
           p.total_charges as total_amount,
+          p.amount_paid,
+          p.due_amount,
+          p.payment_status,
           u.name as guest_name,
           r.room_no as room_number
         FROM booking bk
@@ -369,11 +409,16 @@ class DashboardController {
           u.phone as guest_phone,
           u.email as guest_email,
           r.room_no as room_number,
-          rt.type as room_type
+          rt.type as room_type,
+          p.payment_status,
+          p.total_charges,
+          p.amount_paid,
+          p.due_amount
         FROM booking bk
         JOIN users u ON bk.user_id = u.user_id
         JOIN rooms r ON bk.room_id = r.room_id
         JOIN room_types rt ON r.room_type_id = rt.room_type_id
+        LEFT JOIN payments p ON bk.booking_id = p.booking_id
         WHERE r.branch_id = ? 
         AND DATE(bk.checking_datetime) = CURRENT_DATE()
         AND bk.booking_status IN ('CONFIRMED', 'CHECKED_IN')
@@ -454,11 +499,16 @@ class DashboardController {
           u.name as guest_name,
           u.phone as guest_phone,
           r.room_no as room_number,
-          rt.type as room_type
+          rt.type as room_type,
+          p.payment_status,
+          p.total_charges,
+          p.amount_paid,
+          p.due_amount
         FROM booking bk
         JOIN users u ON bk.user_id = u.user_id
         JOIN rooms r ON bk.room_id = r.room_id
         JOIN room_types rt ON r.room_type_id = rt.room_type_id
+        LEFT JOIN payments p ON bk.booking_id = p.booking_id
         WHERE r.branch_id = ? 
         AND bk.booking_status = 'CHECKED_IN'
         ORDER BY r.room_no ASC`,

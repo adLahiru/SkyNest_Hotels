@@ -192,27 +192,28 @@ const PendingGuestsManager = ({ user }) => {
   }
 
   return (
-    <div className="w-full">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <h2 className="text-3xl font-bold text-gray-900 mb-2 flex items-center">
-              <Clock className="w-8 h-8 mr-3 text-blue-600" />
-              Pending Guests
-            </h2>
-            <p className="text-gray-600">Confirmed bookings awaiting check-in</p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 pt-28 px-8 pb-16">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h2 className="text-4xl font-bold text-gray-900 mb-2 flex items-center">
+                <Clock className="w-10 h-10 mr-3 text-blue-600" />
+                Pending Guests
+              </h2>
+              <p className="text-gray-600 text-lg">Confirmed bookings awaiting check-in</p>
+            </div>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 shadow-lg hover:shadow-xl font-medium"
+            >
+              <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
           </div>
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
         </div>
-      </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -452,6 +453,7 @@ const PendingGuestsManager = ({ user }) => {
             ))}
           </div>
         )}
+      </div>
     </div>
   );
 };

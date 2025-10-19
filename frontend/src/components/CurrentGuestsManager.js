@@ -204,27 +204,28 @@ const CurrentGuestsManager = ({ user }) => {
   }
 
   return (
-    <div className="w-full">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <h2 className="text-3xl font-bold text-gray-900 mb-2 flex items-center">
-              <Users className="w-8 h-8 mr-3 text-blue-600" />
-              Current Guests
-            </h2>
-            <p className="text-gray-600">Manage checked-in guests, services, and payments</p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 pt-28 px-8 pb-16">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h2 className="text-4xl font-bold text-gray-900 mb-2 flex items-center">
+                <Users className="w-10 h-10 mr-3 text-blue-600" />
+                Current Guests
+              </h2>
+              <p className="text-gray-600 text-lg">Manage checked-in guests, services, and payments</p>
+            </div>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 shadow-lg hover:shadow-xl font-medium"
+            >
+              <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
           </div>
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
         </div>
-      </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -304,9 +305,22 @@ const CurrentGuestsManager = ({ user }) => {
                 {/* Guest Header */}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                      {booking.user_name}
-                    </h3>
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-2xl font-bold text-gray-900">
+                        {booking.user_name}
+                      </h3>
+                      {booking.payment_status && (
+                        <span className={`px-3 py-1 text-xs font-bold rounded-full ${
+                          booking.payment_status === 'paid' ? 'bg-green-100 text-green-800 border-2 border-green-300' :
+                          booking.payment_status === 'partial' ? 'bg-yellow-100 text-yellow-800 border-2 border-yellow-300' :
+                          'bg-red-100 text-red-800 border-2 border-red-300'
+                        }`}>
+                          {booking.payment_status === 'paid' ? '✓ FULLY PAID' :
+                           booking.payment_status === 'partial' ? '⚠ PARTIAL PAYMENT' :
+                           '✕ NOT PAID'}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-gray-600 flex items-center gap-2">
                       <Mail className="w-4 h-4" />
                       {booking.user_email}
@@ -315,14 +329,14 @@ const CurrentGuestsManager = ({ user }) => {
                   <div className="flex gap-2">
                     <button
                       onClick={() => openServiceModal(booking)}
-                      className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                      className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium shadow-md hover:shadow-lg"
                     >
                       <Plus className="w-5 h-5" />
                       Add Service
                     </button>
                     <button
                       onClick={() => openPaymentModal(booking)}
-                      className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                      className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium shadow-md hover:shadow-lg"
                     >
                       <DollarSign className="w-5 h-5" />
                       Mark Payment
@@ -385,23 +399,61 @@ const CurrentGuestsManager = ({ user }) => {
 
                 {/* Billing Info */}
                 <div className="mt-4 pt-4 border-t border-gray-200">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <p className="text-xs text-gray-600 mb-1">Room Charges</p>
-                      <p className="text-xl font-bold text-gray-900">
-                        ${booking.total_cost ? parseFloat(booking.total_cost).toFixed(2) : '0.00'}
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                    <CreditCard className="w-4 h-4" />
+                    Payment Details
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                      <p className="text-xs text-blue-600 font-medium mb-1">Total Charges</p>
+                      <p className="text-2xl font-bold text-blue-900">
+                        ${booking.total_charges ? parseFloat(booking.total_charges).toFixed(2) : '0.00'}
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">Room + Services</p>
+                    </div>
+                    <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                      <p className="text-xs text-green-600 font-medium mb-1">Amount Paid</p>
+                      <p className="text-2xl font-bold text-green-900">
+                        ${booking.amount_paid ? parseFloat(booking.amount_paid).toFixed(2) : '0.00'}
+                      </p>
+                      <p className="text-xs text-green-600 mt-1">Received</p>
+                    </div>
+                    <div className={`p-4 rounded-lg border ${
+                      booking.due_amount && parseFloat(booking.due_amount) > 0 
+                        ? 'bg-red-50 border-red-200' 
+                        : 'bg-gray-50 border-gray-200'
+                    }`}>
+                      <p className={`text-xs font-medium mb-1 ${
+                        booking.due_amount && parseFloat(booking.due_amount) > 0 
+                          ? 'text-red-600' 
+                          : 'text-gray-600'
+                      }`}>Due Amount</p>
+                      <p className={`text-2xl font-bold ${
+                        booking.due_amount && parseFloat(booking.due_amount) > 0 
+                          ? 'text-red-900' 
+                          : 'text-gray-900'
+                      }`}>
+                        ${booking.due_amount ? parseFloat(booking.due_amount).toFixed(2) : '0.00'}
+                      </p>
+                      <p className={`text-xs mt-1 ${
+                        booking.due_amount && parseFloat(booking.due_amount) > 0 
+                          ? 'text-red-600' 
+                          : 'text-gray-600'
+                      }`}>
+                        {booking.due_amount && parseFloat(booking.due_amount) > 0 ? 'Pending' : 'Settled'}
                       </p>
                     </div>
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <p className="text-xs text-gray-600 mb-1">Total Days</p>
-                      <p className="text-xl font-bold text-gray-900">
-                        {booking.total_days || 0} days
+                    <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                      <p className="text-xs text-purple-600 font-medium mb-1">Payment Status</p>
+                      <p className="text-lg font-bold text-purple-900">
+                        {booking.payment_status === 'paid' ? 'Fully Paid' :
+                         booking.payment_status === 'partial' ? 'Partial' :
+                         booking.payment_status ? booking.payment_status.toUpperCase() : 'No Payment'}
                       </p>
-                    </div>
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <p className="text-xs text-gray-600 mb-1">Daily Rate</p>
-                      <p className="text-xl font-bold text-gray-900">
-                        ${booking.daily_rate ? parseFloat(booking.daily_rate).toFixed(2) : '0.00'}
+                      <p className="text-xs text-purple-600 mt-1">
+                        {booking.payment_status === 'paid' ? 'Complete ✓' :
+                         booking.payment_status === 'partial' ? 'In Progress' :
+                         'Not Started'}
                       </p>
                     </div>
                   </div>
@@ -625,6 +677,7 @@ const CurrentGuestsManager = ({ user }) => {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };
