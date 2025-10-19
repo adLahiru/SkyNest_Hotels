@@ -921,7 +921,7 @@ class DashboardController {
           b.branch_name,
           r.room_no,
           bk.booking_id,
-          u.fname as guest_name,
+          u.name as guest_name,
           su.quantity,
           su.usage_date,
           su.total as total_charge

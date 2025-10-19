@@ -156,8 +156,7 @@ export const getBillDetails = async (req: AuthenticatedRequest, res: Response): 
         b.checking_datetime as check_in,
         b.checkout_datetime as check_out,
         GREATEST(1, DATEDIFF(b.checkout_datetime, b.checking_datetime)) as nights,
-        u.fname,
-        u.lname,
+        u.name,
         u.email
        FROM booking b
        JOIN rooms r ON b.room_id = r.room_id
@@ -200,7 +199,7 @@ export const getBillDetails = async (req: AuthenticatedRequest, res: Response): 
     res.json({
       bookingId,
       guestInfo: {
-        name: `${roomDetails[0]?.fname || ''} ${roomDetails[0]?.lname || ''}`,
+        name: roomDetails[0]?.name || '',
         email: roomDetails[0]?.email || ''
       },
       roomDetails: roomDetails[0],
@@ -316,10 +315,8 @@ export const getPaymentHistory = async (req: AuthenticatedRequest, res: Response
         pt.payment_method,
         pt.transaction_reference,
         pt.notes,
-        COALESCE(s.fname, u.fname) as processed_by_fname,
-        COALESCE(s.lname, u.lname) as processed_by_lname
+        u.name as processed_by_name
        FROM payment_transactions pt
-       LEFT JOIN staff s ON pt.processed_by_staff_id = s.staff_id
        LEFT JOIN users u ON pt.processed_by_staff_id = u.user_id
        WHERE pt.booking_id = ?
        ORDER BY pt.transaction_date DESC`,
@@ -355,10 +352,9 @@ export const getOutstandingBalances = async (req: AuthenticatedRequest, res: Res
         b.checking_datetime,
         b.checkout_datetime,
         b.branch_id,
-        u.fname,
-        u.lname,
+        u.name,
         u.email,
-        u.phone_number,
+        u.phone,
         r.room_no,
         rt.type as room_type,
         p.total_charges,

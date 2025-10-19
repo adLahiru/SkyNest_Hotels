@@ -15,31 +15,37 @@ exports.setup = function(options, seedLink) {
 };
 
 exports.up = function(db) {
-  var filePath = path.join(__dirname, 'sqls', '20251018212902-room-status-triggers-up.sql');
-  return new Promise( function( resolve, reject ) {
-    fs.readFile(filePath, {encoding: 'utf-8'}, function(err,data){
-      if (err) return reject(err);
-      console.log('received data: ' + data);
-      resolve(data);
-    });
-  })
-  .then(function(data) {
-    return db.runSql(data);
-  });
+  return db.runSql(`
+    CREATE TRIGGER update_room_status_on_checkin
+    AFTER UPDATE ON booking
+    FOR EACH ROW
+    BEGIN
+        IF NEW.booking_status = 'checked_in' AND OLD.booking_status != 'checked_in' THEN
+            UPDATE rooms
+            SET state = 'occupied',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE room_id = NEW.room_id;
+        END IF;
+    END;
+  `)
+  .then(() => db.runSql(`
+    CREATE TRIGGER update_room_status_on_checkout
+    AFTER UPDATE ON booking
+    FOR EACH ROW
+    BEGIN
+        IF NEW.booking_status = 'checked_out' AND OLD.booking_status != 'checked_out' THEN
+            UPDATE rooms
+            SET state = 'available',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE room_id = NEW.room_id;
+        END IF;
+    END;
+  `));
 };
 
 exports.down = function(db) {
-  var filePath = path.join(__dirname, 'sqls', '20251018212902-room-status-triggers-down.sql');
-  return new Promise( function( resolve, reject ) {
-    fs.readFile(filePath, {encoding: 'utf-8'}, function(err,data){
-      if (err) return reject(err);
-      console.log('received data: ' + data);
-      resolve(data);
-    });
-  })
-  .then(function(data) {
-    return db.runSql(data);
-  });
+  return db.runSql('DROP TRIGGER IF EXISTS update_room_status_on_checkout;')
+    .then(() => db.runSql('DROP TRIGGER IF EXISTS update_room_status_on_checkin;'));
 };
 
 exports._meta = {
