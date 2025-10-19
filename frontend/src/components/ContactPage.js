@@ -25,21 +25,16 @@ const ContactPage = () => {
     const fetchUserData = async () => {
       try {
         setLoadingUserData(true);
-        const token = localStorage.getItem('token');
-        
-        console.log('🔍 Contact Page - Checking for token:', token ? 'Token exists' : 'No token found');
+        const token = localStorage.getItem('accessToken'); // Fixed: use 'accessToken' not 'token'
         
         if (token) {
           setIsLoggedIn(true);
-          console.log('✅ User is logged in, fetching profile...');
           
+          // Always fetch from API to get latest data (including phone)
           const response = await userService.getCurrentUserProfile();
-          console.log('📦 API Response:', response);
           
           if (response.success && response.user) {
-            console.log('✅ User data loaded for contact form:', response.user);
-            console.log('📝 Setting form fields - Name:', response.user.name, 'Email:', response.user.email, 'Phone:', response.user.phone);
-            
+            // Use fresh API data
             setContactForm(prev => ({
               ...prev,
               name: response.user.name || '',
@@ -47,18 +42,44 @@ const ContactPage = () => {
               phone: response.user.phone || ''
             }));
           } else {
-            console.warn('⚠️ API call succeeded but no user data:', response);
+            // Fallback to localStorage only if API fails
+            const storedUser = localStorage.getItem('user');
+            if (storedUser) {
+              const userData = JSON.parse(storedUser);
+              setContactForm(prev => ({
+                ...prev,
+                name: userData.name || '',
+                email: userData.email || '',
+                phone: userData.phone || ''
+              }));
+            }
           }
         } else {
-          console.log('❌ No token found - user is guest');
+          // No token - user is guest
           setIsLoggedIn(false);
         }
       } catch (error) {
-        console.error('❌ Error fetching user data for contact form:', error);
-        setIsLoggedIn(false);
+        console.error('Error fetching user data:', error);
+        // Fallback to localStorage on error
+        try {
+          const storedUser = localStorage.getItem('user');
+          if (storedUser) {
+            const userData = JSON.parse(storedUser);
+            setIsLoggedIn(true);
+            setContactForm(prev => ({
+              ...prev,
+              name: userData.name || '',
+              email: userData.email || '',
+              phone: userData.phone || ''
+            }));
+          } else {
+            setIsLoggedIn(false);
+          }
+        } catch (parseError) {
+          setIsLoggedIn(false);
+        }
       } finally {
         setLoadingUserData(false);
-        console.log('✅ Loading complete. isLoggedIn:', isLoggedIn);
       }
     };
 
