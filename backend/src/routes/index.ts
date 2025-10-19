@@ -62,7 +62,7 @@ router.get('/health', (req, res) => {
       services: 'Available at /api/services',
       discounts: 'Available at /api/discounts',
       dashboard: 'Available at /api/dashboard',
-      contact: 'Available at /api/contact'
+      contact: 'Available at /api/contact',
       payments: 'Available at /api/payments'
     }
   });
