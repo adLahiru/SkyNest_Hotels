@@ -123,14 +123,28 @@ const ContactPage = () => {
     if (result.success) {
       setShowSuccess(true);
       setIsSubmitting(false);
-      setContactForm({
-        name: '',
-        email: '',
-        phone: '',
-        subject: '',
-        message: '',
-        inquiry_type: 'general'
-      });
+      
+      // If user is logged in, preserve their auto-filled data
+      // Only reset subject, message, and inquiry_type
+      if (isLoggedIn) {
+        setContactForm(prev => ({
+          ...prev,
+          subject: '',
+          message: '',
+          inquiry_type: 'general'
+        }));
+      } else {
+        // For non-logged-in users, reset everything
+        setContactForm({
+          name: '',
+          email: '',
+          phone: '',
+          subject: '',
+          message: '',
+          inquiry_type: 'general'
+        });
+      }
+      
       setFormErrors({});
       
       // Hide success message after 5 seconds
