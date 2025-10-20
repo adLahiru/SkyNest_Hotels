@@ -141,7 +141,17 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
       
       if (response.success) {
         console.log('Booking created successfully:', response.booking);
-        setBookingReference(response.booking?.booking_id || 'SKN' + Date.now().toString().slice(-6));
+        setBookingReference(response.data?.booking?.booking_id || response.booking?.booking_id || 'SKN' + Date.now().toString().slice(-6));
+        
+        // Update the form with the response data to show correct charges
+        if (response.data?.booking) {
+          setBookingForm(prev => ({
+            ...prev,
+            roomCharges: response.data.booking.room_charges,
+            totalAmount: response.data.booking.total_amount
+          }));
+        }
+        
         setShowConfirmation(true);
       } else {
         console.error('Booking failed:', response.message);
@@ -207,7 +217,11 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
                   <span className="font-medium">{bookingForm.guests}</span>
                 </div>
                 <div className="flex justify-between border-t pt-4">
-                  <span className="text-gray-600">Total ({calculateNights()} nights):</span>
+                  <span className="text-gray-600">Room Charges ({calculateNights()} nights × ${selectedRoom?.price}):</span>
+                  <span className="font-medium text-amber-600">${calculateTotal()}</span>
+                </div>
+                <div className="flex justify-between border-t pt-4">
+                  <span className="text-gray-600 font-semibold">Total Amount:</span>
                   <span className="text-2xl font-bold text-amber-600">${calculateTotal()}</span>
                 </div>
               </div>

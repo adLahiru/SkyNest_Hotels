@@ -265,8 +265,9 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
       }
     }
 
-    // Calculate total cost
+    // Calculate room charges (daily_rate × number of days)
     const dailyRate = room.daily_rate ? parseFloat(room.daily_rate.toString()) : 0;
+    const roomCharges = dailyRate * totalDays;
     const totalCost = calculateTotalCost(dailyRate, totalDays);
 
     // Generate UUID for booking
@@ -282,15 +283,17 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
       booking_status: BookingStatus.CONFIRMED,
       branch_id: room.branch_id,
       number_of_guests: number_of_guests || 1,
-      special_requests: special_requests || null
+      special_requests: special_requests || null,
+      room_charges: roomCharges
+      // Note: total_amount is auto-calculated by database (generated column)
     });
 
-    // Create the booking (dates already formatted in conflict check)
+    // Create the booking with room_charges (total_amount is auto-calculated)
     const [result] = await connection.query<ResultSetHeader>(
       `INSERT INTO booking 
-       (booking_id, user_id, room_id, staff_id, checking_datetime, checkout_datetime, booking_status, booking_date, branch_id, number_of_guests, special_requests) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?)`,
-      [booking_id, user_id, room_id, staff_id || null, checkInForQuery, checkOutForQuery, BookingStatus.CONFIRMED, room.branch_id, number_of_guests || 1, special_requests || null]
+       (booking_id, user_id, room_id, staff_id, checking_datetime, checkout_datetime, booking_status, booking_date, branch_id, number_of_guests, special_requests, room_charges) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?)`,
+      [booking_id, user_id, room_id, staff_id || null, checking_datetime, checkout_datetime, BookingStatus.CONFIRMED, room.branch_id, number_of_guests || 1, special_requests || null, roomCharges]
     );
 
     // Fetch the created booking with joined data
@@ -334,11 +337,15 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
           branch_name: booking?.branch_name,
           checking_datetime: booking?.checking_datetime,
           checkout_datetime: booking?.checkout_datetime,
+          number_of_guests: booking?.number_of_guests || number_of_guests || 1,
           booking_status: booking?.booking_status,
           booking_date: booking?.booking_date,
           staff_id: booking?.staff_id,
           staff_name: booking?.staff_name,
           daily_rate: booking?.daily_rate ? parseFloat(booking.daily_rate.toString()) : null,
+          room_charges: booking?.room_charges || roomCharges,
+          service_charges: booking?.service_charges || 0,
+          total_amount: booking?.total_amount || roomCharges, // Auto-calculated by database
           total_days: totalDays,
           total_cost: totalCost,
           created_at: booking?.created_at,
@@ -1440,5 +1447,95 @@ export const validateCheckout = async (req: AuthenticatedRequest, res: Response)
   } catch (error) {
     console.error('Validation error:', error);
     res.status(500).json({ error: 'Validation failed' });
+  }
+};
+
+/**
+ * Get available rooms for a specific date range (Public endpoint)
+ * GET /api/bookings/available-rooms?branch_id=X&check_in=YYYY-MM-DD&check_out=YYYY-MM-DD
+ */
+export const getAvailableRooms = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { branch_id, check_in, check_out } = req.query;
+
+    // If no dates provided, return all available rooms
+    if (!check_in || !check_out) {
+      res.status(400).json({
+        success: false,
+        message: 'Check-in and check-out dates are required'
+      });
+      return;
+    }
+
+    // Validate dates
+    const checkInDate = new Date(check_in as string);
+    const checkOutDate = new Date(check_out as string);
+
+    if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid date format'
+      });
+      return;
+    }
+
+    if (checkOutDate <= checkInDate) {
+      res.status(400).json({
+        success: false,
+        message: 'Check-out date must be after check-in date'
+      });
+      return;
+    }
+
+    // Query to find rooms that are NOT booked for the given date range
+    let query = `
+      SELECT DISTINCT r.room_id, r.room_no, r.floor_no, r.state, r.branch_id, r.room_type_id
+      FROM rooms r
+      WHERE r.state = 'available'
+    `;
+    const params: any[] = [];
+
+    // Add branch filter if provided
+    if (branch_id) {
+      query += ' AND r.branch_id = ?';
+      params.push(branch_id);
+    }
+
+    // Exclude rooms with conflicting bookings
+    query += `
+      AND r.room_id NOT IN (
+        SELECT b.room_id 
+        FROM booking b
+        WHERE b.booking_status NOT IN ('cancelled', 'checked_out')
+        AND (
+          (b.checking_datetime <= ? AND b.checkout_datetime > ?) OR
+          (b.checking_datetime < ? AND b.checkout_datetime >= ?) OR
+          (b.checking_datetime >= ? AND b.checkout_datetime <= ?)
+        )
+      )
+    `;
+    params.push(check_out, check_in, check_out, check_in, check_in, check_out);
+
+    query += ' ORDER BY r.room_no';
+
+    const [availableRooms] = await db.query<RowDataPacket[]>(query, params);
+
+    res.json({
+      success: true,
+      availableRooms,
+      count: availableRooms.length,
+      dateRange: {
+        check_in: checkInDate.toISOString().split('T')[0],
+        check_out: checkOutDate.toISOString().split('T')[0]
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching available rooms:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch available rooms',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 };
