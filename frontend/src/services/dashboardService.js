@@ -93,6 +93,52 @@ const dashboardService = {
       };
     }
   },
+
+  /**
+   * Check-in a guest
+   * @param {string} bookingId - The booking ID to check in
+   * @returns {Promise} Response with check-in result
+   */
+  checkInGuest: async (bookingId) => {
+    try {
+      const response = await apiClient.patch(`/bookings/${bookingId}/checkin`);
+      return {
+        success: response.data.success,
+        data: response.data.data,
+        message: response.data.message || 'Guest checked in successfully',
+      };
+    } catch (error) {
+      console.error('Check-in guest error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to check in guest',
+        error,
+      };
+    }
+  },
+
+  /**
+   * Check-out a guest
+   * @param {string} bookingId - The booking ID to check out
+   * @returns {Promise} Response with check-out result
+   */
+  checkOutGuest: async (bookingId) => {
+    try {
+      const response = await apiClient.patch(`/bookings/${bookingId}/checkout`);
+      return {
+        success: response.data.success,
+        data: response.data.data,
+        message: response.data.message || 'Guest checked out successfully',
+      };
+    } catch (error) {
+      console.error('Check-out guest error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to check out guest',
+        error,
+      };
+    }
+  },
 };
 
 export default dashboardService;

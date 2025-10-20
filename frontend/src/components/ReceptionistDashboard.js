@@ -5,6 +5,7 @@ import dashboardService from '../services/dashboardService';
 const ReceptionistDashboard = ({ user }) => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [processingBooking, setProcessingBooking] = useState(null);
 
   useEffect(() => {
     fetchDashboardStats();
@@ -17,6 +18,44 @@ const ReceptionistDashboard = ({ user }) => {
       setStats(result.data);
     }
     setLoading(false);
+  };
+
+  const handleCheckIn = async (bookingId) => {
+    setProcessingBooking(bookingId);
+    try {
+      const result = await dashboardService.checkInGuest(bookingId);
+      if (result.success) {
+        // Refresh the dashboard data
+        await fetchDashboardStats();
+        alert('Guest checked in successfully!');
+      } else {
+        alert(result.message || 'Failed to check in guest');
+      }
+    } catch (error) {
+      console.error('Error checking in guest:', error);
+      alert('Failed to check in guest. Please try again.');
+    } finally {
+      setProcessingBooking(null);
+    }
+  };
+
+  const handleCheckOut = async (bookingId) => {
+    setProcessingBooking(bookingId);
+    try {
+      const result = await dashboardService.checkOutGuest(bookingId);
+      if (result.success) {
+        // Refresh the dashboard data
+        await fetchDashboardStats();
+        alert('Guest checked out successfully!');
+      } else {
+        alert(result.message || 'Failed to check out guest');
+      }
+    } catch (error) {
+      console.error('Error checking out guest:', error);
+      alert('Failed to check out guest. Please try again.');
+    } finally {
+      setProcessingBooking(null);
+    }
   };
 
   if (loading) {
@@ -125,7 +164,11 @@ const ReceptionistDashboard = ({ user }) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {stats.todayCheckIns.map((booking) => (
+                  {stats.todayCheckIns.map((booking) => {
+                    // Debug: Log the status to check the actual value
+                    console.log('Booking status:', booking.status, typeof booking.status);
+                    
+                    return (
                     <tr key={booking.booking_id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">{booking.guest_name}</td>
                       <td className="px-4 py-3 text-sm text-gray-600">{booking.room_number}</td>
@@ -135,23 +178,41 @@ const ReceptionistDashboard = ({ user }) => {
                       </td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-1 text-xs rounded-full ${
-                          booking.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' :
-                          booking.status === 'CHECKED_IN' ? 'bg-blue-100 text-blue-800' :
+                          booking.status === 'CONFIRMED' || booking.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                          booking.status === 'CHECKED_IN' || booking.status === 'checked_in' ? 'bg-blue-100 text-blue-800' :
                           'bg-yellow-100 text-yellow-800'
                         }`}>
                           {booking.status}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        {booking.status === 'CONFIRMED' && (
-                          <button className="flex items-center px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700">
-                            <CheckCircle className="w-4 h-4 mr-1" />
-                            Check In
+                        {(booking.status === 'CONFIRMED' || booking.status === 'confirmed') && (
+                          <button 
+                            onClick={() => handleCheckIn(booking.booking_id)}
+                            disabled={processingBooking === booking.booking_id}
+                            className={`flex items-center px-3 py-1 text-white text-sm rounded transition-colors ${
+                              processingBooking === booking.booking_id
+                                ? 'bg-gray-400 cursor-not-allowed'
+                                : 'bg-green-600 hover:bg-green-700'
+                            }`}
+                          >
+                            {processingBooking === booking.booking_id ? (
+                              <>
+                                <div className="w-4 h-4 mr-1 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                Processing...
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="w-4 h-4 mr-1" />
+                                Check In
+                              </>
+                            )}
                           </button>
                         )}
                       </td>
                     </tr>
-                  ))}
+                  );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -193,18 +254,35 @@ const ReceptionistDashboard = ({ user }) => {
                       </td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-1 text-xs rounded-full ${
-                          booking.status === 'CHECKED_IN' ? 'bg-blue-100 text-blue-800' :
-                          booking.status === 'CHECKED_OUT' ? 'bg-gray-100 text-gray-800' :
+                          booking.status === 'CHECKED_IN' || booking.status === 'checked_in' ? 'bg-blue-100 text-blue-800' :
+                          booking.status === 'CHECKED_OUT' || booking.status === 'checked_out' ? 'bg-gray-100 text-gray-800' :
                           'bg-yellow-100 text-yellow-800'
                         }`}>
                           {booking.status}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        {booking.status === 'CHECKED_IN' && (
-                          <button className="flex items-center px-3 py-1 bg-orange-600 text-white text-sm rounded hover:bg-orange-700">
-                            <CheckCircle className="w-4 h-4 mr-1" />
-                            Check Out
+                        {(booking.status === 'CHECKED_IN' || booking.status === 'checked_in') && (
+                          <button 
+                            onClick={() => handleCheckOut(booking.booking_id)}
+                            disabled={processingBooking === booking.booking_id}
+                            className={`flex items-center px-3 py-1 text-white text-sm rounded transition-colors ${
+                              processingBooking === booking.booking_id
+                                ? 'bg-gray-400 cursor-not-allowed'
+                                : 'bg-orange-600 hover:bg-orange-700'
+                            }`}
+                          >
+                            {processingBooking === booking.booking_id ? (
+                              <>
+                                <div className="w-4 h-4 mr-1 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                Processing...
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="w-4 h-4 mr-1" />
+                                Check Out
+                              </>
+                            )}
                           </button>
                         )}
                       </td>
