@@ -3,13 +3,13 @@ import { Calendar, Users, Bed, MapPin, CheckCircle, AlertCircle, ArrowLeft, Load
 import bookingService from '../services/bookingService';
 import userService from '../services/userService';
 
-const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
+const BookingPage = ({ user, selectedRoom, selectedBranch, selectedDates, onBackToRooms }) => {
   const [bookingForm, setBookingForm] = useState({
     name: user?.full_name || user?.name || '',
     email: user?.email || '',
     phone: user?.phone || '',
-    checkIn: '',
-    checkOut: '',
+    checkIn: selectedDates?.checkIn || '',
+    checkOut: selectedDates?.checkOut || '',
     guests: selectedRoom?.occupancy || 2,
     roomType: selectedRoom?.type || 'standard',
     roomId: selectedRoom?.id || '',
@@ -72,6 +72,17 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
       }));
     }
   }, [user, loadingUserData]);
+
+  // Update dates when selectedDates changes
+  useEffect(() => {
+    if (selectedDates) {
+      setBookingForm(prev => ({
+        ...prev,
+        checkIn: selectedDates.checkIn || prev.checkIn,
+        checkOut: selectedDates.checkOut || prev.checkOut
+      }));
+    }
+  }, [selectedDates]);
 
   const validateForm = () => {
     const errors = {};

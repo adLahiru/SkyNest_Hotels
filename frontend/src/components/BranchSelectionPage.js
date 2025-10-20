@@ -85,8 +85,12 @@ const BranchSelectionPage = ({ onBranchSelect }) => {
           })
         );
         
-        console.log('Processed branches:', branchesWithRoomCount);
-        setBranches(branchesWithRoomCount);
+        // Filter out branches that have no rooms (including head office)
+        const branchesWithRooms = branchesWithRoomCount.filter(branch => branch.rooms > 0);
+        
+        console.log('All processed branches:', branchesWithRoomCount);
+        console.log('Branches with rooms:', branchesWithRooms);
+        setBranches(branchesWithRooms);
       } else {
         console.error('API response not successful:', response);
         setError(response.message || 'Failed to load branches');
