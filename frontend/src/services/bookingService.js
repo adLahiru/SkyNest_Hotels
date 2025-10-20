@@ -1,4 +1,29 @@
-import apiClient from '../config/api';
+
+  import apiClient from '../config/api';
+
+  /**
+   * Get bookings for the current user (using token)
+   * @returns {Promise} Response with user's bookings
+   */
+  const getMyBookings = async () => {
+    try {
+      const response = await apiClient.get('/bookings/my-bookings');
+      
+      // Response: { success, data: { bookings, count }, message }
+      return {
+        success: response.data.success,
+        bookings: response.data.data?.bookings || [],
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.error('[BookingService] Failed to fetch bookings:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to fetch bookings',
+        error,
+      };
+    }
+  };
 
 /**
  * Booking Service
@@ -6,6 +31,7 @@ import apiClient from '../config/api';
  */
 
 const bookingService = {
+  getMyBookings,
   /**
    * Create new booking
    * @param {Object} bookingData - Booking data
@@ -42,7 +68,6 @@ const bookingService = {
           params.append(key, filters[key]);
         }
       });
-      
       const response = await apiClient.get(`/bookings?${params.toString()}`);
       return {
         success: response.data.success,

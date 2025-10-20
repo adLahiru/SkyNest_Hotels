@@ -7,7 +7,7 @@
     "dev": "cross-env NODE_ENV=development nodemon",
     "test": "cross-env NODE_ENV=test nodemon",
     "prod": "cross-env NODE_ENV=production nodemon",
-    "start": "cross-env NODE_ENV=production node dist/index.js",
+    "start": "cross-env cd NODE_ENV=production node dist/index.js",
     "build": "tsc",
     "migrate:dev": "dotenv -e ./config/.env.development -- db-migrate up -e development",
     "migrate:test": "dotenv -e config/.env.test -- db-migrate up -e test",

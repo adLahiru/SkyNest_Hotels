@@ -257,13 +257,14 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
               u.fname as user_name, u.email as user_email,
               r.room_no, rt.type as room_type, rt.daily_rate,
               hb.branch_name,
-              s.fname as staff_name
+              su.name as staff_name
        FROM booking b
        LEFT JOIN users u ON b.user_id = u.user_id
        LEFT JOIN rooms r ON b.room_id = r.room_id
        LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
        LEFT JOIN hotel_branches hb ON b.branch_id = hb.branch_id
        LEFT JOIN staff s ON b.staff_id = s.staff_id
+       LEFT JOIN users su ON s.staff_id = su.user_id
        WHERE b.booking_id = ?`,
       [booking_id]
     );
@@ -332,13 +333,14 @@ export const getBookings = async (req: AuthenticatedRequest, res: Response): Pro
          u.fname as user_name, u.email as user_email,
          r.room_no, rt.type as room_type, rt.daily_rate,
          hb.branch_name,
-         s.fname as staff_name
+         su.name as staff_name
        FROM booking b
        LEFT JOIN users u ON b.user_id = u.user_id
        LEFT JOIN rooms r ON b.room_id = r.room_id
        LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
        LEFT JOIN hotel_branches hb ON b.branch_id = hb.branch_id
        LEFT JOIN staff s ON b.staff_id = s.staff_id
+       LEFT JOIN users su ON s.staff_id = su.user_id
        WHERE 1=1`;
     const params: any[] = [];
 
@@ -449,17 +451,18 @@ export const getBookingById = async (req: AuthenticatedRequest, res: Response): 
     const { booking_id } = req.params;
 
     const [bookings] = await db.query<Booking[]>(
-      `SELECT b*, 
+      `SELECT b.*, 
               u.fname as user_name, u.email as user_email, u.phone as user_phone,
               r.room_no, rt.type as room_type, rt.daily_rate, rt.capacity,
               hb.branch_name, hb.address as branch_address,
-              s.fname as staff_name, s.email as staff_email
+              su.name as staff_name, su.email as staff_email
        FROM booking b
        LEFT JOIN users u ON b.user_id = u.user_id
        LEFT JOIN rooms r ON b.room_id = r.room_id
        LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
        LEFT JOIN hotel_branches hb ON b.branch_id = hb.branch_id
        LEFT JOIN staff s ON b.staff_id = s.staff_id
+       LEFT JOIN users su ON s.staff_id = su.user_id
        WHERE b.booking_id = ?`,
       [booking_id]
     );
@@ -731,13 +734,14 @@ export const updateBooking = async (req: AuthenticatedRequest, res: Response): P
               u.fname as user_name, u.email as user_email,
               r.room_no, rt.type as room_type, rt.daily_rate,
               hb.branch_name,
-              s.fname as staff_name
+              su.name as staff_name
        FROM booking b
        LEFT JOIN users u ON b.user_id = u.user_id
        LEFT JOIN rooms r ON b.room_id = r.room_id
        LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
        LEFT JOIN hotel_branches hb ON b.branch_id = hb.branch_id
        LEFT JOIN staff s ON b.staff_id = s.staff_id
+       LEFT JOIN users su ON s.staff_id = su.user_id
        WHERE b.booking_id = ?`,
       [booking_id]
     );
@@ -928,12 +932,13 @@ export const getMyBookings = async (req: AuthenticatedRequest, res: Response): P
     let query = `SELECT b.*, 
          r.room_no, rt.type as room_type, rt.daily_rate,
          hb.branch_name,
-         s.fname as staff_name
+         su.name as staff_name
        FROM booking b
        LEFT JOIN rooms r ON b.room_id = r.room_id
        LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
        LEFT JOIN hotel_branches hb ON b.branch_id = hb.branch_id
        LEFT JOIN staff s ON b.staff_id = s.staff_id
+       LEFT JOIN users su ON s.staff_id = su.user_id
        WHERE b.user_id = ?`;
     const params: any[] = [user_id];
 
@@ -992,7 +997,16 @@ export const getMyBookings = async (req: AuthenticatedRequest, res: Response): P
     });
 
   } catch (error) {
-    console.error('Error fetching user bookings:', error);
+    console.error('[getMyBookings] Error fetching user bookings:', error);
+    if (error instanceof Error) {
+      console.error('[getMyBookings] Error message:', error.message);
+      // @ts-ignore
+      if (error.code) console.error('[getMyBookings] Error code:', error.code);
+      // @ts-ignore
+      if (error.sqlMessage) console.error('[getMyBookings] SQL message:', error.sqlMessage);
+      // @ts-ignore
+      if (error.sql) console.error('[getMyBookings] SQL:', error.sql);
+    }
     res.status(500).json({
       success: false,
       message: 'An error occurred while retrieving your bookings.',

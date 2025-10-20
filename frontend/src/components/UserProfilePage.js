@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { User, Mail, Phone, MapPin, Calendar, Edit, Save, X, Key, Eye, EyeOff, CheckCircle, AlertCircle, CreditCard, Hash, Shield, Briefcase, Award, Clock } from 'lucide-react';
+
 import userService from '../services/userService';
+import bookingService from '../services/bookingService';
 
 const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -164,32 +166,28 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
     setPasswordErrors({});
   };
 
-  const bookingHistory = [
-    {
-      id: 'BK001',
-      date: '2025-09-15',
-      branch: 'Sky Nest Colombo',
-      room: 'Deluxe Executive Suite',
-      status: 'Completed',
-      amount: '$250'
-    },
-    {
-      id: 'BK002',
-      date: '2025-08-10',
-      branch: 'Sky Nest Galle',
-      room: 'Ocean Breeze Standard',
-      status: 'Completed',
-      amount: '$180'
-    },
-    {
-      id: 'BK003',
-      date: '2025-12-20',
-      branch: 'Sky Nest Kandy',
-      room: 'Mountain View Deluxe',
-      status: 'Upcoming',
-      amount: '$200'
-    }
-  ];
+  // User's actual bookings
+  const [userBookings, setUserBookings] = useState([]);
+  const [isBookingsLoading, setIsBookingsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchUserBookings = async () => {
+      setIsBookingsLoading(true);
+      try {
+        const result = await bookingService.getMyBookings();
+        if (result.success) {
+          setUserBookings(result.bookings);
+        } else {
+          setUserBookings([]);
+        }
+      } catch (error) {
+        setUserBookings([]);
+      } finally {
+        setIsBookingsLoading(false);
+      }
+    };
+    fetchUserBookings();
+  }, []);
 
   // Show loading state
   if (isLoading) {
@@ -422,29 +420,64 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
 
             {/* Booking History */}
             <div className="bg-white rounded-3xl shadow-xl p-8">
-              <h3 className="text-lg font-semibold text-gray-800 mb-6">Recent Bookings</h3>
-              
-              <div className="space-y-4">
-                {bookingHistory.map((booking, index) => (
-                  <div key={booking.id} className="border-l-4 border-amber-500 pl-4 py-2">
-                    <div className="flex justify-between items-start mb-1">
-                      <span className="font-medium text-sm">{booking.branch}</span>
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        booking.status === 'Completed' ? 'bg-green-100 text-green-800' : 
-                        booking.status === 'Upcoming' ? 'bg-blue-100 text-blue-800' : 
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {booking.status}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-600 mb-1">{booking.room}</p>
-                    <div className="flex justify-between text-xs text-gray-500">
-                      <span>{booking.date}</span>
-                      <span className="font-medium">{booking.amount}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-6">My Bookings</h3>
+              {isBookingsLoading ? (
+                <div className="text-center text-gray-500 py-6">Loading bookings...</div>
+              ) : userBookings.length === 0 ? (
+                <div className="text-center text-gray-400 py-6">No bookings found.</div>
+              ) : (
+                <div className="space-y-4">
+                  {userBookings.map((booking) => {
+                    // Map backend status to user-friendly label and color
+                    let statusLabel = '';
+                    let statusColor = '';
+                    switch (booking.booking_status) {
+                      case 'confirmed':
+                        statusLabel = 'Confirmed';
+                        statusColor = 'bg-blue-100 text-blue-800';
+                        break;
+                      case 'checked_in':
+                        statusLabel = 'Checked In';
+                        statusColor = 'bg-green-100 text-green-800';
+                        break;
+                      case 'checked_out':
+                        statusLabel = 'Checked Out';
+                        statusColor = 'bg-gray-200 text-gray-800';
+                        break;
+                      case 'cancelled':
+                        statusLabel = 'Cancelled';
+                        statusColor = 'bg-red-100 text-red-800';
+                        break;
+                      default:
+                        statusLabel = booking.booking_status || 'Status';
+                        statusColor = 'bg-gray-100 text-gray-800';
+                    }
+                    return (
+                      <div key={booking.booking_id} className="border-l-4 border-amber-500 pl-4 py-2">
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="font-medium text-sm">{booking.branch_name || 'Branch'}</span>
+                          <span className={`text-xs px-2 py-1 rounded-full ${statusColor}`}>
+                            {statusLabel}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-600 mb-1">
+                          Room: {booking.room_no || 'N/A'} | Type: {booking.room_type || 'N/A'}
+                        </p>
+                        <div className="flex justify-between text-xs text-gray-500">
+                          <span>
+                            {booking.checking_datetime ? new Date(booking.checking_datetime).toLocaleDateString() : 'N/A'}
+                            {' '}to{' '}
+                            {booking.checkout_datetime ? new Date(booking.checkout_datetime).toLocaleDateString() : 'N/A'}
+                          </span>
+                          <span className="font-medium">
+                            {typeof booking.total_cost !== 'undefined' ? `LKR ${booking.total_cost}` : ''}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
