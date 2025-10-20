@@ -101,6 +101,22 @@ export const createService = async (req: AuthenticatedRequest, res: Response): P
       return;
     }
 
+    // Convert Base64 photo to Buffer if provided
+    let photoBuffer: Buffer | null = null;
+    if (photo && photo.trim() !== '') {
+      try {
+        // Remove data:image/...;base64, prefix if present
+        const base64Data = photo.replace(/^data:image\/\w+;base64,/, '');
+        photoBuffer = Buffer.from(base64Data, 'base64');
+      } catch (error) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid photo format'
+        });
+        return;
+      }
+    }
+
     await connection.beginTransaction();
 
     // Check if service name already exists in the same branch (case-insensitive)
@@ -120,18 +136,12 @@ export const createService = async (req: AuthenticatedRequest, res: Response): P
       return;
     }
 
-    // Process photo - strip data URL prefix if present
-    let processedPhoto = photo;
-    if (photo && typeof photo === 'string' && photo.includes('base64,')) {
-      processedPhoto = photo.split('base64,')[1];
-    }
-
     // Insert new service
     const [result] = await connection.query<ResultSetHeader>(
       `INSERT INTO service_types 
        (service_name, price, branch_id, photo, description) 
        VALUES (?, ?, ?, ?, ?)`,
-      [service_name, price, branch_id, processedPhoto || null, description || null]
+      [service_name, price, branch_id, photoBuffer || null, description || null]
     );
 
     // Fetch the created service
