@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Calendar, Users, Bed, MapPin, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 
-const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
+const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms, onProceedToBill }) => {
   // Map room type fields to expected format
   const roomName = selectedRoom?.type || selectedRoom?.name || '';
   const roomPrice = selectedRoom?.daily_rate || selectedRoom?.price || 0;
@@ -22,7 +22,8 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
     specialRequests: '',
     location: branchId,
     branchName: branchName,
-    totalPrice: roomPrice
+    totalPrice: roomPrice,
+    roomPrice: roomPrice
   });
 
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -78,11 +79,15 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
     
     setIsSubmitting(true);
     
-    // Simulate API call
+    // Proceed to bill page instead of showing confirmation
     setTimeout(() => {
-      setShowConfirmation(true);
       setIsSubmitting(false);
-    }, 2000);
+      if (onProceedToBill) {
+        onProceedToBill(bookingForm);
+      } else {
+        setShowConfirmation(true);
+      }
+    }, 1000);
   };
 
   const resetForm = () => {
@@ -177,10 +182,10 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
         )}
 
         <div className="text-center mb-16">
-          <h1 className="text-5xl md:text-6xl font-light text-gray-800 mb-4">Complete Your Booking</h1>
+          <h1 className="text-5xl md:text-6xl font-light text-gray-800 mb-4">Booking Details</h1>
           <div className="w-24 h-1 bg-gradient-to-r from-amber-400 to-amber-600 mx-auto mb-6"></div>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            You're almost there! Complete your booking for {roomName} at {branchName}.
+            Please provide your details for {roomName} at {branchName}.
           </p>
         </div>
 
@@ -374,10 +379,10 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
                   {isSubmitting ? (
                     <div className="flex items-center justify-center">
                       <div className="spinner mr-3"></div>
-                      Processing Booking...
+                      Processing...
                     </div>
                   ) : (
-                    'Complete Booking'
+                    'Proceed to Review'
                   )}
                 </button>
               </form>

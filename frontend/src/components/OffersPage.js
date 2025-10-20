@@ -1,320 +1,243 @@
 import React, { useState, useEffect } from 'react';
-import { Gift, Clock, Users, Percent, Star, Calendar } from 'lucide-react';
+import { Tag, Calendar, TrendingDown, Check, AlertCircle, Loader } from 'lucide-react';
+import { discountService } from '../services';
 
 const OffersPage = ({ setCurrentPage }) => {
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [isVisible, setIsVisible] = useState({});
+  const [offers, setOffers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const categories = [
-    { id: 'all', name: 'All Offers', icon: Gift },
-    { id: 'seasonal', name: 'Seasonal', icon: Calendar },
-    { id: 'advance', name: 'Early Bird', icon: Clock },
-    { id: 'group', name: 'Group Deals', icon: Users },
-    { id: 'premium', name: 'Premium', icon: Star }
-  ];
+  // Map backend discount to display format
+  const mapDiscountToOffer = (d) => {
+    const isPercentage = d.type === 'rate';
+    const discountText = isPercentage ? `${d.discount_value}%` : `$${d.discount_value}`;
+    
+    // Format title: EARLY_BIRD_25 → Early Bird 25
+    const title = d.discount_name
+      .replace(/_/g, ' ')
+      .split(' ')
+      .map(word => word.charAt(0) + word.slice(1).toLowerCase())
+      .join(' ');
 
-  const offers = [
-    {
-      id: 1,
-      category: 'advance',
-      title: 'Early Bird Special',
-      discount: '25% OFF',
-      description: 'Book 30 days in advance and save 25% on your stay. Perfect for planning ahead and securing the best rates.',
-      code: 'EARLY25',
-      validUntil: '2025-12-31',
-      terms: ['Valid for bookings made 30 days in advance', 'Minimum 2 nights stay', 'Subject to availability'],
-      image: '/Images/6256702-middle.png',
-      fallback: '/assets/images/external/offers/early-bird-special.jpg',
-      originalPrice: 200,
-      discountedPrice: 150,
-      featured: true
-    },
-    {
-      id: 2,
-      category: 'seasonal',
-      title: 'Weekend Getaway',
-      discount: '20% OFF',
-      description: 'Escape the weekday hustle with our weekend special. Enjoy 20% off on Friday to Sunday bookings.',
-      code: 'WEEKEND20',
-      validUntil: '2025-11-30',
-      terms: ['Valid Friday to Sunday only', 'Minimum 2 nights stay', 'Cannot be combined with other offers'],
-      image: '/Images/umbrella-pool-chair.jpg',
-      fallback: '/assets/images/external/offers/weekend-getaway.jpg',
-      originalPrice: 180,
-      discountedPrice: 144,
-      featured: false
-    },
-    {
-      id: 3,
-      category: 'advance',
-      title: 'Long Stay Discount',
-      discount: '30% OFF',
-      description: 'Extended stays deserve extended savings. Stay 7+ nights and receive 30% off your entire booking.',
-      code: 'STAY30',
-      validUntil: '2025-12-15',
-      terms: ['Minimum 7 nights stay', 'Valid for all room types', 'Advance booking required'],
-      image: '/Images/park-hyatt-sydney.png',
-      fallback: '/assets/images/external/offers/long-stay-discount.jpg',
-      originalPrice: 220,
-      discountedPrice: 154,
-      featured: true
-    },
-    {
-      id: 4,
-      category: 'premium',
-      title: 'Honeymoon Package',
-      discount: '35% OFF',
-      description: 'Celebrate love with our romantic honeymoon package. Includes spa treatments, candlelit dinner, and premium amenities.',
-      code: 'LOVE35',
-      validUntil: '2026-02-14',
-      terms: ['Proof of marriage required', 'Includes spa and dining credits', 'Premium room upgrade included'],
-      image: '/Images/f_a6ac69d2b315fc52106206940c54e2e36375e06e.jpg',
-      fallback: '/assets/images/external/offers/honeymoon-package.jpg',
-      originalPrice: 400,
-      discountedPrice: 260,
-      featured: true
-    },
-    {
-      id: 5,
-      category: 'group',
-      title: 'Group Booking Special',
-      discount: '15% OFF',
-      description: 'Perfect for corporate events, family reunions, or friend getaways. Book 5+ rooms and save 15%.',
-      code: 'GROUP15',
-      validUntil: '2025-12-31',
-      terms: ['Minimum 5 rooms required', 'All rooms must be booked together', 'Contact us for custom packages'],
-      image: '/Images/istockphoto-1452529483-612x612.jpg',
-      fallback: '/assets/images/external/offers/group-booking-special.jpg',
-      originalPrice: 160,
-      discountedPrice: 136,
-      featured: false
-    },
-    {
-      id: 6,
-      category: 'seasonal',
-      title: 'Summer Paradise',
-      discount: '22% OFF',
-      description: 'Beat the heat with our summer special. Cool off in our pools and enjoy refreshing tropical drinks.',
-      code: 'SUMMER22',
-      validUntil: '2025-08-31',
-      terms: ['Valid June to August', 'Includes welcome drink', 'Pool access and activities included'],
-      image: '/Images/umbrella-pool-chair.jpg',
-      fallback: '/assets/images/external/offers/summer-paradise.jpg',
-      originalPrice: 190,
-      discountedPrice: 148,
-      featured: false
-    }
-  ];
+    // Generate description based on applies_to
+    const appliesTo = d.applies_to === 'SERVICES' 
+      ? 'hotel services' 
+      : d.applies_to === 'SERVICES_AND_ROOMS' 
+      ? 'rooms and services' 
+      : 'room bookings';
 
-  const filteredOffers = selectedCategory === 'all' 
-    ? offers 
-    : offers.filter(offer => offer.category === selectedCategory);
+    const description = isPercentage
+      ? `Get ${d.discount_value}% off on ${appliesTo}`
+      : `Save $${d.discount_value} on ${appliesTo}`;
 
-  const featuredOffers = offers.filter(offer => offer.featured);
+    // Format dates
+    const startDate = d.start_date ? new Date(d.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Now';
+    const endDate = d.end_date ? new Date(d.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Ongoing';
 
-  // Intersection Observer for animations
+    return {
+      id: d.discount_id,
+      title,
+      code: d.discount_name,
+      discountText,
+      discountValue: d.discount_value,
+      isPercentage,
+      description,
+      appliesTo: d.applies_to,
+      startDate,
+      endDate,
+      rawStartDate: d.start_date,
+      rawEndDate: d.end_date
+    };
+  };
+
+  // Fetch active discounts from backend
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setIsVisible(prev => ({ ...prev, [entry.target.id]: true }));
+    let mounted = true;
+
+    const fetchDiscounts = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const response = await discountService.getAllDiscounts({ active_only: 'true' });
+        
+        if (response.success && mounted) {
+          const discountList = response.discounts?.discounts || [];
+          
+          if (discountList.length === 0) {
+            setError('No active offers available at the moment.');
+          } else {
+            const mappedOffers = discountList.map(mapDiscountToOffer);
+            setOffers(mappedOffers);
           }
-        });
-      },
-      { threshold: 0.1 }
-    );
+        } else if (mounted) {
+          setError(response.message || 'Failed to load offers. Please try again later.');
+          console.error('Failed to fetch discounts:', response);
+        }
+      } catch (err) {
+        if (mounted) {
+          setError('Unable to connect to the server. Please check your connection.');
+          console.error('Error loading discounts:', err);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
 
-    const elements = document.querySelectorAll('.reveal');
-    elements.forEach((el) => observer.observe(el));
+    fetchDiscounts();
 
-    return () => observer.disconnect();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const handleBookNow = (offer) => {
-    // In a real app, you might pass the offer details to the booking page
+    console.log('Booking offer:', offer);
     setCurrentPage('booking');
   };
 
+  const copyPromoCode = (code) => {
+    navigator.clipboard.writeText(code).then(() => {
+      alert(`Promo code "${code}" copied to clipboard!`);
+    }).catch(err => {
+      console.error('Failed to copy:', err);
+    });
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-20 pt-32">
-      <div className="max-w-7xl mx-auto px-6">
-        {/* Header */}
-        <div className={`text-center mb-16 reveal ${isVisible['offers-header'] ? 'active' : ''}`} id="offers-header">
-          <h1 className="text-5xl md:text-6xl font-light text-gray-800 mb-4">
-            Exclusive Offers & Deals
+    <div className="min-h-screen bg-gray-50 py-20 pt-32">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        {/* Header Section */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+            Special Offers & Discounts
           </h1>
-          <div className="w-24 h-1 bg-gradient-to-r from-amber-400 to-amber-600 mx-auto mb-6"></div>
-          <p className="text-lg text-gray-600 max-w-3xl mx-auto">
-            Discover incredible savings and special packages designed to make your stay even more memorable.
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            Take advantage of our exclusive offers and save on your next stay
           </p>
         </div>
 
-        {/* Featured Offers Banner */}
-        <div className={`mb-16 reveal ${isVisible['featured-banner'] ? 'active' : ''}`} id="featured-banner">
-          <div className="bg-gradient-to-r from-amber-500 to-amber-600 rounded-3xl p-8 md:p-12 text-white text-center">
-            <h2 className="text-3xl md:text-4xl font-light mb-4">🎉 Featured Deals</h2>
-            <p className="text-xl mb-6 opacity-90">Limited time offers you won't want to miss!</p>
-            <div className="grid md:grid-cols-3 gap-6">
-              {featuredOffers.slice(0, 3).map((offer, index) => (
-                <div key={offer.id} className="bg-white/20 backdrop-blur-sm rounded-2xl p-6 card-hover">
-                  <div className="text-3xl font-bold mb-2">{offer.discount}</div>
-                  <div className="text-lg font-medium mb-2">{offer.title}</div>
-                  <div className="text-sm opacity-80">Code: {offer.code}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Category Filter */}
-        <div className={`mb-12 reveal ${isVisible['category-filter'] ? 'active' : ''}`} id="category-filter">
-          <div className="flex flex-wrap justify-center gap-4">
-            {categories.map((category) => {
-              const IconComponent = category.icon;
-              return (
-                <button
-                  key={category.id}
-                  onClick={() => setSelectedCategory(category.id)}
-                  className={`flex items-center space-x-2 px-6 py-3 rounded-full font-medium transition-all duration-300 ${
-                    selectedCategory === category.id
-                      ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-lg transform scale-105'
-                      : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200 hover:border-amber-300'
-                  }`}
-                >
-                  <IconComponent className="w-5 h-5" />
-                  <span>{category.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Offers Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredOffers.map((offer, index) => (
-            <div 
-              key={offer.id}
-              className={`bg-white rounded-3xl overflow-hidden shadow-xl card-hover reveal ${isVisible[`offer-${offer.id}`] ? 'active' : ''}`}
-              id={`offer-${offer.id}`}
-              style={{ animationDelay: `${index * 0.1}s` }}
-            >
-              {/* Offer Image */}
-              <div className="relative h-48 overflow-hidden">
-                <img 
-                  src={offer.image} 
-                  alt={offer.title}
-                  className="w-full h-full object-cover image-hover"
-                  onError={(e) => {
-                    e.target.src = offer.fallback;
-                  }}
-                />
-                <div className="absolute top-4 right-4">
-                  <div className="bg-red-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">
-                    {offer.discount}
-                  </div>
-                </div>
-                {offer.featured && (
-                  <div className="absolute top-4 left-4">
-                    <div className="bg-amber-500 text-white px-3 py-1 rounded-full text-xs font-semibold flex items-center">
-                      <Star className="w-3 h-3 mr-1 fill-current" />
-                      Featured
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Offer Content */}
-              <div className="p-8">
-                <h3 className="text-2xl font-semibold text-gray-800 mb-3">{offer.title}</h3>
-                <p className="text-gray-600 mb-6 leading-relaxed">{offer.description}</p>
-
-                {/* Pricing */}
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-2xl font-bold text-amber-600">
-                        ${offer.discountedPrice}
-                      </span>
-                      <span className="text-lg text-gray-400 line-through">
-                        ${offer.originalPrice}
-                      </span>
-                    </div>
-                    <div className="text-sm text-gray-500">per night</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm text-gray-500 mb-1">Promo Code</div>
-                    <div className="font-mono font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded">
-                      {offer.code}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Terms */}
-                <div className="mb-6">
-                  <h4 className="text-sm font-semibold text-gray-700 mb-2">Terms & Conditions:</h4>
-                  <ul className="text-xs text-gray-600 space-y-1">
-                    {offer.terms.map((term, termIndex) => (
-                      <li key={termIndex} className="flex items-start">
-                        <span className="text-amber-500 mr-2">•</span>
-                        {term}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* Valid Until */}
-                <div className="flex items-center justify-between mb-6 text-sm text-gray-500">
-                  <span className="flex items-center">
-                    <Clock className="w-4 h-4 mr-1" />
-                    Valid until {new Date(offer.validUntil).toLocaleDateString()}
-                  </span>
-                </div>
-
-                {/* Action Button */}
-                <button 
-                  onClick={() => handleBookNow(offer)}
-                  className="w-full btn-primary"
-                >
-                  Book This Deal
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* No offers message */}
-        {filteredOffers.length === 0 && (
-          <div className="text-center py-16">
-            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Gift className="w-10 h-10 text-gray-400" />
-            </div>
-            <h3 className="text-2xl font-light text-gray-600 mb-4">No offers found</h3>
-            <p className="text-gray-500 mb-8">Try selecting a different category to see more deals.</p>
-            <button 
-              onClick={() => setSelectedCategory('all')}
-              className="btn-secondary"
-            >
-              View All Offers
-            </button>
+        {/* Loading State */}
+        {loading && (
+          <div className="flex flex-col items-center justify-center py-20">
+            <Loader className="w-12 h-12 text-amber-600 animate-spin mb-4" />
+            <p className="text-gray-600 text-lg">Loading available offers...</p>
           </div>
         )}
 
+        {/* Error State */}
+        {!loading && error && (
+          <div className="max-w-md mx-auto bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
+            <p className="text-red-800 font-medium">{error}</p>
+          </div>
+        )}
+
+        {/* Offers Grid */}
+        {!loading && !error && offers.length > 0 && (
+          <>
+            <div className="mb-6 text-center">
+              <p className="text-gray-700">
+                <span className="font-semibold text-amber-600">{offers.length}</span> active offer{offers.length !== 1 ? 's' : ''} available
+              </p>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {offers.map((offer) => (
+                <div
+                  key={offer.id}
+                  className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
+                >
+                  {/* Discount Badge Header */}
+                  <div className="bg-gradient-to-r from-amber-500 to-amber-600 p-6 text-white text-center">
+                    <div className="flex items-center justify-center mb-2">
+                      <TrendingDown className="w-8 h-8 mr-2" />
+                      <span className="text-5xl font-bold">{offer.discountText}</span>
+                    </div>
+                    <div className="text-amber-100 text-sm font-medium uppercase tracking-wide">
+                      {offer.isPercentage ? 'Percentage Discount' : 'Fixed Discount'}
+                    </div>
+                  </div>
+
+                  {/* Offer Details */}
+                  <div className="p-6">
+                    {/* Title */}
+                    <h3 className="text-2xl font-bold text-gray-900 mb-3">
+                      {offer.title}
+                    </h3>
+
+                    {/* Description */}
+                    <p className="text-gray-600 mb-4 leading-relaxed">
+                      {offer.description}
+                    </p>
+
+                    {/* Valid Period */}
+                    <div className="flex items-start mb-4 text-sm text-gray-600">
+                      <Calendar className="w-5 h-5 mr-2 flex-shrink-0 text-amber-600" />
+                      <div>
+                        <div className="font-medium text-gray-700">Valid Period:</div>
+                        <div>{offer.startDate} - {offer.endDate}</div>
+                      </div>
+                    </div>
+
+                    {/* Applies To */}
+                    <div className="flex items-center mb-4 text-sm">
+                      <Check className="w-5 h-5 mr-2 text-green-600" />
+                      <span className="text-gray-700">
+                        Applies to: <span className="font-medium">{offer.appliesTo.replace(/_/g, ' ')}</span>
+                      </span>
+                    </div>
+
+                    {/* Promo Code */}
+                    <div className="mb-6">
+                      <div className="text-sm text-gray-600 mb-2">Promo Code:</div>
+                      <div className="flex items-center">
+                        <div className="flex-1 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg px-4 py-3 font-mono font-bold text-amber-600 text-center">
+                          {offer.code}
+                        </div>
+                        <button
+                          onClick={() => copyPromoCode(offer.code)}
+                          className="ml-2 p-3 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
+                          title="Copy code"
+                        >
+                          <Tag className="w-5 h-5 text-gray-700" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Book Now Button */}
+                    <button
+                      onClick={() => handleBookNow(offer)}
+                      className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-300 shadow-md hover:shadow-lg"
+                    >
+                      Book Now & Save
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Empty State */}
+        {!loading && !error && offers.length === 0 && (
+          <div className="max-w-md mx-auto text-center py-20">
+            <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Tag className="w-10 h-10 text-gray-400" />
+            </div>
+            <h3 className="text-2xl font-semibold text-gray-800 mb-3">
+              No Active Offers
+            </h3>
+            <p className="text-gray-600 mb-6">
+              There are no active discount offers at the moment. Please check back later for great deals!
+            </p>
+          </div>
+        )}
 
       </div>
-
-      <style>{`
-        .reveal {
-          opacity: 0;
-          transform: translateY(30px);
-          transition: all 0.6s ease;
-        }
-        
-        .reveal.active {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      `}</style>
     </div>
   );
 };

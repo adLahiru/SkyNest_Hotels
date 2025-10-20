@@ -5,6 +5,7 @@ import HomePage from './components/HomePage';
 import BranchSelectionPage from './components/BranchSelectionPage';
 import RoomSelectionPage from './components/RoomSelectionPage';
 import BookingPage from './components/BookingPage';
+import BillPage from './components/BillPage';
 import OffersPage from './components/OffersPage';
 import ContactPage from './components/ContactPage';
 import LoginPage from './components/LoginPage';
@@ -23,6 +24,7 @@ const App = () => {
   // Booking flow state
   const [selectedBranch, setSelectedBranch] = useState(null);
   const [selectedRoom, setSelectedRoom] = useState(null);
+  const [billData, setBillData] = useState(null);
   const [pendingBookingRoom, setPendingBookingRoom] = useState(null); // For login redirect
   const [returnToPage, setReturnToPage] = useState(null); // For login redirect
 
@@ -118,6 +120,35 @@ const App = () => {
     setCurrentPage('room-selection');
   };
 
+  const handleProceedToBill = (bookingData) => {
+    setBillData(bookingData);
+    setCurrentPage('bill');
+  };
+
+  const handleBackToBooking = () => {
+    setCurrentPage('booking-form');
+  };
+
+  const handleConfirmPayment = async (finalBillData) => {
+    // TODO: Implement booking storage in database
+    console.log('Confirming booking:', finalBillData);
+    // For now, show a success message
+    alert('Booking confirmed successfully! Thank you for choosing SkyNest Hotels.');
+    // Reset booking flow
+    setSelectedBranch(null);
+    setSelectedRoom(null);
+    setBillData(null);
+    setCurrentPage('home');
+  };
+
+  const handleMakeAnotherBooking = () => {
+    // Reset booking state but keep user logged in
+    setSelectedBranch(null);
+    setSelectedRoom(null);
+    setBillData(null);
+    setCurrentPage('branch-selection');
+  };
+
   const renderCurrentPage = () => {
     switch (currentPage) {
       case 'home':
@@ -154,7 +185,20 @@ const App = () => {
             selectedRoom={selectedRoom}
             selectedBranch={selectedBranch}
             onBackToRooms={handleBackToRooms}
+            onProceedToBill={handleProceedToBill}
           />
+        );
+
+      case 'bill':
+        return billData ? (
+          <BillPage 
+            bookingData={billData}
+            onBack={handleBackToBooking}
+            onConfirm={handleConfirmPayment}
+            onMakeAnotherBooking={handleMakeAnotherBooking}
+          />
+        ) : (
+          <HomePage setCurrentPage={setCurrentPage} />
         );
         
       case 'offers':
