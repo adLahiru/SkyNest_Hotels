@@ -4,6 +4,7 @@ import userRoutes from './userRoutes';
 import branchRoutes from './branchRoutes';
 import roomTypeRoutes from './roomTypeRoutes';
 import serviceCatalogueRoutes from './serviceCatalogueRoutes';
+import serviceUsageRoutes from './serviceUsageRoutes';
 import discountRoutes from './discountRoutes';
 import roomRoutes from './roomRoutes';
 import bookingRoutes from './bookingRoutes';
@@ -34,6 +35,9 @@ router.use('/bookings', bookingRoutes);
 // Mount service catalogue routes
 router.use('/services', serviceCatalogueRoutes);
 
+// Mount service usage routes
+router.use('/service-usage', serviceUsageRoutes);
+
 // Mount discount routes
 router.use('/discounts', discountRoutes);
 
@@ -60,6 +64,7 @@ router.get('/health', (req, res) => {
       rooms: 'Available at /api/rooms',
       bookings: 'Available at /api/bookings',
       services: 'Available at /api/services',
+      serviceUsage: 'Available at /api/service-usage',
       discounts: 'Available at /api/discounts',
       dashboard: 'Available at /api/dashboard',
       contact: 'Available at /api/contact',

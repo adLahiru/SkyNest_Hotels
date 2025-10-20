@@ -89,7 +89,7 @@ export const createDiscount = async (req: AuthenticatedRequest, res: Response): 
       return;
     }
 
-    const { discount_name, type, discount_value, applies_to, start_date, end_date } = req.body;
+    const { discount_name, type, discount_value, applies_to, start_date, end_date, room_type_ids, service_ids } = req.body;
 
     // Validate required fields
     if (!discount_name || !type || discount_value === undefined || !applies_to) {
@@ -209,9 +209,30 @@ export const createDiscount = async (req: AuthenticatedRequest, res: Response): 
       return;
     }
 
-    await connection.commit();
-
     const discount = newDiscount[0];
+    const discount_id = discount.discount_id;
+
+    // Insert room type associations if provided
+    if (room_type_ids && Array.isArray(room_type_ids) && room_type_ids.length > 0) {
+      for (const room_type_id of room_type_ids) {
+        await connection.query(
+          'INSERT INTO discount_room_type (discount_id, room_type_id) VALUES (?, ?)',
+          [discount_id, room_type_id]
+        );
+      }
+    }
+
+    // Insert service associations if provided
+    if (service_ids && Array.isArray(service_ids) && service_ids.length > 0) {
+      for (const service_id of service_ids) {
+        await connection.query(
+          'INSERT INTO discount_service (discount_id, service_id) VALUES (?, ?)',
+          [discount_id, service_id]
+        );
+      }
+    }
+
+    await connection.commit();
 
     res.status(201).json({
       success: true,
@@ -226,6 +247,8 @@ export const createDiscount = async (req: AuthenticatedRequest, res: Response): 
           start_date: discount.start_date,
           end_date: discount.end_date,
           is_active: isDiscountActive(discount),
+          room_type_ids: room_type_ids || [],
+          service_ids: service_ids || [],
           created_at: discount.created_at,
           updated_at: discount.updated_at
         }
@@ -356,6 +379,20 @@ export const getDiscountById = async (req: AuthenticatedRequest, res: Response):
       return;
     }
 
+    // Fetch associated room types
+    const [roomTypes] = await db.query<RowDataPacket[]>(
+      'SELECT room_type_id FROM discount_room_type WHERE discount_id = ?',
+      [discount_id]
+    );
+    const room_type_ids = roomTypes.map((rt: any) => rt.room_type_id);
+
+    // Fetch associated services
+    const [services] = await db.query<RowDataPacket[]>(
+      'SELECT service_id FROM discount_service WHERE discount_id = ?',
+      [discount_id]
+    );
+    const service_ids = services.map((s: any) => s.service_id);
+
     res.status(200).json({
       success: true,
       message: 'Discount retrieved successfully.',
@@ -369,6 +406,8 @@ export const getDiscountById = async (req: AuthenticatedRequest, res: Response):
           start_date: discount.start_date,
           end_date: discount.end_date,
           is_active: isDiscountActive(discount),
+          room_type_ids,
+          service_ids,
           created_at: discount.created_at,
           updated_at: discount.updated_at
         }
@@ -404,7 +443,7 @@ export const updateDiscount = async (req: AuthenticatedRequest, res: Response): 
     }
 
     const { discount_id } = req.params;
-    const { discount_name, type, discount_value, applies_to, start_date, end_date } = req.body;
+    const { discount_name, type, discount_value, applies_to, start_date, end_date, room_type_ids, service_ids } = req.body;
 
     // Check if discount exists
     const [existingDiscounts] = await connection.query<Discount[]>(
@@ -555,6 +594,44 @@ export const updateDiscount = async (req: AuthenticatedRequest, res: Response): 
       values
     );
 
+    // Update room type associations if provided
+    if (room_type_ids !== undefined) {
+      // Delete existing associations
+      await connection.query(
+        'DELETE FROM discount_room_type WHERE discount_id = ?',
+        [discount_id]
+      );
+      
+      // Insert new associations
+      if (Array.isArray(room_type_ids) && room_type_ids.length > 0) {
+        for (const room_type_id of room_type_ids) {
+          await connection.query(
+            'INSERT INTO discount_room_type (discount_id, room_type_id) VALUES (?, ?)',
+            [discount_id, room_type_id]
+          );
+        }
+      }
+    }
+
+    // Update service associations if provided
+    if (service_ids !== undefined) {
+      // Delete existing associations
+      await connection.query(
+        'DELETE FROM discount_service WHERE discount_id = ?',
+        [discount_id]
+      );
+      
+      // Insert new associations
+      if (Array.isArray(service_ids) && service_ids.length > 0) {
+        for (const service_id of service_ids) {
+          await connection.query(
+            'INSERT INTO discount_service (discount_id, service_id) VALUES (?, ?)',
+            [discount_id, service_id]
+          );
+        }
+      }
+    }
+
     // Fetch updated discount
     const [updatedDiscounts] = await connection.query<Discount[]>(
       'SELECT * FROM discount WHERE discount_id = ?',
@@ -573,6 +650,20 @@ export const updateDiscount = async (req: AuthenticatedRequest, res: Response): 
       return;
     }
 
+    // Fetch associated room types
+    const [roomTypes] = await connection.query<RowDataPacket[]>(
+      'SELECT room_type_id FROM discount_room_type WHERE discount_id = ?',
+      [discount_id]
+    );
+    const updated_room_type_ids = roomTypes.map((rt: any) => rt.room_type_id);
+
+    // Fetch associated services
+    const [services] = await connection.query<RowDataPacket[]>(
+      'SELECT service_id FROM discount_service WHERE discount_id = ?',
+      [discount_id]
+    );
+    const updated_service_ids = services.map((s: any) => s.service_id);
+
     res.status(200).json({
       success: true,
       message: 'Discount updated successfully.',
@@ -586,6 +677,8 @@ export const updateDiscount = async (req: AuthenticatedRequest, res: Response): 
           start_date: discount.start_date,
           end_date: discount.end_date,
           is_active: isDiscountActive(discount),
+          room_type_ids: updated_room_type_ids,
+          service_ids: updated_service_ids,
           created_at: discount.created_at,
           updated_at: discount.updated_at
         }

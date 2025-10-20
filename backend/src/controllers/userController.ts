@@ -1167,6 +1167,56 @@ export class UserController {
         return;
       }
 
+      // Guard: prevent deletion when dependent records exist
+      const [bkRows] = await db.query<any>(
+        `SELECT COUNT(*) AS booking_count FROM booking WHERE user_id = ?`,
+        [userId]
+      );
+      const booking_count = (bkRows && (bkRows as any)[0] && (bkRows as any)[0].booking_count)
+        ? Number((bkRows as any)[0].booking_count)
+        : 0;
+
+      let payments_count = 0;
+      let tx_count = 0;
+
+      if (booking_count > 0) {
+        const [pRows] = await db.query<any>(
+          `SELECT COUNT(*) AS payments_count
+           FROM payments p
+           JOIN booking b ON b.booking_id = p.booking_id
+           WHERE b.user_id = ?`,
+          [userId]
+        );
+        payments_count = (pRows && (pRows as any)[0] && (pRows as any)[0].payments_count)
+          ? Number((pRows as any)[0].payments_count)
+          : 0;
+
+        const [tRows] = await db.query<any>(
+          `SELECT COUNT(*) AS tx_count
+           FROM payment_transactions t
+           JOIN payments p ON p.payment_id = t.payment_id
+           JOIN booking b ON b.booking_id = p.booking_id
+           WHERE b.user_id = ?`,
+          [userId]
+        );
+        tx_count = (tRows && (tRows as any)[0] && (tRows as any)[0].tx_count)
+          ? Number((tRows as any)[0].tx_count)
+          : 0;
+      }
+
+      if (booking_count > 0 || payments_count > 0 || tx_count > 0) {
+        res.status(409).json({
+          success: false,
+          message: 'User has related bookings/payments and cannot be deleted. Delete or reassign dependent records first.',
+          data: {
+            booking_count,
+            payments_count,
+            payment_transactions_count: tx_count
+          }
+        } as ApiResponse);
+        return;
+      }
+
       // Get a connection from pool for transaction
       const connection = await db.getConnection();
 

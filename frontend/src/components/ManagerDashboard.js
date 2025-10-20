@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, DoorOpen, Calendar, DollarSign, Home, UserCheck, UserX, FileText, BarChart3 } from 'lucide-react';
+import { Building2, Users, DoorOpen, Calendar, DollarSign, Home, UserCheck, UserX, FileText, BarChart3, ClipboardList } from 'lucide-react';
 import dashboardService from '../services/dashboardService';
 import ReportsMain from './Reports/ReportsMain';
+import PendingGuestsManager from './PendingGuestsManager';
+import CurrentGuestsManager from './CurrentGuestsManager';
 
 const ManagerDashboard = ({ user }) => {
   const [stats, setStats] = useState(null);
@@ -62,6 +64,28 @@ const ManagerDashboard = ({ user }) => {
               >
                 <BarChart3 className="w-5 h-5 inline-block mr-2" />
                 Overview
+              </button>
+              <button
+                onClick={() => setActiveTab('pending')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'pending'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <ClipboardList className="w-5 h-5 inline-block mr-2" />
+                Pending Guests
+              </button>
+              <button
+                onClick={() => setActiveTab('current')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'current'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <Users className="w-5 h-5 inline-block mr-2" />
+                Current Guests
               </button>
               <button
                 onClick={() => setActiveTab('reports')}
@@ -305,6 +329,16 @@ const ManagerDashboard = ({ user }) => {
           </div>
         </div>
           </>
+        )}
+
+        {/* Pending Guests Tab */}
+        {activeTab === 'pending' && (
+          <PendingGuestsManager user={user} />
+        )}
+
+        {/* Current Guests Tab */}
+        {activeTab === 'current' && (
+          <CurrentGuestsManager user={user} />
         )}
 
         {/* Reports Tab */}

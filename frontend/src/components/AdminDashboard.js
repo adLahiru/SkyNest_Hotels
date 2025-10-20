@@ -113,6 +113,42 @@ const AdminDashboard = ({ user }) => {
   const [services, setServices] = useState([]);
   const [loadingServices, setLoadingServices] = useState(false);
   const [serviceSearchQuery, setServiceSearchQuery] = useState('');
+  const [serviceCategoryFilter, setServiceCategoryFilter] = useState('');
+  const [showAddServiceModal, setShowAddServiceModal] = useState(false);
+  const [showEditServiceModal, setShowEditServiceModal] = useState(false);
+  const [showDeleteServiceConfirmModal, setShowDeleteServiceConfirmModal] = useState(false);
+  const [selectedService, setSelectedService] = useState(null);
+  const [serviceFormData, setServiceFormData] = useState({
+    service_name: '',
+    category: '',
+    unit_price: '',
+    is_active: true,
+    image_url: ''
+  });
+  const [serviceFormErrors, setServiceFormErrors] = useState({});
+  const [serviceSubmitMessage, setServiceSubmitMessage] = useState({ type: '', text: '' });
+
+  // Discount/Offers management states
+  const [discounts, setDiscounts] = useState([]);
+  const [loadingDiscounts, setLoadingDiscounts] = useState(false);
+  const [discountSearchQuery, setDiscountSearchQuery] = useState('');
+  const [discountCategoryFilter, setDiscountCategoryFilter] = useState('');
+  const [showAddDiscountModal, setShowAddDiscountModal] = useState(false);
+  const [showEditDiscountModal, setShowEditDiscountModal] = useState(false);
+  const [showDeleteDiscountConfirmModal, setShowDeleteDiscountConfirmModal] = useState(false);
+  const [selectedDiscount, setSelectedDiscount] = useState(null);
+  const [discountFormData, setDiscountFormData] = useState({
+    discount_name: '',
+    type: 'rate',
+    discount_value: '',
+    applies_to: 'SERVICES_AND_ROOMS',
+    start_date: '',
+    end_date: '',
+    room_type_ids: [],
+    service_ids: []
+  });
+  const [discountFormErrors, setDiscountFormErrors] = useState({});
+  const [discountSubmitMessage, setDiscountSubmitMessage] = useState({ type: '', text: '' });
   const [showAddServiceModal, setShowAddServiceModal] = useState(false);
   const [serviceFormData, setServiceFormData] = useState({
     service_name: '',
@@ -143,8 +179,10 @@ const AdminDashboard = ({ user }) => {
       fetchBranches();
     } else if (activeTab === 'services') {
       fetchServices();
+    } else if (activeTab === 'offers') {
+      fetchDiscounts();
     }
-  }, [activeTab, searchQuery, roleFilter, roomSearchQuery, roomStateFilter, roomTypeFilter, roomBranchFilter, roomFloorFilter, roomTypeSearchQuery, minCapacityFilter, maxCapacityFilter, minPriceFilter, maxPriceFilter, branchSearchQuery, serviceSearchQuery]);
+  }, [activeTab, searchQuery, roleFilter, roomSearchQuery, roomStateFilter, roomTypeFilter, roomBranchFilter, roomFloorFilter, roomTypeSearchQuery, minCapacityFilter, maxCapacityFilter, minPriceFilter, maxPriceFilter, branchSearchQuery, serviceSearchQuery, serviceCategoryFilter, discountSearchQuery, discountCategoryFilter]);
 
   const fetchDashboardStats = async () => {
     setLoading(true);
@@ -1150,6 +1188,52 @@ const AdminDashboard = ({ user }) => {
     setSelectedBranch(null);
   };
 
+  // ========== SERVICE MANAGEMENT FUNCTIONS ==========
+  
+  const fetchServices = async () => {
+    setLoadingServices(true);
+    const filters = {};
+    if (serviceCategoryFilter) filters.category = serviceCategoryFilter;
+    
+    const result = await serviceCatalogueService.getAllServices(filters);
+    if (result.success) {
+      const servicesData = Array.isArray(result.services) ? result.services : [];
+      setServices(servicesData);
+    } else {
+      console.error('Failed to fetch services:', result.message);
+      setServices([]);
+    }
+    setLoadingServices(false);
+  };
+
+  const handleAddServiceClick = () => {
+    setServiceFormData({
+      service_name: '',
+      category: '',
+      unit_price: '',
+      is_active: true,
+      image_url: ''
+    });
+    setServiceFormErrors({});
+    setServiceSubmitMessage({ type: '', text: '' });
+    setShowAddServiceModal(true);
+  };
+
+  const handleEditServiceClick = (service) => {
+    setSelectedService(service);
+    setServiceFormData({
+      service_name: service.service_name,
+      category: service.category,
+      unit_price: service.unit_price,
+      is_active: service.is_active,
+      image_url: service.image_url || ''
+    });
+    setServiceFormErrors({});
+    setServiceSubmitMessage({ type: '', text: '' });
+    setShowEditServiceModal(true);
+  };
+
+  const handleServiceFormChange = (e) => {
   // Service Management Functions
   const processServiceImageFile = (file) => {
     // Validate file type
@@ -1239,6 +1323,8 @@ const AdminDashboard = ({ user }) => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+    if (serviceFormErrors[name]) {
+      setServiceFormErrors(prev => ({ ...prev, [name]: '' }));
     
     // Clear error for this field
     if (serviceFormErrors[name]) {
@@ -1252,6 +1338,16 @@ const AdminDashboard = ({ user }) => {
   const validateServiceForm = () => {
     const errors = {};
     
+    if (!serviceFormData.service_name.trim()) {
+      errors.service_name = 'Service name is required';
+    }
+    
+    if (!serviceFormData.category.trim()) {
+      errors.category = 'Category is required';
+    }
+    
+    if (!serviceFormData.unit_price || parseFloat(serviceFormData.unit_price) <= 0) {
+      errors.unit_price = 'Valid unit price is required';
     if (!serviceFormData.service_name?.trim()) {
       errors.service_name = 'Service name is required';
     }
@@ -1268,6 +1364,7 @@ const AdminDashboard = ({ user }) => {
     return Object.keys(errors).length === 0;
   };
 
+  const handleSubmitAddService = async (e) => {
   const handleSubmitService = async (e) => {
     e.preventDefault();
     
@@ -1278,6 +1375,15 @@ const AdminDashboard = ({ user }) => {
     setLoadingServices(true);
     setServiceSubmitMessage({ type: '', text: '' });
     
+    const serviceData = {
+      service_name: serviceFormData.service_name.trim(),
+      category: serviceFormData.category.trim(),
+      unit_price: parseFloat(serviceFormData.unit_price),
+      is_active: serviceFormData.is_active,
+      image_url: serviceFormData.image_url.trim() || null
+    };
+
+    const result = await serviceCatalogueService.createService(serviceData);
     const result = await serviceCatalogueService.createService({
       ...serviceFormData,
       price: parseFloat(serviceFormData.price)
@@ -1294,6 +1400,274 @@ const AdminDashboard = ({ user }) => {
     }
     
     setLoadingServices(false);
+  };
+
+  const handleSubmitEditService = async (e) => {
+    e.preventDefault();
+    
+    if (!validateServiceForm() || !selectedService) {
+      return;
+    }
+
+    setLoadingServices(true);
+    setServiceSubmitMessage({ type: '', text: '' });
+    
+    const serviceData = {
+      service_name: serviceFormData.service_name.trim(),
+      category: serviceFormData.category.trim(),
+      unit_price: parseFloat(serviceFormData.unit_price),
+      is_active: serviceFormData.is_active,
+      image_url: serviceFormData.image_url.trim() || null
+    };
+
+    const result = await serviceCatalogueService.updateService(selectedService.service_id, serviceData);
+    
+    if (result.success) {
+      setServiceSubmitMessage({ type: 'success', text: 'Service updated successfully!' });
+      setTimeout(() => {
+        setShowEditServiceModal(false);
+        setSelectedService(null);
+        fetchServices();
+      }, 1500);
+    } else {
+      setServiceSubmitMessage({ type: 'error', text: result.message || 'Failed to update service' });
+    }
+    
+    setLoadingServices(false);
+  };
+
+  const handleDeleteServiceClick = (service) => {
+    setSelectedService(service);
+    setShowDeleteServiceConfirmModal(true);
+  };
+
+  const handleConfirmDeleteService = async () => {
+    if (!selectedService) return;
+
+    setLoadingServices(true);
+    
+    const result = await serviceCatalogueService.deleteService(selectedService.service_id);
+    
+    if (result.success) {
+      setShowDeleteServiceConfirmModal(false);
+      setSelectedService(null);
+      setTimeout(() => {
+        fetchServices();
+      }, 500);
+    } else {
+      setServiceSubmitMessage({ type: 'error', text: result.message || 'Failed to delete service' });
+    }
+    
+    setLoadingServices(false);
+  };
+
+  const handleCancelDeleteService = () => {
+    setShowDeleteServiceConfirmModal(false);
+    setSelectedService(null);
+  };
+
+  // ========== DISCOUNT/OFFERS MANAGEMENT FUNCTIONS ==========
+  
+  const fetchDiscounts = async () => {
+    setLoadingDiscounts(true);
+    const filters = {};
+    if (discountCategoryFilter) filters.applies_to = discountCategoryFilter;
+    
+    const result = await discountService.getAllDiscounts(filters);
+    if (result.success) {
+      const discountsData = Array.isArray(result.discounts) ? result.discounts : [];
+      setDiscounts(discountsData);
+    } else {
+      console.error('Failed to fetch discounts:', result.message);
+      setDiscounts([]);
+    }
+    setLoadingDiscounts(false);
+  };
+
+  const handleAddDiscountClick = () => {
+    setDiscountFormData({
+      discount_name: '',
+      type: 'rate',
+      discount_value: '',
+      applies_to: 'SERVICES_AND_ROOMS',
+      start_date: '',
+      end_date: '',
+      room_type_ids: [],
+      service_ids: []
+    });
+    setDiscountFormErrors({});
+    setDiscountSubmitMessage({ type: '', text: '' });
+    setShowAddDiscountModal(true);
+  };
+
+  const handleEditDiscountClick = (discount) => {
+    setSelectedDiscount(discount);
+    setDiscountFormData({
+      discount_name: discount.discount_name,
+      type: discount.type,
+      discount_value: discount.discount_value,
+      applies_to: discount.applies_to,
+      start_date: discount.start_date ? discount.start_date.split('T')[0] : '',
+      end_date: discount.end_date ? discount.end_date.split('T')[0] : '',
+      room_type_ids: discount.room_type_ids || [],
+      service_ids: discount.service_ids || []
+    });
+    setDiscountFormErrors({});
+    setDiscountSubmitMessage({ type: '', text: '' });
+    setShowEditDiscountModal(true);
+  };
+
+  const handleDiscountFormChange = (e) => {
+    const { name, value } = e.target;
+    setDiscountFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    if (discountFormErrors[name]) {
+      setDiscountFormErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const handleRoomTypeToggle = (roomTypeId) => {
+    setDiscountFormData(prev => {
+      const isSelected = prev.room_type_ids.includes(roomTypeId);
+      return {
+        ...prev,
+        room_type_ids: isSelected
+          ? prev.room_type_ids.filter(id => id !== roomTypeId)
+          : [...prev.room_type_ids, roomTypeId]
+      };
+    });
+  };
+
+  const handleServiceToggle = (serviceId) => {
+    setDiscountFormData(prev => {
+      const isSelected = prev.service_ids.includes(serviceId);
+      return {
+        ...prev,
+        service_ids: isSelected
+          ? prev.service_ids.filter(id => id !== serviceId)
+          : [...prev.service_ids, serviceId]
+      };
+    });
+  };
+
+  const validateDiscountForm = () => {
+    const errors = {};
+    
+    if (!discountFormData.discount_name.trim()) {
+      errors.discount_name = 'Discount name is required';
+    }
+    
+    if (!discountFormData.discount_value || parseFloat(discountFormData.discount_value) <= 0) {
+      errors.discount_value = 'Valid discount value is required';
+    }
+
+    if (discountFormData.type === 'rate' && parseFloat(discountFormData.discount_value) > 100) {
+      errors.discount_value = 'Percentage discount cannot exceed 100%';
+    }
+    
+    setDiscountFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmitAddDiscount = async (e) => {
+    e.preventDefault();
+    
+    if (!validateDiscountForm()) {
+      return;
+    }
+
+    setLoadingDiscounts(true);
+    setDiscountSubmitMessage({ type: '', text: '' });
+    
+    const discountData = {
+      discount_name: discountFormData.discount_name.trim(),
+      type: discountFormData.type,
+      discount_value: parseFloat(discountFormData.discount_value),
+      applies_to: discountFormData.applies_to,
+      start_date: discountFormData.start_date || null,
+      end_date: discountFormData.end_date || null
+    };
+
+    const result = await discountService.createDiscount(discountData);
+    
+    if (result.success) {
+      setDiscountSubmitMessage({ type: 'success', text: 'Offer created successfully!' });
+      setTimeout(() => {
+        setShowAddDiscountModal(false);
+        fetchDiscounts();
+      }, 1500);
+    } else {
+      setDiscountSubmitMessage({ type: 'error', text: result.message || 'Failed to create offer' });
+    }
+    
+    setLoadingDiscounts(false);
+  };
+
+  const handleSubmitEditDiscount = async (e) => {
+    e.preventDefault();
+    
+    if (!validateDiscountForm() || !selectedDiscount) {
+      return;
+    }
+
+    setLoadingDiscounts(true);
+    setDiscountSubmitMessage({ type: '', text: '' });
+    
+    const discountData = {
+      discount_name: discountFormData.discount_name.trim(),
+      type: discountFormData.type,
+      discount_value: parseFloat(discountFormData.discount_value),
+      applies_to: discountFormData.applies_to,
+      start_date: discountFormData.start_date || null,
+      end_date: discountFormData.end_date || null
+    };
+
+    const result = await discountService.updateDiscount(selectedDiscount.discount_id, discountData);
+    
+    if (result.success) {
+      setDiscountSubmitMessage({ type: 'success', text: 'Offer updated successfully!' });
+      setTimeout(() => {
+        setShowEditDiscountModal(false);
+        setSelectedDiscount(null);
+        fetchDiscounts();
+      }, 1500);
+    } else {
+      setDiscountSubmitMessage({ type: 'error', text: result.message || 'Failed to update offer' });
+    }
+    
+    setLoadingDiscounts(false);
+  };
+
+  const handleDeleteDiscountClick = (discount) => {
+    setSelectedDiscount(discount);
+    setShowDeleteDiscountConfirmModal(true);
+  };
+
+  const handleConfirmDeleteDiscount = async () => {
+    if (!selectedDiscount) return;
+
+    setLoadingDiscounts(true);
+    
+    const result = await discountService.deleteDiscount(selectedDiscount.discount_id);
+    
+    if (result.success) {
+      setShowDeleteDiscountConfirmModal(false);
+      setSelectedDiscount(null);
+      setTimeout(() => {
+        fetchDiscounts();
+      }, 500);
+    } else {
+      setDiscountSubmitMessage({ type: 'error', text: result.message || 'Failed to delete offer' });
+    }
+    
+    setLoadingDiscounts(false);
+  };
+
+  const handleCancelDeleteDiscount = () => {
+    setShowDeleteDiscountConfirmModal(false);
+    setSelectedDiscount(null);
   };
 
   const getRoleBadgeColor = (role) => {
@@ -1468,6 +1842,21 @@ const AdminDashboard = ({ user }) => {
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
+                <ShoppingBag className="w-5 h-5 inline-block mr-2" />
+                Services
+              </button>
+              <button
+                onClick={() => setActiveTab('offers')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'offers'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <Gift className="w-5 h-5 inline-block mr-2" />
+                Offers
+              </button>
+              <button
                 <Briefcase className="w-5 h-5 inline-block mr-2" />
                 Services
               </button>
@@ -2442,6 +2831,291 @@ const AdminDashboard = ({ user }) => {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Financial Tab */}
+            {activeTab === 'financial' && (
+              <div className="space-y-6">
+                {/* Header with search and filters */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <h3 className="text-2xl font-bold text-gray-900">Service Catalogue</h3>
+                  {user?.role === 'ADMIN' && (
+                    <button
+                      onClick={handleAddServiceClick}
+                      className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <Plus className="w-5 h-5 mr-2" />
+                      Add Service
+                    </button>
+                  )}
+                </div>
+
+                {/* Search and Filter Bar */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      placeholder="Search services..."
+                      value={serviceSearchQuery}
+                      onChange={(e) => setServiceSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <select
+                      value={serviceCategoryFilter}
+                      onChange={(e) => setServiceCategoryFilter(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">All Categories</option>
+                      {Array.isArray(services) && [...new Set(services.map(s => s.category))].filter(Boolean).map((category) => (
+                        <option key={category} value={category}>{category}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Services Table */}
+                {loadingServices ? (
+                  <div className="text-center py-12">
+                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+                    <p className="mt-4 text-gray-600">Loading services...</p>
+                  </div>
+                ) : (Array.isArray(services) ? services : []).filter(service => {
+                  const matchesSearch = !serviceSearchQuery || 
+                    service.service_name.toLowerCase().includes(serviceSearchQuery.toLowerCase()) ||
+                    service.category?.toLowerCase().includes(serviceSearchQuery.toLowerCase());
+                  return matchesSearch;
+                }).length === 0 ? (
+                  <div className="text-center py-12 bg-gray-50 rounded-lg">
+                    <ShoppingBag className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500 text-lg">No services found</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto bg-white rounded-lg shadow">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Service Name</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {(Array.isArray(services) ? services : []).filter(service => {
+                          const matchesSearch = !serviceSearchQuery || 
+                            service.service_name.toLowerCase().includes(serviceSearchQuery.toLowerCase()) ||
+                            service.category?.toLowerCase().includes(serviceSearchQuery.toLowerCase());
+                          return matchesSearch;
+                        }).map((service) => (
+                          <tr key={service.service_id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900">{service.service_name}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center text-sm text-gray-600">
+                                <Tag className="w-4 h-4 mr-1" />
+                                {service.category}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-semibold text-green-600">
+                                ${Number(service.unit_price).toFixed(2)}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                service.is_active 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : 'bg-gray-100 text-gray-800'
+                              }`}>
+                                {service.is_active ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                              <button
+                                onClick={() => handleEditServiceClick(service)}
+                                className="text-blue-600 hover:text-blue-900"
+                                title="Edit Service"
+                              >
+                                <Edit className="w-4 h-4 inline" />
+                              </button>
+                              {user?.role === 'ADMIN' && (
+                                <button
+                                  onClick={() => handleDeleteServiceClick(service)}
+                                  className="text-red-600 hover:text-red-900"
+                                  title="Delete Service"
+                                >
+                                  <Trash2 className="w-4 h-4 inline" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="mt-4 px-6 py-3 text-sm text-gray-600 text-center bg-gray-50">
+                      {(() => {
+                        const filteredCount = (Array.isArray(services) ? services : []).filter(service => {
+                          const matchesSearch = !serviceSearchQuery || 
+                            service.service_name.toLowerCase().includes(serviceSearchQuery.toLowerCase()) ||
+                            service.category?.toLowerCase().includes(serviceSearchQuery.toLowerCase());
+                          return matchesSearch;
+                        }).length;
+                        return `Showing ${filteredCount} service${filteredCount !== 1 ? 's' : ''}`;
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Offers Tab */}
+            {activeTab === 'offers' && (
+              <div className="space-y-6">
+                {/* Header with search and filters */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <h3 className="text-2xl font-bold text-gray-900">Offers & Discounts</h3>
+                  {user?.role === 'ADMIN' && (
+                    <button
+                      onClick={handleAddDiscountClick}
+                      className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <Plus className="w-5 h-5 mr-2" />
+                      Add Offer
+                    </button>
+                  )}
+                </div>
+
+                {/* Search and Filter Bar */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      placeholder="Search offers..."
+                      value={discountSearchQuery}
+                      onChange={(e) => setDiscountSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <select
+                      value={discountCategoryFilter}
+                      onChange={(e) => setDiscountCategoryFilter(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">All Categories</option>
+                      <option value="SERVICES">Services Only</option>
+                      <option value="ROOMS">Rooms Only</option>
+                      <option value="SERVICES_AND_ROOMS">Services & Rooms</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Offers Table */}
+                {loadingDiscounts ? (
+                  <div className="text-center py-12">
+                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+                    <p className="mt-4 text-gray-600">Loading offers...</p>
+                  </div>
+                ) : (Array.isArray(discounts) ? discounts : []).filter(discount => {
+                  const matchesSearch = !discountSearchQuery || 
+                    discount.discount_name.toLowerCase().includes(discountSearchQuery.toLowerCase());
+                  return matchesSearch;
+                }).length === 0 ? (
+                  <div className="text-center py-12 bg-gray-50 rounded-lg">
+                    <Gift className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500 text-lg">No offers found</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto bg-white rounded-lg shadow">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Offer Name</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Applies To</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valid Period</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {(Array.isArray(discounts) ? discounts : []).filter(discount => {
+                          const matchesSearch = !discountSearchQuery || 
+                            discount.discount_name.toLowerCase().includes(discountSearchQuery.toLowerCase());
+                          return matchesSearch;
+                        }).map((discount) => (
+                          <tr key={discount.discount_id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900">{discount.discount_name}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                discount.type === 'rate' 
+                                  ? 'bg-blue-100 text-blue-800' 
+                                  : 'bg-green-100 text-green-800'
+                              }`}>
+                                {discount.type === 'rate' ? 'Percentage' : 'Fixed Amount'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center text-sm font-semibold text-amber-600">
+                                <Percent className="w-4 h-4 mr-1" />
+                                {discount.type === 'rate' ? `${discount.discount_value}%` : `$${discount.discount_value}`}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-600">
+                                {discount.applies_to === 'SERVICES_AND_ROOMS' ? 'Services & Rooms' : 
+                                 discount.applies_to === 'SERVICES' ? 'Services' : 'Rooms'}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-xs text-gray-600">
+                                {discount.start_date ? new Date(discount.start_date).toLocaleDateString() : 'No start'} - 
+                                {discount.end_date ? new Date(discount.end_date).toLocaleDateString() : 'No end'}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                              <button
+                                onClick={() => handleEditDiscountClick(discount)}
+                                className="text-blue-600 hover:text-blue-900"
+                                title="Edit Offer"
+                              >
+                                <Edit className="w-4 h-4 inline" />
+                              </button>
+                              {user?.role === 'ADMIN' && (
+                                <button
+                                  onClick={() => handleDeleteDiscountClick(discount)}
+                                  className="text-red-600 hover:text-red-900"
+                                  title="Delete Offer"
+                                >
+                                  <Trash2 className="w-4 h-4 inline" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="mt-4 px-6 py-3 text-sm text-gray-600 text-center bg-gray-50">
+                      {(() => {
+                        const filteredCount = (Array.isArray(discounts) ? discounts : []).filter(discount => {
+                          const matchesSearch = !discountSearchQuery || 
+                            discount.discount_name.toLowerCase().includes(discountSearchQuery.toLowerCase());
+                          return matchesSearch;
+                        }).length;
+                        return `Showing ${filteredCount} offer${filteredCount !== 1 ? 's' : ''}`;
+                      })()}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

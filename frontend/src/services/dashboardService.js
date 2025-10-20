@@ -93,6 +93,35 @@ const dashboardService = {
       };
     }
   },
+
+  /**
+   * Get Recent Payment Transactions
+   * @param {number} limit - Number of transactions to fetch (default: 20)
+   * @param {string} branchId - Optional branch filter (Admin only)
+   * @returns {Promise} Response with recent payment transactions
+   */
+  getRecentPayments: async (limit = 20, branchId = null) => {
+    try {
+      const params = { limit };
+      if (branchId) params.branch_id = branchId;
+      
+      const response = await apiClient.get('/dashboard/recent-payments', { params });
+      return {
+        success: response.data.success,
+        data: response.data.data,
+        transactions: response.data.data.transactions,
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.error('Get recent payments error:', error);
+      return {
+        success: false,
+        transactions: [],
+        message: error.response?.data?.message || 'Failed to fetch recent payments',
+        error,
+      };
+    }
+  },
 };
 
 export default dashboardService;
