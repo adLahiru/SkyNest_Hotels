@@ -2,20 +2,50 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Users, Bed, Wifi, Coffee, Tv, Wind, Car, CheckCircle, XCircle, Calendar, Star, Loader2, AlertCircle } from 'lucide-react';
 import roomService from '../services/roomService';
 import roomTypeService from '../services/roomTypeService';
+import bookingService from '../services/bookingService';
 
 const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isLoggedIn, onLoginRequired }) => {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [checkInDate, setCheckInDate] = useState('');
+  const [checkOutDate, setCheckOutDate] = useState('');
+  const [dateFilterApplied, setDateFilterApplied] = useState(false);
 
   const fetchRooms = React.useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Fetch rooms for the selected branch (using public endpoint)
+      // First, fetch all rooms for the selected branch
       const roomsResponse = await roomService.getAllRoomsPublic({ branch_id: selectedBranch.id });
+      
+      if (!roomsResponse.success || !roomsResponse.rooms) {
+        setError(roomsResponse.message || 'Failed to load rooms');
+        setLoading(false);
+        return;
+      }
+
+      // If dates are selected, get available room IDs
+      let availableRoomIds = null;
+      if (checkInDate && checkOutDate) {
+        const availabilityResponse = await bookingService.getAvailableRooms({
+          branch_id: selectedBranch.id,
+          check_in: checkInDate,
+          check_out: checkOutDate
+        });
+        
+        if (availabilityResponse.success) {
+          // Extract room IDs from the available rooms
+          availableRoomIds = new Set(
+            availabilityResponse.availableRooms.map(room => room.room_id)
+          );
+          setDateFilterApplied(true);
+        }
+      } else {
+        setDateFilterApplied(false);
+      }
       
       if (roomsResponse.success && roomsResponse.rooms) {
         // Fetch room types for each room to get detailed information
@@ -68,9 +98,16 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
                 }
               });
 
-              // Determine availability based on room state
-              const isAvailable = room.state === 'available';
-              const statusText = room.state === 'occupied' ? 'Currently Occupied' : 
+              // Determine availability based on room state AND date filter
+              let isAvailable = room.state === 'available';
+              
+              // If date filter is applied, also check if room is in available list
+              if (availableRoomIds !== null) {
+                isAvailable = isAvailable && availableRoomIds.has(room.room_id);
+              }
+              
+              const statusText = !isAvailable && availableRoomIds !== null ? 'Booked for selected dates' :
+                                room.state === 'occupied' ? 'Currently Occupied' : 
                                 room.state === 'maintenance' ? 'Under Maintenance' : 
                                 'Available';
 
@@ -114,11 +151,21 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
         );
 
         // Filter out null values (rooms without valid room types)
-        const validRooms = roomsWithDetails.filter(room => room !== null);
+        let validRooms = roomsWithDetails.filter(room => room !== null);
+        
+        // If date filter is applied, only show available rooms
+        if (availableRoomIds !== null) {
+          validRooms = validRooms.filter(room => room.available);
+        }
+        
         setRooms(validRooms);
 
         if (validRooms.length === 0) {
-          setError('No rooms available at this branch yet.');
+          if (availableRoomIds !== null) {
+            setError('No rooms available for the selected dates. Please try different dates.');
+          } else {
+            setError('No rooms available at this branch yet.');
+          }
         }
       } else {
         setError(roomsResponse.message || 'Failed to load rooms');
@@ -128,7 +175,7 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
     } finally {
       setLoading(false);
     }
-  }, [selectedBranch.id]);
+  }, [selectedBranch.id, checkInDate, checkOutDate]);
 
   // Fetch rooms when branch is selected
   useEffect(() => {
@@ -147,7 +194,12 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
     
     setSelectedRoom(room.id);
     setTimeout(() => {
-      onRoomSelect(room, selectedBranch);
+      // Pass the selected dates along with room and branch
+      const dates = {
+        checkIn: checkInDate,
+        checkOut: checkOutDate
+      };
+      onRoomSelect(room, selectedBranch, dates);
     }, 300);
   };
 
@@ -195,6 +247,83 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
               Choose from our carefully selected rooms at {selectedBranch?.location}. 
               Each room is designed for comfort and equipped with modern amenities.
             </p>
+          </div>
+        </div>
+
+        {/* Date Filter Section */}
+        <div className="max-w-4xl mx-auto mb-12">
+          <div className="bg-white rounded-2xl shadow-lg p-6">
+            <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+              <Calendar className="w-5 h-5 mr-2 text-amber-600" />
+              Filter by Availability
+            </h3>
+            <div className="grid md:grid-cols-3 gap-4 items-end">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Check-in Date
+                </label>
+                <input
+                  type="date"
+                  value={checkInDate}
+                  onChange={(e) => setCheckInDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Check-out Date
+                </label>
+                <input
+                  type="date"
+                  value={checkOutDate}
+                  onChange={(e) => setCheckOutDate(e.target.value)}
+                  min={checkInDate || new Date().toISOString().split('T')[0]}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                />
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => {
+                    setDateFilterApplied(true);
+                    fetchRooms();
+                  }}
+                  disabled={!checkInDate || !checkOutDate || loading}
+                  className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-colors ${
+                    !checkInDate || !checkOutDate || loading
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-amber-600 text-white hover:bg-amber-700'
+                  }`}
+                >
+                  {loading ? 'Searching...' : 'Search'}
+                </button>
+                {(checkInDate || checkOutDate) && (
+                  <button
+                    onClick={() => {
+                      setCheckInDate('');
+                      setCheckOutDate('');
+                      setDateFilterApplied(false);
+                      fetchRooms();
+                    }}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+            {dateFilterApplied && checkInDate && checkOutDate && rooms.length > 0 && (
+              <p className="text-sm text-green-600 mt-3 flex items-center">
+                <CheckCircle className="w-4 h-4 mr-1" />
+                Found {rooms.length} available room{rooms.length !== 1 ? 's' : ''} from {new Date(checkInDate).toLocaleDateString()} to {new Date(checkOutDate).toLocaleDateString()}
+              </p>
+            )}
+            {dateFilterApplied && checkInDate && checkOutDate && rooms.length === 0 && !loading && !error && (
+              <p className="text-sm text-amber-600 mt-3 flex items-center">
+                <AlertCircle className="w-4 h-4 mr-1" />
+                No rooms available for these dates. Try different dates or clear the filter.
+              </p>
+            )}
           </div>
         </div>
 

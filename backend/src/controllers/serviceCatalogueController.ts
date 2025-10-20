@@ -10,11 +10,12 @@ import { UserRole, AuthenticatedRequest } from '../types/auth.types';
  */
 
 interface ServiceCatalogue extends RowDataPacket {
-  service_id: string;
+  service_type_id: string;
   service_name: string;
-  category: string;
-  unit_price: number;
-  is_active: boolean;
+  price: number;
+  branch_id: string | null;
+  photo: Buffer | null;
+  description: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -47,13 +48,13 @@ export const createService = async (req: AuthenticatedRequest, res: Response): P
       return;
     }
 
-    const { service_name, category, unit_price, is_active = true } = req.body;
+    const { service_name, price, branch_id, photo, description } = req.body;
 
     // Validate required fields
-    if (!service_name || !category || unit_price === undefined) {
+    if (!service_name || price === undefined || !branch_id) {
       res.status(400).json({
         success: false,
-        message: 'Missing required fields: service_name, category, and unit_price are required.'
+        message: 'Missing required fields: service_name, price, and branch_id are required.'
       });
       return;
     }
@@ -67,63 +68,85 @@ export const createService = async (req: AuthenticatedRequest, res: Response): P
       return;
     }
 
-    // Validate category length
-    if (category.length > 50) {
+    // Validate price is positive
+    if (price <= 0) {
       res.status(400).json({
         success: false,
-        message: 'Category must be 50 characters or less.'
+        message: 'Price must be a positive number.'
       });
       return;
     }
 
-    // Validate unit_price is positive
-    if (unit_price <= 0) {
-      res.status(400).json({
-        success: false,
-        message: 'Unit price must be a positive number.'
-      });
-      return;
-    }
-
-    // Validate unit_price format (max 10 digits, 2 decimals)
-    const priceString = unit_price.toString();
+    // Validate price format (max 10 digits, 2 decimals)
+    const priceString = price.toString();
     const parts = priceString.split('.');
     if (parts[0].length > 8 || (parts[1] && parts[1].length > 2)) {
       res.status(400).json({
         success: false,
-        message: 'Unit price format invalid. Maximum 8 digits before decimal and 2 after.'
+        message: 'Price format invalid. Maximum 8 digits before decimal and 2 after.'
       });
       return;
     }
 
+    // Validate branch_id
+    const [branches] = await connection.query<RowDataPacket[]>(
+      'SELECT branch_id FROM hotel_branches WHERE branch_id = ?',
+      [branch_id]
+    );
+    if (branches.length === 0) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid branch_id provided.'
+      });
+      return;
+    }
+
+    // Convert Base64 photo to Buffer if provided
+    let photoBuffer: Buffer | null = null;
+    if (photo && photo.trim() !== '') {
+      try {
+        // Remove data:image/...;base64, prefix if present
+        const base64Data = photo.replace(/^data:image\/\w+;base64,/, '');
+        photoBuffer = Buffer.from(base64Data, 'base64');
+      } catch (error) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid photo format'
+        });
+        return;
+      }
+    }
+
     await connection.beginTransaction();
 
-    // Check if service name already exists (case-insensitive)
+    // Check if service name already exists in the same branch (case-insensitive)
     const [existingServices] = await connection.query<ServiceCatalogue[]>(
-      'SELECT service_id FROM service_catalogue WHERE LOWER(service_name) = LOWER(?)',
-      [service_name]
+      `SELECT service_type_id FROM service_types 
+       WHERE LOWER(service_name) = LOWER(?) 
+       AND branch_id = ?`,
+      [service_name, branch_id]
     );
 
     if (existingServices.length > 0) {
       await connection.rollback();
       res.status(409).json({
         success: false,
-        message: `Service with name "${service_name}" already exists.`
+        message: `Service with name "${service_name}" already exists in this branch.`
       });
       return;
     }
 
     // Insert new service
     const [result] = await connection.query<ResultSetHeader>(
-      `INSERT INTO service_catalogue 
-       (service_name, category, unit_price, is_active) 
-       VALUES (?, ?, ?, ?)`,
-      [service_name, category, unit_price, is_active ? 1 : 0]
+      `INSERT INTO service_types 
+       (service_name, price, branch_id, photo, description) 
+       VALUES (?, ?, ?, ?, ?)`,
+      [service_name, price, branch_id, photoBuffer || null, description || null]
     );
 
     // Fetch the created service
     const [newService] = await connection.query<ServiceCatalogue[]>(
-      'SELECT * FROM service_catalogue WHERE service_id = (SELECT service_id FROM service_catalogue ORDER BY created_at DESC LIMIT 1)'
+      'SELECT * FROM service_types WHERE service_type_id = (SELECT service_type_id FROM service_types ORDER BY created_at DESC LIMIT 1)'
     );
 
     if (!newService[0]) {
@@ -142,11 +165,12 @@ export const createService = async (req: AuthenticatedRequest, res: Response): P
       message: 'Service added to catalogue successfully.',
       data: {
         service: {
-          service_id: newService[0].service_id,
+          service_type_id: newService[0].service_type_id,
           service_name: newService[0].service_name,
-          category: newService[0].category,
-          unit_price: parseFloat(newService[0].unit_price.toString()),
-          is_active: Boolean(newService[0].is_active),
+          price: parseFloat(newService[0].price.toString()),
+          branch_id: newService[0].branch_id,
+          photo: newService[0].photo ? newService[0].photo.toString('base64') : null,
+          description: newService[0].description,
           created_at: newService[0].created_at,
           updated_at: newService[0].updated_at
         }
@@ -173,33 +197,32 @@ export const createService = async (req: AuthenticatedRequest, res: Response): P
  */
 export const getServices = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { category, is_active } = req.query;
+    const { branch_id } = req.query;
 
-    let query = 'SELECT * FROM service_catalogue WHERE 1=1';
+    let query = `SELECT st.*, hb.branch_name 
+                 FROM service_types st 
+                 LEFT JOIN hotel_branches hb ON st.branch_id = hb.branch_id 
+                 WHERE 1=1`;
     const params: any[] = [];
 
-    // Filter by category if provided
-    if (category) {
-      query += ' AND LOWER(category) = LOWER(?)';
-      params.push(category);
+    // Filter by branch if provided
+    if (branch_id) {
+      query += ' AND st.branch_id = ?';
+      params.push(branch_id);
     }
 
-    // Filter by active status if provided
-    if (is_active !== undefined) {
-      query += ' AND is_active = ?';
-      params.push(is_active === 'true' ? 1 : 0);
-    }
-
-    query += ' ORDER BY category, service_name';
+    query += ' ORDER BY st.service_name';
 
     const [services] = await db.query<ServiceCatalogue[]>(query, params);
 
-    const formattedServices = services.map((service: ServiceCatalogue) => ({
-      service_id: service.service_id,
+    const formattedServices = services.map((service: any) => ({
+      service_type_id: service.service_type_id,
       service_name: service.service_name,
-      category: service.category,
-      unit_price: parseFloat(service.unit_price.toString()),
-      is_active: Boolean(service.is_active),
+      price: parseFloat(service.price.toString()),
+      branch_id: service.branch_id,
+      branch_name: service.branch_name || 'Unknown Branch',
+      photo: service.photo ? service.photo.toString('base64') : null,
+      description: service.description,
       created_at: service.created_at,
       updated_at: service.updated_at
     }));
@@ -300,11 +323,11 @@ export const updateService = async (req: AuthenticatedRequest, res: Response): P
     }
 
     const { service_id } = req.params;
-    const { service_name, category, unit_price, is_active } = req.body;
+    const { service_name, price, branch_id, photo, description } = req.body;
 
     // Check if service exists
     const [existingServices] = await connection.query<ServiceCatalogue[]>(
-      'SELECT * FROM service_catalogue WHERE service_id = ?',
+      'SELECT * FROM service_types WHERE service_type_id = ?',
       [service_id]
     );
 
@@ -326,52 +349,65 @@ export const updateService = async (req: AuthenticatedRequest, res: Response): P
         return;
       }
 
-      // Check for duplicate service name (excluding current service)
-      const [duplicates] = await connection.query<ServiceCatalogue[]>(
-        'SELECT service_id FROM service_catalogue WHERE LOWER(service_name) = LOWER(?) AND service_id != ?',
-        [service_name, service_id]
-      );
+      // Check for duplicate service name in the same branch (excluding current service)
+      const checkBranchId = branch_id || existingServices[0]?.branch_id;
+      if (checkBranchId) {
+        const [duplicates] = await connection.query<ServiceCatalogue[]>(
+          'SELECT service_type_id FROM service_types WHERE LOWER(service_name) = LOWER(?) AND branch_id = ? AND service_type_id != ?',
+          [service_name, checkBranchId, service_id]
+        );
 
-      if (duplicates.length > 0) {
-        res.status(409).json({
-          success: false,
-          message: `Service with name "${service_name}" already exists.`
-        });
-        return;
+        if (duplicates.length > 0) {
+          res.status(409).json({
+            success: false,
+            message: `Service with name "${service_name}" already exists in this branch.`
+          });
+          return;
+        }
       }
     }
 
-    // Validate category if provided
-    if (category !== undefined && (category.length === 0 || category.length > 50)) {
+    // Validate price if provided
+    if (price !== undefined && price <= 0) {
       res.status(400).json({
         success: false,
-        message: 'Category must be between 1 and 50 characters.'
+        message: 'Price must be a positive number.'
       });
       return;
     }
 
-    // Validate unit_price if provided
-    if (unit_price !== undefined) {
-      if (unit_price <= 0) {
+    // Validate branch_id if provided
+    if (branch_id) {
+      const [branches] = await connection.query<RowDataPacket[]>(
+        'SELECT branch_id FROM hotel_branches WHERE branch_id = ?',
+        [branch_id]
+      );
+      if (branches.length === 0) {
         res.status(400).json({
           success: false,
-          message: 'Unit price must be a positive number.'
-        });
-        return;
-      }
-
-      const priceString = unit_price.toString();
-      const parts = priceString.split('.');
-      if (parts[0].length > 8 || (parts[1] && parts[1].length > 2)) {
-        res.status(400).json({
-          success: false,
-          message: 'Unit price format invalid. Maximum 8 digits before decimal and 2 after.'
+          message: 'Invalid branch_id provided.'
         });
         return;
       }
     }
 
     await connection.beginTransaction();
+
+    // Convert Base64 photo to Buffer if provided
+    let photoBuffer: Buffer | null = null;
+    if (photo && photo.trim() !== '') {
+      try {
+        const base64Data = photo.replace(/^data:image\/\w+;base64,/, '');
+        photoBuffer = Buffer.from(base64Data, 'base64');
+      } catch (error) {
+        await connection.rollback();
+        res.status(400).json({
+          success: false,
+          message: 'Invalid photo format'
+        });
+        return;
+      }
+    }
 
     // Build update query dynamically
     const updates: string[] = [];
@@ -381,17 +417,21 @@ export const updateService = async (req: AuthenticatedRequest, res: Response): P
       updates.push('service_name = ?');
       values.push(service_name);
     }
-    if (category !== undefined) {
-      updates.push('category = ?');
-      values.push(category);
+    if (price !== undefined) {
+      updates.push('price = ?');
+      values.push(price);
     }
-    if (unit_price !== undefined) {
-      updates.push('unit_price = ?');
-      values.push(unit_price);
+    if (branch_id !== undefined) {
+      updates.push('branch_id = ?');
+      values.push(branch_id);
     }
-    if (is_active !== undefined) {
-      updates.push('is_active = ?');
-      values.push(is_active ? 1 : 0);
+    if (photoBuffer !== null) {
+      updates.push('photo = ?');
+      values.push(photoBuffer);
+    }
+    if (description !== undefined) {
+      updates.push('description = ?');
+      values.push(description);
     }
 
     if (updates.length === 0) {
@@ -406,13 +446,16 @@ export const updateService = async (req: AuthenticatedRequest, res: Response): P
     values.push(service_id);
 
     await connection.query(
-      `UPDATE service_catalogue SET ${updates.join(', ')} WHERE service_id = ?`,
+      `UPDATE service_types SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE service_type_id = ?`,
       values
     );
 
-    // Fetch updated service
+    // Fetch updated service with branch name
     const [updatedServices] = await connection.query<ServiceCatalogue[]>(
-      'SELECT * FROM service_catalogue WHERE service_id = ?',
+      `SELECT st.*, hb.branch_name 
+       FROM service_types st 
+       LEFT JOIN hotel_branches hb ON st.branch_id = hb.branch_id
+       WHERE st.service_type_id = ?`,
       [service_id]
     );
 
@@ -428,19 +471,24 @@ export const updateService = async (req: AuthenticatedRequest, res: Response): P
       return;
     }
 
+    // Convert photo Buffer to Base64 for response
+    const photoBase64 = service.photo 
+      ? service.photo.toString('base64')
+      : null;
+
     res.status(200).json({
       success: true,
       message: 'Service updated successfully.',
       data: {
-        service: {
-          service_id: service.service_id,
-          service_name: service.service_name,
-          category: service.category,
-          unit_price: parseFloat(service.unit_price.toString()),
-          is_active: Boolean(service.is_active),
-          created_at: service.created_at,
-          updated_at: service.updated_at
-        }
+        service_type_id: service.service_type_id,
+        service_name: service.service_name,
+        price: parseFloat(service.price.toString()),
+        branch_id: service.branch_id,
+        branch_name: service.branch_name || null,
+        photo: photoBase64,
+        description: service.description,
+        created_at: service.created_at,
+        updated_at: service.updated_at
       }
     });
 
@@ -479,7 +527,7 @@ export const deleteService = async (req: AuthenticatedRequest, res: Response): P
 
     // Check if service exists
     const [services] = await connection.query<ServiceCatalogue[]>(
-      'SELECT * FROM service_catalogue WHERE service_id = ?',
+      'SELECT * FROM service_types WHERE service_type_id = ?',
       [service_id]
     );
 
@@ -493,26 +541,9 @@ export const deleteService = async (req: AuthenticatedRequest, res: Response): P
 
     await connection.beginTransaction();
 
-    // Check if service is being used in service_usage table
-    const [usageRecords] = await connection.query<RowDataPacket[]>(
-      'SELECT COUNT(*) as count FROM service_usage WHERE service_id = ?',
-      [service_id]
-    );
-
-    const usageCount = usageRecords[0]?.count ?? 0;
-
-    if (usageCount > 0) {
-      await connection.rollback();
-      res.status(409).json({
-        success: false,
-        message: 'Cannot delete service. It has associated usage records. Consider deactivating it instead.'
-      });
-      return;
-    }
-
     // Delete the service
     await connection.query(
-      'DELETE FROM service_catalogue WHERE service_id = ?',
+      'DELETE FROM service_types WHERE service_type_id = ?',
       [service_id]
     );
 

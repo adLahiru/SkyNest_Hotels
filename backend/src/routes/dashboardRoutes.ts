@@ -37,4 +37,39 @@ router.get('/receptionist', authenticateToken, requireStaff, dashboardController
  */
 router.get('/housekeeping', authenticateToken, requireStaff, dashboardController.getHousekeepingStats.bind(dashboardController));
 
+/**
+ * @route GET /api/dashboard/reports/room-occupancy
+ * @desc Get room occupancy report for a selected date range
+ * @access Private (Admin only)
+ */
+router.get('/reports/room-occupancy', authenticateToken, requireAdmin, dashboardController.getRoomOccupancyReport.bind(dashboardController));
+
+/**
+ * @route GET /api/dashboard/reports/guest-billing
+ * @desc Get guest billing summary with unpaid balances
+ * @access Private (Admin and Manager)
+ */
+router.get('/reports/guest-billing', authenticateToken, requireStaff, dashboardController.getGuestBillingSummary.bind(dashboardController));
+
+/**
+ * @route GET /api/dashboard/reports/service-usage
+ * @desc Get service usage breakdown report
+ * @access Private (Admin and Manager)
+ */
+router.get('/reports/service-usage', authenticateToken, requireStaff, dashboardController.getServiceUsageBreakdown.bind(dashboardController));
+
+/**
+ * @route GET /api/dashboard/reports/monthly-revenue
+ * @desc Get monthly revenue per branch report
+ * @access Private (Admin and Manager)
+ */
+router.get('/reports/monthly-revenue', authenticateToken, requireStaff, dashboardController.getMonthlyRevenuePerBranch.bind(dashboardController));
+
+/**
+ * @route GET /api/dashboard/reports/top-services
+ * @desc Get top-used services and customer preference trends
+ * @access Private (Admin and Manager)
+ */
+router.get('/reports/top-services', authenticateToken, requireStaff, dashboardController.getTopUsedServices.bind(dashboardController));
+
 export default router;

@@ -5,7 +5,11 @@ import {
   getBookingById,
   updateBooking,
   cancelBooking,
-  getMyBookings
+  getMyBookings,
+  checkInGuest,
+  checkOutGuest,
+  validateCheckout,
+  getAvailableRooms
 } from '../controllers/bookingController';
 import { authenticateToken } from '../middleware/authMiddleware';
 
@@ -24,6 +28,9 @@ const router: Router = express.Router();
 
 // Get my bookings (user's own bookings)
 router.get('/my-bookings', authenticateToken, getMyBookings);
+
+// Get available rooms by date range (public - no auth required)
+router.get('/available-rooms', getAvailableRooms);
 
 // Get all bookings (access-controlled)
 router.get('/', authenticateToken, getBookings);
@@ -44,5 +51,14 @@ router.put('/:booking_id', authenticateToken, updateBooking);
 
 // Cancel booking (access-controlled)
 router.delete('/:booking_id', authenticateToken, cancelBooking);
+
+// Check-in guest (staff only)
+router.patch('/:booking_id/checkin', authenticateToken, checkInGuest);
+
+// Validate checkout eligibility
+router.get('/:booking_id/checkout-validation', authenticateToken, validateCheckout);
+
+// Check-out guest (staff only)
+router.patch('/:booking_id/checkout', authenticateToken, checkOutGuest);
 
 export default router;

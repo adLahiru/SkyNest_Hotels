@@ -23,12 +23,13 @@ const serviceCatalogueService = {
       const response = await apiClient.get(`/services?${params.toString()}`);
       return {
         success: response.data.success,
-        services: response.data.data || [],
+        services: response.data.data?.services || [],
         message: response.data.message,
       };
     } catch (error) {
       return {
         success: false,
+        services: [], // Always return empty array on error
         message: error.response?.data?.message || 'Failed to fetch services',
         error,
       };

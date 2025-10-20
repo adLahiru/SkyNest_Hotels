@@ -3,13 +3,13 @@ import { Calendar, Users, CheckCircle, AlertCircle, ArrowLeft, Loader2 } from 'l
 import bookingService from '../services/bookingService';
 import userService from '../services/userService';
 
-const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
+const BookingPage = ({ user, selectedRoom, selectedBranch, selectedDates, onBackToRooms }) => {
   const [bookingForm, setBookingForm] = useState({
     name: user?.full_name || user?.name || '',
     email: user?.email || '',
     phone: user?.phone || '',
-    checkIn: '',
-    checkOut: '',
+    checkIn: selectedDates?.checkIn || '',
+    checkOut: selectedDates?.checkOut || '',
     guests: selectedRoom?.occupancy || 2,
     roomType: selectedRoom?.type || 'standard',
     roomId: selectedRoom?.id || '',
@@ -71,6 +71,17 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
       }));
     }
   }, [user, loadingUserData]);
+
+  // Update dates when selectedDates changes
+  useEffect(() => {
+    if (selectedDates) {
+      setBookingForm(prev => ({
+        ...prev,
+        checkIn: selectedDates.checkIn || prev.checkIn,
+        checkOut: selectedDates.checkOut || prev.checkOut
+      }));
+    }
+  }, [selectedDates]);
 
   const validateForm = () => {
     const errors = {};
@@ -137,7 +148,18 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
       const response = await bookingService.createBooking(bookingData);
       
       if (response.success) {
-        setBookingReference(response.booking?.booking_id || 'SKN' + Date.now().toString().slice(-6));
+        console.log('Booking created successfully:', response.booking);
+        setBookingReference(response.data?.booking?.booking_id || response.booking?.booking_id || 'SKN' + Date.now().toString().slice(-6));
+        
+        // Update the form with the response data to show correct charges
+        if (response.data?.booking) {
+          setBookingForm(prev => ({
+            ...prev,
+            roomCharges: response.data.booking.room_charges,
+            totalAmount: response.data.booking.total_amount
+          }));
+        }
+        
         setShowConfirmation(true);
       } else {
         setFormErrors({ submit: response.message || 'Failed to create booking. Please try again.' });
@@ -201,7 +223,11 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, onBackToRooms }) => {
                   <span className="font-medium">{bookingForm.guests}</span>
                 </div>
                 <div className="flex justify-between border-t pt-4">
-                  <span className="text-gray-600">Total ({calculateNights()} nights):</span>
+                  <span className="text-gray-600">Room Charges ({calculateNights()} nights × ${selectedRoom?.price}):</span>
+                  <span className="font-medium text-amber-600">${calculateTotal()}</span>
+                </div>
+                <div className="flex justify-between border-t pt-4">
+                  <span className="text-gray-600 font-semibold">Total Amount:</span>
                   <span className="text-2xl font-bold text-amber-600">${calculateTotal()}</span>
                 </div>
               </div>
