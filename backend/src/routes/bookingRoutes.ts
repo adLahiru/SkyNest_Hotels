@@ -8,7 +8,8 @@ import {
   getMyBookings,
   checkInGuest,
   checkOutGuest,
-  validateCheckout
+  validateCheckout,
+  getAvailableRooms
 } from '../controllers/bookingController';
 import { authenticateToken } from '../middleware/authMiddleware';
 
@@ -27,6 +28,9 @@ const router: Router = express.Router();
 
 // Get my bookings (user's own bookings)
 router.get('/my-bookings', authenticateToken, getMyBookings);
+
+// Get available rooms by date range (public - no auth required)
+router.get('/available-rooms', getAvailableRooms);
 
 // Get all bookings (access-controlled)
 router.get('/', authenticateToken, getBookings);

@@ -244,6 +244,38 @@ const bookingService = {
       };
     }
   },
+
+  /**
+   * Get available rooms for specific dates
+   * @param {Object} params - { branch_id, check_in, check_out }
+   * @returns {Promise} Response with available room IDs
+   */
+  getAvailableRooms: async ({ branch_id, check_in, check_out }) => {
+    try {
+      const params = new URLSearchParams();
+      if (branch_id) params.append('branch_id', branch_id);
+      if (check_in) params.append('check_in', check_in);
+      if (check_out) params.append('check_out', check_out);
+      
+      const response = await apiClient.get(`/bookings/available-rooms?${params.toString()}`);
+      return {
+        success: response.data.success,
+        availableRooms: response.data.availableRooms || [],
+        count: response.data.count || 0,
+        dateRange: response.data.dateRange,
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.error('Get available rooms error:', error);
+      return {
+        success: false,
+        availableRooms: [],
+        count: 0,
+        message: error.response?.data?.message || 'Failed to fetch available rooms',
+        error,
+      };
+    }
+  },
 };
 
 export default bookingService;
