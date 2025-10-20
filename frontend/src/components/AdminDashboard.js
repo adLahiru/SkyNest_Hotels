@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2, Search, Filter, X, Eye, EyeOff, Home, Bed, Upload, FileText, Briefcase } from 'lucide-react';
+import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2, Search, Filter, X, Eye, EyeOff, Home, Bed, Upload, FileText, Briefcase, MessageSquare, Mail, Phone, Clock } from 'lucide-react';
 import dashboardService from '../services/dashboardService';
 import userService from '../services/userService';
 import branchService from '../services/branchService';
 import roomService from '../services/roomService';
 import roomTypeService from '../services/roomTypeService';
 import serviceCatalogueService from '../services/serviceCatalogueService';
+import contactService from '../services/contactService';
 import ReportsMain from './Reports/ReportsMain';
 
 const AdminDashboard = ({ user }) => {
@@ -114,6 +115,9 @@ const AdminDashboard = ({ user }) => {
   const [loadingServices, setLoadingServices] = useState(false);
   const [serviceSearchQuery, setServiceSearchQuery] = useState('');
   const [showAddServiceModal, setShowAddServiceModal] = useState(false);
+  const [showEditServiceModal, setShowEditServiceModal] = useState(false);
+  const [showDeleteServiceModal, setShowDeleteServiceModal] = useState(false);
+  const [selectedService, setSelectedService] = useState(null);
   const [serviceFormData, setServiceFormData] = useState({
     service_name: '',
     price: '',
@@ -125,6 +129,14 @@ const AdminDashboard = ({ user }) => {
   const [serviceSubmitMessage, setServiceSubmitMessage] = useState({ type: '', text: '' });
   const [serviceIsDragging, setServiceIsDragging] = useState(false);
   const [servicePhotoPreview, setServicePhotoPreview] = useState(null);
+
+  // Contact/Reviews management states
+  const [contactMessages, setContactMessages] = useState([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [messageFilter, setMessageFilter] = useState('pending'); // 'pending' or 'read'
+  const [messageSearchQuery, setMessageSearchQuery] = useState('');
+  const [showDeleteMessageModal, setShowDeleteMessageModal] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState(null);
 
   useEffect(() => {
     fetchDashboardStats();
@@ -143,8 +155,10 @@ const AdminDashboard = ({ user }) => {
       fetchBranches();
     } else if (activeTab === 'services') {
       fetchServices();
+    } else if (activeTab === 'messages') {
+      fetchContactMessages();
     }
-  }, [activeTab, searchQuery, roleFilter, roomSearchQuery, roomStateFilter, roomTypeFilter, roomBranchFilter, roomFloorFilter, roomTypeSearchQuery, minCapacityFilter, maxCapacityFilter, minPriceFilter, maxPriceFilter, branchSearchQuery, serviceSearchQuery]);
+  }, [activeTab, searchQuery, roleFilter, roomSearchQuery, roomStateFilter, roomTypeFilter, roomBranchFilter, roomFloorFilter, roomTypeSearchQuery, minCapacityFilter, maxCapacityFilter, minPriceFilter, maxPriceFilter, branchSearchQuery, serviceSearchQuery, messageFilter, messageSearchQuery]);
 
   const fetchDashboardStats = async () => {
     setLoading(true);
@@ -1296,6 +1310,149 @@ const AdminDashboard = ({ user }) => {
     setLoadingServices(false);
   };
 
+  const handleEditServiceClick = (service) => {
+    setSelectedService(service);
+    setServiceFormData({
+      service_name: service.service_name,
+      price: service.price,
+      branch_id: service.branch_id,
+      photo: service.photo || '',
+      description: service.description || ''
+    });
+    setServicePhotoPreview(service.photo ? `data:image/jpeg;base64,${service.photo}` : null);
+    setServiceFormErrors({});
+    setServiceSubmitMessage({ type: '', text: '' });
+    setShowEditServiceModal(true);
+  };
+
+  const handleSubmitEditService = async (e) => {
+    e.preventDefault();
+    
+    if (!validateServiceForm()) {
+      return;
+    }
+
+    if (!selectedService) return;
+
+    setLoadingServices(true);
+    setServiceSubmitMessage({ type: '', text: '' });
+    
+    const result = await serviceCatalogueService.updateService(selectedService.service_type_id, {
+      ...serviceFormData,
+      price: parseFloat(serviceFormData.price)
+    });
+    
+    if (result.success) {
+      setServiceSubmitMessage({ type: 'success', text: 'Service updated successfully!' });
+      setTimeout(() => {
+        setShowEditServiceModal(false);
+        setSelectedService(null);
+        fetchServices();
+      }, 1500);
+    } else {
+      setServiceSubmitMessage({ type: 'error', text: result.message || 'Failed to update service' });
+    }
+    
+    setLoadingServices(false);
+  };
+
+  const handleDeleteServiceClick = (service) => {
+    setSelectedService(service);
+    setShowDeleteServiceModal(true);
+  };
+
+  const handleConfirmDeleteService = async () => {
+    if (!selectedService) return;
+
+    setLoadingServices(true);
+    
+    const result = await serviceCatalogueService.deleteService(selectedService.service_type_id);
+    
+    if (result.success) {
+      setShowDeleteServiceModal(false);
+      setSelectedService(null);
+      setTimeout(() => {
+        fetchServices();
+      }, 500);
+    } else {
+      setServiceSubmitMessage({ type: 'error', text: result.message || 'Failed to delete service' });
+    }
+    
+    setLoadingServices(false);
+  };
+
+  const handleCancelDeleteService = () => {
+    setShowDeleteServiceModal(false);
+    setSelectedService(null);
+  };
+
+  // Contact Messages Functions
+  const fetchContactMessages = async () => {
+    setLoadingMessages(true);
+    try {
+      const result = await contactService.getAllContactMessages({ status: messageFilter });
+      if (result.success) {
+        let filtered = result.messages || [];
+        
+        // Apply search filter
+        if (messageSearchQuery) {
+          filtered = filtered.filter(msg =>
+            msg.name.toLowerCase().includes(messageSearchQuery.toLowerCase()) ||
+            msg.email.toLowerCase().includes(messageSearchQuery.toLowerCase()) ||
+            msg.subject.toLowerCase().includes(messageSearchQuery.toLowerCase()) ||
+            msg.message.toLowerCase().includes(messageSearchQuery.toLowerCase())
+          );
+        }
+        
+        setContactMessages(filtered);
+      } else {
+        console.error('Failed to fetch messages:', result.message);
+        setContactMessages([]);
+      }
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      setContactMessages([]);
+    }
+    setLoadingMessages(false);
+  };
+
+  const handleMarkAsRead = async (messageId) => {
+    const result = await contactService.updateContactStatus(messageId, 'read');
+    if (result.success) {
+      fetchContactMessages();
+    } else {
+      console.error('Failed to mark message as read:', result.message);
+    }
+  };
+
+  const handleDeleteMessageClick = (message) => {
+    setSelectedMessage(message);
+    setShowDeleteMessageModal(true);
+  };
+
+  const handleConfirmDeleteMessage = async () => {
+    if (!selectedMessage) return;
+
+    setLoadingMessages(true);
+    
+    const result = await contactService.deleteContactMessage(selectedMessage.contact_id);
+    
+    if (result.success) {
+      setShowDeleteMessageModal(false);
+      setSelectedMessage(null);
+      setTimeout(() => {
+        fetchContactMessages();
+      }, 500);
+    }
+    
+    setLoadingMessages(false);
+  };
+
+  const handleCancelDeleteMessage = () => {
+    setShowDeleteMessageModal(false);
+    setSelectedMessage(null);
+  };
+
   const getRoleBadgeColor = (role) => {
     switch(role) {
       case 'ADMIN': return 'bg-purple-100 text-purple-800';
@@ -1470,6 +1627,17 @@ const AdminDashboard = ({ user }) => {
               >
                 <Briefcase className="w-5 h-5 inline-block mr-2" />
                 Services
+              </button>
+              <button
+                onClick={() => setActiveTab('messages')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'messages'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <MessageSquare className="w-5 h-5 inline-block mr-2" />
+                Messages
               </button>
               <button
                 onClick={() => setActiveTab('financial')}
@@ -2403,6 +2571,9 @@ const AdminDashboard = ({ user }) => {
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Description
                             </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Actions
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
@@ -2435,6 +2606,22 @@ const AdminDashboard = ({ user }) => {
                                   {service.description || '-'}
                                 </div>
                               </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                <button 
+                                  onClick={() => handleEditServiceClick(service)}
+                                  className="text-blue-600 hover:text-blue-800 mr-3"
+                                  title="Edit Service"
+                                >
+                                  <Edit className="w-4 h-4 inline" />
+                                </button>
+                                <button 
+                                  onClick={() => handleDeleteServiceClick(service)}
+                                  className="text-red-600 hover:text-red-800"
+                                  title="Delete Service"
+                                >
+                                  <Trash2 className="w-4 h-4 inline" />
+                                </button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -2442,6 +2629,169 @@ const AdminDashboard = ({ user }) => {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Messages Tab */}
+            {activeTab === 'messages' && (
+              <div>
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Contact Messages</h3>
+                  
+                  {/* Filter buttons */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setMessageFilter('pending')}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                        messageFilter === 'pending'
+                          ? 'bg-orange-600 text-white'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      <Clock className="w-4 h-4 inline mr-2" />
+                      Needs Review
+                    </button>
+                    <button
+                      onClick={() => setMessageFilter('read')}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                        messageFilter === 'read'
+                          ? 'bg-green-600 text-white'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      <Eye className="w-4 h-4 inline mr-2" />
+                      Reviewed
+                    </button>
+                  </div>
+                </div>
+
+                {/* Search Bar */}
+                <div className="mb-6">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      placeholder="Search messages by name, email, subject, or message..."
+                      value={messageSearchQuery}
+                      onChange={(e) => setMessageSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Messages Table */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                  {loadingMessages ? (
+                    <div className="p-8 text-center">
+                      <p className="text-gray-500">Loading messages...</p>
+                    </div>
+                  ) : contactMessages.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-gray-500">No messages found</p>
+                      <p className="text-sm text-gray-400 mt-1">
+                        {messageFilter === 'pending' ? 'All messages have been reviewed' : 'No reviewed messages yet'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Date
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Name
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Contact
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Inquiry Type
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Subject
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Message
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {contactMessages.map((message) => (
+                            <tr key={message.contact_id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                                {new Date(message.created_at).toLocaleDateString()}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">{message.name}</div>
+                                {message.user_id && (
+                                  <div className="text-xs text-gray-500">User ID: {message.user_id.slice(0, 8)}...</div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <div className="text-sm text-gray-600">
+                                  <Mail className="w-3 h-3 inline mr-1" />
+                                  {message.email}
+                                </div>
+                                {message.phone && (
+                                  <div className="text-sm text-gray-600">
+                                    <Phone className="w-3 h-3 inline mr-1" />
+                                    {message.phone}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                  {message.inquiry_type || 'General'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="text-sm text-gray-900 max-w-xs truncate">
+                                  {message.subject}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="text-sm text-gray-600 max-w-md truncate">
+                                  {message.message}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                {messageFilter === 'pending' && (
+                                  <button 
+                                    onClick={() => handleMarkAsRead(message.contact_id)}
+                                    className="text-green-600 hover:text-green-800 mr-3"
+                                    title="Mark as Read"
+                                  >
+                                    <Eye className="w-4 h-4 inline" /> Read
+                                  </button>
+                                )}
+                                <button 
+                                  onClick={() => handleDeleteMessageClick(message)}
+                                  className="text-red-600 hover:text-red-800"
+                                  title="Delete Message"
+                                >
+                                  <Trash2 className="w-4 h-4 inline" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Message count */}
+                {contactMessages.length > 0 && (
+                  <div className="mt-4 text-sm text-gray-600 text-center">
+                    Showing {contactMessages.length} {messageFilter === 'pending' ? 'pending' : 'reviewed'} message{contactMessages.length !== 1 ? 's' : ''}
+                  </div>
+                )}
               </div>
             )}
 
@@ -4645,6 +4995,300 @@ const AdminDashboard = ({ user }) => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Service Modal */}
+        {showEditServiceModal && selectedService && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-semibold text-gray-900">Edit Service</h3>
+                  <button
+                    onClick={() => {
+                      setShowEditServiceModal(false);
+                      setSelectedService(null);
+                    }}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              <form onSubmit={handleSubmitEditService} className="p-6 space-y-4">
+                {/* Service Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Service Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="service_name"
+                    value={serviceFormData.service_name}
+                    onChange={handleServiceInputChange}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      serviceFormErrors.service_name ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                  />
+                  {serviceFormErrors.service_name && (
+                    <p className="text-red-500 text-xs mt-1">{serviceFormErrors.service_name}</p>
+                  )}
+                </div>
+
+                {/* Branch Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Branch *
+                  </label>
+                  <select
+                    name="branch_id"
+                    value={serviceFormData.branch_id}
+                    onChange={handleServiceInputChange}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      serviceFormErrors.branch_id ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                  >
+                    <option value="">Select Branch</option>
+                    {branches.map(branch => (
+                      <option key={branch.branch_id} value={branch.branch_id}>
+                        {branch.branch_name}
+                      </option>
+                    ))}
+                  </select>
+                  {serviceFormErrors.branch_id && (
+                    <p className="text-red-500 text-xs mt-1">{serviceFormErrors.branch_id}</p>
+                  )}
+                </div>
+
+                {/* Price */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Price ($) *
+                  </label>
+                  <input
+                    type="number"
+                    name="price"
+                    value={serviceFormData.price}
+                    onChange={handleServiceInputChange}
+                    step="0.01"
+                    min="0"
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      serviceFormErrors.price ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                  />
+                  {serviceFormErrors.price && (
+                    <p className="text-red-500 text-xs mt-1">{serviceFormErrors.price}</p>
+                  )}
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    name="description"
+                    value={serviceFormData.description}
+                    onChange={handleServiceInputChange}
+                    rows="3"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  />
+                </div>
+
+                {/* Photo Upload */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Service Photo
+                  </label>
+                  
+                  {!servicePhotoPreview ? (
+                    <div
+                      onDragOver={handleServiceDragOver}
+                      onDragLeave={handleServiceDragLeave}
+                      onDrop={handleServiceDrop}
+                      className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                        serviceIsDragging 
+                          ? 'border-blue-500 bg-blue-50' 
+                          : 'border-gray-300 hover:border-gray-400'
+                      }`}
+                    >
+                      <Briefcase className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-sm text-gray-600 mb-2">
+                        Drag and drop an image here, or
+                      </p>
+                      <label className="inline-block">
+                        <span className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">
+                          Choose File
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            if (e.target.files[0]) {
+                              processServiceImageFile(e.target.files[0]);
+                            }
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="relative inline-block">
+                      <img
+                        src={servicePhotoPreview}
+                        alt="Service preview"
+                        className="w-full h-48 object-cover rounded-lg border border-gray-300"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleRemoveServicePhoto}
+                        className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow-lg transition-colors"
+                        title="Remove photo"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Success/Error Messages */}
+                {serviceSubmitMessage.text && (
+                  <div className={`p-3 rounded-lg ${
+                    serviceSubmitMessage.type === 'success'
+                      ? 'bg-green-50 text-green-800 border border-green-200'
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}>
+                    {serviceSubmitMessage.text}
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditServiceModal(false);
+                      setSelectedService(null);
+                    }}
+                    disabled={loadingServices}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loadingServices}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    {loadingServices ? (
+                      <>
+                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                        Updating...
+                      </>
+                    ) : (
+                      <>
+                        <Edit className="w-4 h-4 mr-2" />
+                        Update Service
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Service Confirmation Modal */}
+        {showDeleteServiceModal && selectedService && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+              <div className="flex items-center justify-center w-12 h-12 bg-red-100 rounded-full mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              
+              <h3 className="text-xl font-semibold text-gray-900 text-center mb-2">
+                Delete Service
+              </h3>
+              
+              <p className="text-gray-600 text-center mb-6">
+                Are you sure you want to delete <strong>{selectedService.service_name}</strong>? This action cannot be undone.
+              </p>
+              
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleCancelDeleteService}
+                  disabled={loadingServices}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmDeleteService}
+                  disabled={loadingServices}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  {loadingServices ? (
+                    <>
+                      <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Message Confirmation Modal */}
+        {showDeleteMessageModal && selectedMessage && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+              <div className="flex items-center justify-center w-12 h-12 bg-red-100 rounded-full mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              
+              <h3 className="text-xl font-semibold text-gray-900 text-center mb-2">
+                Delete Message
+              </h3>
+              
+              <p className="text-gray-600 text-center mb-6">
+                Are you sure you want to delete the message from <strong>{selectedMessage.name}</strong>? This action cannot be undone.
+              </p>
+              
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleCancelDeleteMessage}
+                  disabled={loadingMessages}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmDeleteMessage}
+                  disabled={loadingMessages}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  {loadingMessages ? (
+                    <>
+                      <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}
