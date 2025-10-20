@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Mail, Phone, MapPin, Calendar, Edit, Save, X, Key, Eye, EyeOff, CheckCircle, AlertCircle, CreditCard, Hash, Shield, Briefcase, Award, Clock } from 'lucide-react';
 import userService from '../services/userService';
+import bookingService from '../services/bookingService';
 
 const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -164,32 +165,29 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
     setPasswordErrors({});
   };
 
-  const bookingHistory = [
-    {
-      id: 'BK001',
-      date: '2025-09-15',
-      branch: 'Sky Nest Colombo',
-      room: 'Deluxe Executive Suite',
-      status: 'Completed',
-      amount: '$250'
-    },
-    {
-      id: 'BK002',
-      date: '2025-08-10',
-      branch: 'Sky Nest Galle',
-      room: 'Ocean Breeze Standard',
-      status: 'Completed',
-      amount: '$180'
-    },
-    {
-      id: 'BK003',
-      date: '2025-12-20',
-      branch: 'Sky Nest Kandy',
-      room: 'Mountain View Deluxe',
-      status: 'Upcoming',
-      amount: '$200'
-    }
-  ];
+  // User's actual bookings from database
+  const [userBookings, setUserBookings] = useState([]);
+  const [isBookingsLoading, setIsBookingsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchUserBookings = async () => {
+      setIsBookingsLoading(true);
+      try {
+        const result = await bookingService.getMyBookings();
+        if (result.success) {
+          setUserBookings(result.bookings);
+        } else {
+          setUserBookings([]);
+        }
+      } catch (error) {
+        console.error('Error fetching bookings:', error);
+        setUserBookings([]);
+      } finally {
+        setIsBookingsLoading(false);
+      }
+    };
+    fetchUserBookings();
+  }, []);
 
   // Show loading state
   if (isLoading) {
@@ -234,9 +232,9 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
           </div>
         )}
 
-        <div className="grid lg:grid-cols-3 gap-8">
+        <div className="grid lg:grid-cols-4 gap-8">
           {/* Profile Information */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-3">
             <div className="bg-white rounded-3xl shadow-xl p-8">
               <div className="flex items-center justify-between mb-8">
                 <h2 className="text-2xl font-semibold text-gray-800 flex items-center">
@@ -389,7 +387,7 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-8">
+          <div className="lg:col-span-1 space-y-8">
             {/* Profile Avatar & Actions */}
             <div className="bg-white rounded-3xl shadow-xl p-8 text-center">
               <div className="w-24 h-24 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -419,33 +417,176 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
 
-            {/* Booking History */}
-            <div className="bg-white rounded-3xl shadow-xl p-8">
-              <h3 className="text-lg font-semibold text-gray-800 mb-6">Recent Bookings</h3>
-              
-              <div className="space-y-4">
-                {bookingHistory.map((booking, index) => (
-                  <div key={booking.id} className="border-l-4 border-amber-500 pl-4 py-2">
-                    <div className="flex justify-between items-start mb-1">
-                      <span className="font-medium text-sm">{booking.branch}</span>
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        booking.status === 'Completed' ? 'bg-green-100 text-green-800' : 
-                        booking.status === 'Upcoming' ? 'bg-blue-100 text-blue-800' : 
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {booking.status}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-600 mb-1">{booking.room}</p>
-                    <div className="flex justify-between text-xs text-gray-500">
-                      <span>{booking.date}</span>
-                      <span className="font-medium">{booking.amount}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+        {/* Booking History - Full Width Section */}
+        <div className="mt-8">
+          <div className="bg-white rounded-3xl shadow-xl p-8">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-semibold text-gray-800 flex items-center">
+                <Calendar className="w-6 h-6 mr-3 text-amber-600" />
+                My Bookings
+              </h3>
+              {!isBookingsLoading && userBookings.length > 0 && (
+                <span className="text-sm text-gray-500">
+                  Total: {userBookings.length} booking{userBookings.length !== 1 ? 's' : ''}
+                </span>
+              )}
             </div>
+
+            {isBookingsLoading ? (
+              <div className="text-center text-gray-500 py-12">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600 mb-4"></div>
+                <p>Loading bookings...</p>
+              </div>
+            ) : userBookings.length === 0 ? (
+              <div className="text-center text-gray-400 py-12">
+                <Calendar className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                <p className="text-lg">No bookings found.</p>
+                <p className="text-sm mt-2">Start your journey by booking a room!</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {userBookings.map((booking) => {
+                  // Map backend status to user-friendly label and color
+                  let statusLabel = '';
+                  let statusColor = '';
+                  let statusBgColor = '';
+                  switch (booking.booking_status) {
+                    case 'confirmed':
+                      statusLabel = 'Confirmed';
+                      statusColor = 'text-blue-800';
+                      statusBgColor = 'bg-blue-100';
+                      break;
+                    case 'checked_in':
+                      statusLabel = 'Checked In';
+                      statusColor = 'text-green-800';
+                      statusBgColor = 'bg-green-100';
+                      break;
+                    case 'checked_out':
+                      statusLabel = 'Checked Out';
+                      statusColor = 'text-gray-800';
+                      statusBgColor = 'bg-gray-200';
+                      break;
+                    case 'cancelled':
+                      statusLabel = 'Cancelled';
+                      statusColor = 'text-red-800';
+                      statusBgColor = 'bg-red-100';
+                      break;
+                    default:
+                      statusLabel = booking.booking_status || 'Status';
+                      statusColor = 'text-gray-800';
+                      statusBgColor = 'bg-gray-100';
+                  }
+
+                  // Calculate number of nights
+                  const checkIn = new Date(booking.checking_datetime);
+                  const checkOut = new Date(booking.checkout_datetime);
+                  const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
+
+                  return (
+                    <div 
+                      key={booking.booking_id} 
+                      className="border border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-shadow duration-300"
+                    >
+                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                        {/* Left Section - Branch & Room Info */}
+                        <div className="flex-1">
+                          <div className="flex items-start justify-between mb-3">
+                            <div>
+                              <h4 className="text-lg font-semibold text-gray-800 mb-1">
+                                {booking.branch_name || 'Branch'}
+                              </h4>
+                              <p className="text-sm text-gray-600">
+                                Room {booking.room_no || 'N/A'} - {booking.room_type || 'N/A'}
+                              </p>
+                            </div>
+                            <span className={`${statusBgColor} ${statusColor} px-3 py-1 rounded-full text-xs font-semibold`}>
+                              {statusLabel}
+                            </span>
+                          </div>
+
+                          {/* Date Information */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                            <div className="flex items-start space-x-2">
+                              <Calendar className="w-4 h-4 text-amber-600 mt-0.5" />
+                              <div>
+                                <p className="text-xs text-gray-500">Check-in</p>
+                                <p className="text-sm font-medium text-gray-800">
+                                  {booking.checking_datetime 
+                                    ? new Date(booking.checking_datetime).toLocaleDateString('en-US', { 
+                                        month: 'short', 
+                                        day: 'numeric', 
+                                        year: 'numeric' 
+                                      })
+                                    : 'N/A'}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-start space-x-2">
+                              <Calendar className="w-4 h-4 text-amber-600 mt-0.5" />
+                              <div>
+                                <p className="text-xs text-gray-500">Check-out</p>
+                                <p className="text-sm font-medium text-gray-800">
+                                  {booking.checkout_datetime 
+                                    ? new Date(booking.checkout_datetime).toLocaleDateString('en-US', { 
+                                        month: 'short', 
+                                        day: 'numeric', 
+                                        year: 'numeric' 
+                                      })
+                                    : 'N/A'}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-start space-x-2">
+                              <Clock className="w-4 h-4 text-amber-600 mt-0.5" />
+                              <div>
+                                <p className="text-xs text-gray-500">Duration</p>
+                                <p className="text-sm font-medium text-gray-800">
+                                  {nights} night{nights !== 1 ? 's' : ''}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Right Section - Pricing */}
+                        <div className="md:text-right md:ml-6 border-t md:border-t-0 md:border-l md:pl-6 pt-4 md:pt-0">
+                          <p className="text-xs text-gray-500 mb-1">Total Amount</p>
+                          <p className="text-2xl font-bold text-amber-600">
+                            LKR {typeof booking.total_cost !== 'undefined' ? booking.total_cost.toLocaleString() : '0'}
+                          </p>
+                          {booking.daily_rate && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              LKR {booking.daily_rate.toLocaleString()}/night
+                            </p>
+                          )}
+                          {booking.booking_date && (
+                            <p className="text-xs text-gray-400 mt-2">
+                              Booked on {new Date(booking.booking_date).toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric', 
+                                year: 'numeric' 
+                              })}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Booking ID at the bottom */}
+                      <div className="mt-4 pt-4 border-t border-gray-100">
+                        <p className="text-xs text-gray-400">
+                          Booking ID: #{booking.booking_id}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
