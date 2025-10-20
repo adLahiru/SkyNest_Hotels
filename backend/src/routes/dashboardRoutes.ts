@@ -72,4 +72,11 @@ router.get('/reports/monthly-revenue', authenticateToken, requireStaff, dashboar
  */
 router.get('/reports/top-services', authenticateToken, requireStaff, dashboardController.getTopUsedServices.bind(dashboardController));
 
+/**
+ * @route GET /api/dashboard/recent-payments
+ * @desc Get recent payment transactions
+ * @access Private (Staff only - Manager, Receptionist, Admin)
+ */
+router.get('/recent-payments', authenticateToken, requireStaff, dashboardController.getRecentPayments.bind(dashboardController));
+
 export default router;

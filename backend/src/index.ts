@@ -5,7 +5,7 @@ import path from 'path';
 import { testConnection } from './config/db';
 import routes from './routes';
 
-dotenv.config(); // Load environment variables from .env file
+// dotenv.config(); // Commented out - db.ts loads the environment-specific .env file
 
 const app = express();
 const PORT = process.env.PORT || 3000;

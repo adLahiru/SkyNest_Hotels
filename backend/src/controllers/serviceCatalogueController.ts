@@ -14,6 +14,8 @@ interface ServiceCatalogue extends RowDataPacket {
   service_name: string;
   category: string;
   unit_price: number;
+  image?: Buffer;
+  image_url?: string;
   is_active: boolean;
   created_at: Date;
   updated_at: Date;
@@ -47,7 +49,7 @@ export const createService = async (req: AuthenticatedRequest, res: Response): P
       return;
     }
 
-    const { service_name, category, unit_price, is_active = true } = req.body;
+    const { service_name, category, unit_price, is_active = true, image_url } = req.body;
 
     // Validate required fields
     if (!service_name || !category || unit_price === undefined) {
@@ -116,9 +118,9 @@ export const createService = async (req: AuthenticatedRequest, res: Response): P
     // Insert new service
     const [result] = await connection.query<ResultSetHeader>(
       `INSERT INTO service_catalogue 
-       (service_name, category, unit_price, is_active) 
-       VALUES (?, ?, ?, ?)`,
-      [service_name, category, unit_price, is_active ? 1 : 0]
+       (service_name, category, unit_price, image_url, is_active) 
+       VALUES (?, ?, ?, ?, ?)`,
+      [service_name, category, unit_price, image_url || null, is_active ? 1 : 0]
     );
 
     // Fetch the created service
@@ -264,6 +266,7 @@ export const getServiceById = async (req: AuthenticatedRequest, res: Response): 
           service_name: service.service_name,
           category: service.category,
           unit_price: parseFloat(service.unit_price.toString()),
+          image_url: service.image_url,
           is_active: Boolean(service.is_active),
           created_at: service.created_at,
           updated_at: service.updated_at
@@ -300,7 +303,7 @@ export const updateService = async (req: AuthenticatedRequest, res: Response): P
     }
 
     const { service_id } = req.params;
-    const { service_name, category, unit_price, is_active } = req.body;
+    const { service_name, category, unit_price, is_active, image_url } = req.body;
 
     // Check if service exists
     const [existingServices] = await connection.query<ServiceCatalogue[]>(
@@ -393,6 +396,10 @@ export const updateService = async (req: AuthenticatedRequest, res: Response): P
       updates.push('is_active = ?');
       values.push(is_active ? 1 : 0);
     }
+    if (image_url !== undefined) {
+      updates.push('image_url = ?');
+      values.push(image_url || null);
+    }
 
     if (updates.length === 0) {
       await connection.rollback();
@@ -437,6 +444,7 @@ export const updateService = async (req: AuthenticatedRequest, res: Response): P
           service_name: service.service_name,
           category: service.category,
           unit_price: parseFloat(service.unit_price.toString()),
+          image_url: service.image_url,
           is_active: Boolean(service.is_active),
           created_at: service.created_at,
           updated_at: service.updated_at

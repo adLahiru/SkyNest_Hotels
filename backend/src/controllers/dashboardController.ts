@@ -1234,6 +1234,81 @@ class DashboardController {
       } as ApiResponse);
     }
   }
+
+  /**
+   * Get recent payment transactions
+   * For managers and admins to see latest payments
+   * GET /api/dashboard/recent-payments
+   */
+  async getRecentPayments(req: Request, res: Response): Promise<void> {
+    try {
+      const authReq = req as AuthenticatedRequest;
+      const { limit = 20, branch_id } = req.query;
+      
+      let query = `
+        SELECT 
+          pt.transaction_id,
+          pt.booking_id,
+          pt.transaction_date,
+          pt.amount,
+          pt.payment_method,
+          pt.transaction_reference,
+          pt.notes,
+          b.booking_id as booking_ref,
+          u.name as guest_name,
+          u.email as guest_email,
+          r.room_no,
+          rt.type as room_type,
+          hb.branch_name,
+          hb.branch_id,
+          staff.name as processed_by_name,
+          p.total_charges,
+          p.amount_paid,
+          p.due_amount,
+          p.payment_status
+        FROM payment_transactions pt
+        INNER JOIN payments p ON pt.payment_id = p.payment_id
+        INNER JOIN booking b ON pt.booking_id = b.booking_id
+        INNER JOIN users u ON b.user_id = u.user_id
+        INNER JOIN rooms r ON b.room_id = r.room_id
+        INNER JOIN room_types rt ON r.room_type_id = rt.room_type_id
+        INNER JOIN hotel_branches hb ON b.branch_id = hb.branch_id
+        LEFT JOIN users staff ON pt.processed_by_staff_id = staff.user_id
+        WHERE 1=1
+      `;
+      
+      const params: any[] = [];
+      
+      // Filter by branch for managers
+      if (authReq.user?.role === 'MANAGER' || authReq.user?.role === 'RECEPTIONIST') {
+        query += ' AND b.branch_id = ?';
+        params.push(authReq.user.branch_id);
+      } else if (branch_id) {
+        query += ' AND b.branch_id = ?';
+        params.push(branch_id);
+      }
+      
+      query += ' ORDER BY pt.transaction_date DESC LIMIT ?';
+      params.push(parseInt(limit as string));
+      
+      const [transactions] = await db.execute<RowDataPacket[]>(query, params);
+      
+      res.status(200).json({
+        success: true,
+        message: 'Recent payments retrieved successfully',
+        data: {
+          transactions,
+          count: transactions.length
+        }
+      } as ApiResponse);
+    } catch (error) {
+      console.error('Get recent payments error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve recent payments'
+      } as ApiResponse);
+    }
+  }
 }
 
 export default new DashboardController();

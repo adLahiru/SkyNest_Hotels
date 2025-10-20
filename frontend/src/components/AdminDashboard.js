@@ -123,7 +123,8 @@ const AdminDashboard = ({ user }) => {
     service_name: '',
     category: '',
     unit_price: '',
-    is_active: true
+    is_active: true,
+    image_url: ''
   });
   const [serviceFormErrors, setServiceFormErrors] = useState({});
   const [serviceSubmitMessage, setServiceSubmitMessage] = useState({ type: '', text: '' });
@@ -143,7 +144,9 @@ const AdminDashboard = ({ user }) => {
     discount_value: '',
     applies_to: 'SERVICES_AND_ROOMS',
     start_date: '',
-    end_date: ''
+    end_date: '',
+    room_type_ids: [],
+    service_ids: []
   });
   const [discountFormErrors, setDiscountFormErrors] = useState({});
   const [discountSubmitMessage, setDiscountSubmitMessage] = useState({ type: '', text: '' });
@@ -1171,7 +1174,8 @@ const AdminDashboard = ({ user }) => {
       service_name: '',
       category: '',
       unit_price: '',
-      is_active: true
+      is_active: true,
+      image_url: ''
     });
     setServiceFormErrors({});
     setServiceSubmitMessage({ type: '', text: '' });
@@ -1184,7 +1188,8 @@ const AdminDashboard = ({ user }) => {
       service_name: service.service_name,
       category: service.category,
       unit_price: service.unit_price,
-      is_active: service.is_active
+      is_active: service.is_active,
+      image_url: service.image_url || ''
     });
     setServiceFormErrors({});
     setServiceSubmitMessage({ type: '', text: '' });
@@ -1235,7 +1240,8 @@ const AdminDashboard = ({ user }) => {
       service_name: serviceFormData.service_name.trim(),
       category: serviceFormData.category.trim(),
       unit_price: parseFloat(serviceFormData.unit_price),
-      is_active: serviceFormData.is_active
+      is_active: serviceFormData.is_active,
+      image_url: serviceFormData.image_url.trim() || null
     };
 
     const result = await serviceCatalogueService.createService(serviceData);
@@ -1267,7 +1273,8 @@ const AdminDashboard = ({ user }) => {
       service_name: serviceFormData.service_name.trim(),
       category: serviceFormData.category.trim(),
       unit_price: parseFloat(serviceFormData.unit_price),
-      is_active: serviceFormData.is_active
+      is_active: serviceFormData.is_active,
+      image_url: serviceFormData.image_url.trim() || null
     };
 
     const result = await serviceCatalogueService.updateService(selectedService.service_id, serviceData);
@@ -1341,7 +1348,9 @@ const AdminDashboard = ({ user }) => {
       discount_value: '',
       applies_to: 'SERVICES_AND_ROOMS',
       start_date: '',
-      end_date: ''
+      end_date: '',
+      room_type_ids: [],
+      service_ids: []
     });
     setDiscountFormErrors({});
     setDiscountSubmitMessage({ type: '', text: '' });
@@ -1356,7 +1365,9 @@ const AdminDashboard = ({ user }) => {
       discount_value: discount.discount_value,
       applies_to: discount.applies_to,
       start_date: discount.start_date ? discount.start_date.split('T')[0] : '',
-      end_date: discount.end_date ? discount.end_date.split('T')[0] : ''
+      end_date: discount.end_date ? discount.end_date.split('T')[0] : '',
+      room_type_ids: discount.room_type_ids || [],
+      service_ids: discount.service_ids || []
     });
     setDiscountFormErrors({});
     setDiscountSubmitMessage({ type: '', text: '' });
@@ -1372,6 +1383,30 @@ const AdminDashboard = ({ user }) => {
     if (discountFormErrors[name]) {
       setDiscountFormErrors(prev => ({ ...prev, [name]: '' }));
     }
+  };
+
+  const handleRoomTypeToggle = (roomTypeId) => {
+    setDiscountFormData(prev => {
+      const isSelected = prev.room_type_ids.includes(roomTypeId);
+      return {
+        ...prev,
+        room_type_ids: isSelected
+          ? prev.room_type_ids.filter(id => id !== roomTypeId)
+          : [...prev.room_type_ids, roomTypeId]
+      };
+    });
+  };
+
+  const handleServiceToggle = (serviceId) => {
+    setDiscountFormData(prev => {
+      const isSelected = prev.service_ids.includes(serviceId);
+      return {
+        ...prev,
+        service_ids: isSelected
+          ? prev.service_ids.filter(id => id !== serviceId)
+          : [...prev.service_ids, serviceId]
+      };
+    });
   };
 
   const validateDiscountForm = () => {
@@ -4911,6 +4946,21 @@ const AdminDashboard = ({ user }) => {
                     )}
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Image URL (Optional)
+                    </label>
+                    <input
+                      type="url"
+                      name="image_url"
+                      value={serviceFormData.image_url}
+                      onChange={handleServiceFormChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="https://example.com/service-image.jpg"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Enter a URL to an image for this service</p>
+                  </div>
+
                   <div className="flex items-center">
                     <input
                       type="checkbox"
@@ -5036,6 +5086,21 @@ const AdminDashboard = ({ user }) => {
                     {serviceFormErrors.unit_price && (
                       <p className="mt-1 text-sm text-red-600">{serviceFormErrors.unit_price}</p>
                     )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Image URL (Optional)
+                    </label>
+                    <input
+                      type="url"
+                      name="image_url"
+                      value={serviceFormData.image_url}
+                      onChange={handleServiceFormChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="https://example.com/service-image.jpg"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Enter a URL to an image for this service</p>
                   </div>
 
                   <div className="flex items-center">
@@ -5227,6 +5292,66 @@ const AdminDashboard = ({ user }) => {
                     </select>
                   </div>
 
+                  {/* Room Types Selection */}
+                  {(discountFormData.applies_to === 'ROOMS' || discountFormData.applies_to === 'SERVICES_AND_ROOMS') && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Select Room Types (Optional - leave empty for all)
+                      </label>
+                      <div className="border border-gray-300 rounded-lg p-3 max-h-48 overflow-y-auto bg-gray-50">
+                        {roomTypes.length === 0 ? (
+                          <p className="text-sm text-gray-500">No room types available</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {roomTypes.map((roomType) => (
+                              <label key={roomType.room_type_id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-2 rounded">
+                                <input
+                                  type="checkbox"
+                                  checked={discountFormData.room_type_ids.includes(roomType.room_type_id)}
+                                  onChange={() => handleRoomTypeToggle(roomType.room_type_id)}
+                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <span className="text-sm text-gray-700">
+                                  {roomType.type} - ${roomType.daily_rate}/night (Capacity: {roomType.capacity})
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Services Selection */}
+                  {(discountFormData.applies_to === 'SERVICES' || discountFormData.applies_to === 'SERVICES_AND_ROOMS') && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Select Services (Optional - leave empty for all)
+                      </label>
+                      <div className="border border-gray-300 rounded-lg p-3 max-h-48 overflow-y-auto bg-gray-50">
+                        {services.length === 0 ? (
+                          <p className="text-sm text-gray-500">No services available</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {services.map((service) => (
+                              <label key={service.service_id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-2 rounded">
+                                <input
+                                  type="checkbox"
+                                  checked={discountFormData.service_ids.includes(service.service_id)}
+                                  onChange={() => handleServiceToggle(service.service_id)}
+                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <span className="text-sm text-gray-700">
+                                  {service.service_name} - ${service.unit_price} ({service.category})
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -5384,6 +5509,66 @@ const AdminDashboard = ({ user }) => {
                       <option value="ROOMS">Rooms Only</option>
                     </select>
                   </div>
+
+                  {/* Room Types Selection */}
+                  {(discountFormData.applies_to === 'ROOMS' || discountFormData.applies_to === 'SERVICES_AND_ROOMS') && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Select Room Types (Optional - leave empty for all)
+                      </label>
+                      <div className="border border-gray-300 rounded-lg p-3 max-h-48 overflow-y-auto bg-gray-50">
+                        {roomTypes.length === 0 ? (
+                          <p className="text-sm text-gray-500">No room types available</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {roomTypes.map((roomType) => (
+                              <label key={roomType.room_type_id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-2 rounded">
+                                <input
+                                  type="checkbox"
+                                  checked={discountFormData.room_type_ids.includes(roomType.room_type_id)}
+                                  onChange={() => handleRoomTypeToggle(roomType.room_type_id)}
+                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <span className="text-sm text-gray-700">
+                                  {roomType.type} - ${roomType.daily_rate}/night (Capacity: {roomType.capacity})
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Services Selection */}
+                  {(discountFormData.applies_to === 'SERVICES' || discountFormData.applies_to === 'SERVICES_AND_ROOMS') && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Select Services (Optional - leave empty for all)
+                      </label>
+                      <div className="border border-gray-300 rounded-lg p-3 max-h-48 overflow-y-auto bg-gray-50">
+                        {services.length === 0 ? (
+                          <p className="text-sm text-gray-500">No services available</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {services.map((service) => (
+                              <label key={service.service_id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-2 rounded">
+                                <input
+                                  type="checkbox"
+                                  checked={discountFormData.service_ids.includes(service.service_id)}
+                                  onChange={() => handleServiceToggle(service.service_id)}
+                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <span className="text-sm text-gray-700">
+                                  {service.service_name} - ${service.unit_price} ({service.category})
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>

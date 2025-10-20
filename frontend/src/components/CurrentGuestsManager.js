@@ -44,6 +44,8 @@ const CurrentGuestsManager = ({ user }) => {
   // Payment modal state
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [transactionReference, setTransactionReference] = useState('');
+  const [paymentNotes, setPaymentNotes] = useState('');
   const [processingPayment, setProcessingPayment] = useState(false);
 
   useEffect(() => {
@@ -101,6 +103,8 @@ const CurrentGuestsManager = ({ user }) => {
     setSelectedBooking(booking);
     setPaymentAmount('');
     setPaymentMethod('cash');
+    setTransactionReference('');
+    setPaymentNotes('');
     setShowPaymentModal(true);
   };
 
@@ -148,7 +152,9 @@ const CurrentGuestsManager = ({ user }) => {
       const result = await paymentService.markPayment(
         selectedBooking.booking_id,
         parseFloat(paymentAmount),
-        paymentMethod
+        paymentMethod,
+        transactionReference || null,
+        paymentNotes || null
       );
 
       if (result.success) {
@@ -619,7 +625,7 @@ const CurrentGuestsManager = ({ user }) => {
               </div>
 
               {/* Payment Method */}
-              <div className="mb-6">
+              <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Payment Method *
                 </label>
@@ -634,6 +640,36 @@ const CurrentGuestsManager = ({ user }) => {
                   <option value="bank_transfer">Bank Transfer</option>
                   <option value="mobile_payment">Mobile Payment</option>
                 </select>
+              </div>
+
+              {/* Transaction Reference */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Transaction Reference (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., Receipt #, Check #, Transaction ID"
+                  value={transactionReference}
+                  onChange={(e) => setTransactionReference(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 mt-1">Enter receipt number, check number, or transaction ID for record keeping</p>
+              </div>
+
+              {/* Payment Notes */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Notes (Optional)
+                </label>
+                <textarea
+                  placeholder="Add any additional notes about this payment..."
+                  value={paymentNotes}
+                  onChange={(e) => setPaymentNotes(e.target.value)}
+                  rows="3"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                />
+                <p className="text-xs text-gray-500 mt-1">Optional notes or comments about this transaction</p>
               </div>
 
               {/* Info Message */}

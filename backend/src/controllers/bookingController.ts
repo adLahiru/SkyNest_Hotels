@@ -381,7 +381,15 @@ export const getBookings = async (req: AuthenticatedRequest, res: Response): Pro
                         r.room_no, rt.type as room_type, rt.daily_rate,
                         hb.branch_name,
                         su.name as staff_name,
-                        p.payment_id, p.total_charges, p.amount_paid, p.due_amount, p.payment_status
+                        b.total_amount,
+                        COALESCE(p.payment_id, NULL) as payment_id, 
+                        COALESCE(p.total_charges, b.total_amount, 0) as total_charges, 
+                        COALESCE(p.amount_paid, 0) as amount_paid, 
+                        COALESCE(p.due_amount, b.total_amount, 0) as due_amount, 
+                        COALESCE(p.payment_status, 'pending') as payment_status,
+                        (SELECT COALESCE(SUM(bs.total_price), 0) 
+                         FROM booking_services bs 
+                         WHERE bs.booking_id = b.booking_id) as service_charges
                  FROM booking b
                  LEFT JOIN users u ON b.user_id = u.user_id
                  LEFT JOIN rooms r ON b.room_id = r.room_id
@@ -445,6 +453,12 @@ export const getBookings = async (req: AuthenticatedRequest, res: Response): Pro
       const dailyRate = booking.daily_rate ? parseFloat(booking.daily_rate.toString()) : 0;
       const totalCost = calculateTotalCost(dailyRate, totalDays);
 
+      const totalAmount = (booking as any).total_amount ? parseFloat((booking as any).total_amount.toString()) : totalCost;
+      const serviceCharges = (booking as any).service_charges ? parseFloat((booking as any).service_charges.toString()) : 0;
+      const totalCharges = (booking as any).total_charges ? parseFloat((booking as any).total_charges.toString()) : totalAmount;
+      const amountPaid = (booking as any).amount_paid ? parseFloat((booking as any).amount_paid.toString()) : 0;
+      const dueAmount = (booking as any).due_amount ? parseFloat((booking as any).due_amount.toString()) : totalCharges;
+      
       return {
         booking_id: booking.booking_id,
         user_id: booking.user_id,
@@ -464,11 +478,13 @@ export const getBookings = async (req: AuthenticatedRequest, res: Response): Pro
         daily_rate: dailyRate,
         total_days: totalDays,
         total_cost: totalCost,
+        total_amount: totalAmount,
+        service_charges: serviceCharges,
         payment_id: (booking as any).payment_id,
-        total_charges: (booking as any).total_charges,
-        amount_paid: (booking as any).amount_paid,
-        due_amount: (booking as any).due_amount,
-        payment_status: (booking as any).payment_status,
+        total_charges: totalCharges,
+        amount_paid: amountPaid,
+        due_amount: dueAmount,
+        payment_status: (booking as any).payment_status || 'pending',
         created_at: booking.created_at,
         updated_at: booking.updated_at
       };
@@ -990,13 +1006,23 @@ export const getMyBookings = async (req: AuthenticatedRequest, res: Response): P
     let query = `SELECT b.*, 
                         r.room_no, rt.type as room_type, rt.daily_rate,
                         hb.branch_name,
-                        su.name as staff_name
+                        su.name as staff_name,
+                        b.total_amount,
+                        COALESCE(p.payment_id, NULL) as payment_id, 
+                        COALESCE(p.total_charges, b.total_amount, 0) as total_charges, 
+                        COALESCE(p.amount_paid, 0) as amount_paid, 
+                        COALESCE(p.due_amount, b.total_amount, 0) as due_amount, 
+                        COALESCE(p.payment_status, 'pending') as payment_status,
+                        (SELECT COALESCE(SUM(bs.total_price), 0) 
+                         FROM booking_services bs 
+                         WHERE bs.booking_id = b.booking_id) as service_charges
                  FROM booking b
                  LEFT JOIN rooms r ON b.room_id = r.room_id
                  LEFT JOIN room_types rt ON r.room_type_id = rt.room_type_id
                  LEFT JOIN hotel_branches hb ON b.branch_id = hb.branch_id
                  LEFT JOIN staff st ON b.staff_id = st.staff_id
                  LEFT JOIN users su ON st.staff_id = su.user_id
+                 LEFT JOIN payments p ON b.booking_id = p.booking_id
                  WHERE b.user_id = ?`;
     const params: any[] = [user_id];
 
@@ -1023,6 +1049,12 @@ export const getMyBookings = async (req: AuthenticatedRequest, res: Response): P
       );
       const dailyRate = booking.daily_rate ? parseFloat(booking.daily_rate.toString()) : 0;
       const totalCost = calculateTotalCost(dailyRate, totalDays);
+      
+      const totalAmount = (booking as any).total_amount ? parseFloat((booking as any).total_amount.toString()) : totalCost;
+      const serviceCharges = (booking as any).service_charges ? parseFloat((booking as any).service_charges.toString()) : 0;
+      const totalCharges = (booking as any).total_charges ? parseFloat((booking as any).total_charges.toString()) : totalAmount;
+      const amountPaid = (booking as any).amount_paid ? parseFloat((booking as any).amount_paid.toString()) : 0;
+      const dueAmount = (booking as any).due_amount ? parseFloat((booking as any).due_amount.toString()) : totalCharges;
 
       return {
         booking_id: booking.booking_id,
@@ -1040,6 +1072,13 @@ export const getMyBookings = async (req: AuthenticatedRequest, res: Response): P
         daily_rate: dailyRate,
         total_days: totalDays,
         total_cost: totalCost,
+        total_amount: totalAmount,
+        service_charges: serviceCharges,
+        payment_id: (booking as any).payment_id,
+        total_charges: totalCharges,
+        amount_paid: amountPaid,
+        due_amount: dueAmount,
+        payment_status: (booking as any).payment_status || 'pending',
         created_at: booking.created_at,
         updated_at: booking.updated_at
       };

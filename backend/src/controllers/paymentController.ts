@@ -412,7 +412,7 @@ export const markPayment = async (req: AuthenticatedRequest, res: Response): Pro
   const connection = await db.getConnection();
   
   try {
-    const { booking_id, amount, payment_method } = req.body;
+    const { booking_id, amount, payment_method, transaction_reference, notes } = req.body;
     const staffId = req.user?.staff_id || req.user?.user_id;
     
     // Validation
@@ -498,9 +498,9 @@ export const markPayment = async (req: AuthenticatedRequest, res: Response): Pro
     await connection.query(
       `INSERT INTO payment_transactions (
         transaction_id, payment_id, booking_id, transaction_date,
-        amount, payment_method, processed_by_staff_id
-      ) VALUES (?, ?, ?, NOW(), ?, ?, ?)`,
-      [transaction_id, payment_id, booking_id, amount, payment_method, staffId]
+        amount, payment_method, transaction_reference, notes, processed_by_staff_id
+      ) VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, ?)`,
+      [transaction_id, payment_id, booking_id, amount, payment_method, transaction_reference || null, notes || null, staffId]
     );
     
     await connection.commit();

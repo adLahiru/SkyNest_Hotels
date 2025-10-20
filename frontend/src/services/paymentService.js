@@ -11,14 +11,18 @@ const paymentService = {
    * @param {string} bookingId - Booking ID
    * @param {number} amount - Payment amount
    * @param {string} paymentMethod - Payment method (cash, credit_card, etc.)
+   * @param {string} transactionReference - Optional transaction reference
+   * @param {string} notes - Optional payment notes
    * @returns {Promise} Response with payment details
    */
-  markPayment: async (bookingId, amount, paymentMethod) => {
+  markPayment: async (bookingId, amount, paymentMethod, transactionReference = null, notes = null) => {
     try {
       const response = await apiClient.post('/payments/mark-payment', {
         booking_id: bookingId,
         amount: amount,
         payment_method: paymentMethod,
+        transaction_reference: transactionReference,
+        notes: notes,
       });
       return {
         success: response.data.success || true,
