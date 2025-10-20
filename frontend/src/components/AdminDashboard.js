@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2, Search, Filter, X, Eye, EyeOff, Home, Bed, Upload, FileText } from 'lucide-react';
+import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2, Search, Filter, X, Eye, EyeOff, Home, Bed, Upload, FileText, Briefcase } from 'lucide-react';
 import dashboardService from '../services/dashboardService';
 import userService from '../services/userService';
 import branchService from '../services/branchService';
 import roomService from '../services/roomService';
 import roomTypeService from '../services/roomTypeService';
+import serviceCatalogueService from '../services/serviceCatalogueService';
 import ReportsMain from './Reports/ReportsMain';
 
 const AdminDashboard = ({ user }) => {
@@ -108,6 +109,23 @@ const AdminDashboard = ({ user }) => {
   const [branchIsDragging, setBranchIsDragging] = useState(false);
   const [branchPhotoPreview, setBranchPhotoPreview] = useState(null);
 
+  // Service management states
+  const [services, setServices] = useState([]);
+  const [loadingServices, setLoadingServices] = useState(false);
+  const [serviceSearchQuery, setServiceSearchQuery] = useState('');
+  const [showAddServiceModal, setShowAddServiceModal] = useState(false);
+  const [serviceFormData, setServiceFormData] = useState({
+    service_name: '',
+    price: '',
+    branch_id: '',
+    photo: '',
+    description: ''
+  });
+  const [serviceFormErrors, setServiceFormErrors] = useState({});
+  const [serviceSubmitMessage, setServiceSubmitMessage] = useState({ type: '', text: '' });
+  const [serviceIsDragging, setServiceIsDragging] = useState(false);
+  const [servicePhotoPreview, setServicePhotoPreview] = useState(null);
+
   useEffect(() => {
     fetchDashboardStats();
     fetchBranches();
@@ -123,8 +141,10 @@ const AdminDashboard = ({ user }) => {
       fetchRoomTypes();
     } else if (activeTab === 'branches') {
       fetchBranches();
+    } else if (activeTab === 'services') {
+      fetchServices();
     }
-  }, [activeTab, searchQuery, roleFilter, roomSearchQuery, roomStateFilter, roomTypeFilter, roomBranchFilter, roomFloorFilter, roomTypeSearchQuery, minCapacityFilter, maxCapacityFilter, minPriceFilter, maxPriceFilter, branchSearchQuery]);
+  }, [activeTab, searchQuery, roleFilter, roomSearchQuery, roomStateFilter, roomTypeFilter, roomBranchFilter, roomFloorFilter, roomTypeSearchQuery, minCapacityFilter, maxCapacityFilter, minPriceFilter, maxPriceFilter, branchSearchQuery, serviceSearchQuery]);
 
   const fetchDashboardStats = async () => {
     setLoading(true);
@@ -157,6 +177,32 @@ const AdminDashboard = ({ user }) => {
       setBranches(result.branches);
     }
     setLoadingBranches(false);
+  };
+
+  const fetchServices = async () => {
+    setLoadingServices(true);
+    try {
+      const result = await serviceCatalogueService.getAllServices();
+      if (result.success) {
+        let filteredServices = result.services || [];
+        
+        // Apply search filter
+        if (serviceSearchQuery) {
+          filteredServices = filteredServices.filter(service =>
+            service.service_name.toLowerCase().includes(serviceSearchQuery.toLowerCase())
+          );
+        }
+        
+        setServices(filteredServices);
+      } else {
+        console.error('Failed to fetch services:', result.message);
+        setServices([]); // Set empty array on failure
+      }
+    } catch (error) {
+      console.error('Error fetching services:', error);
+      setServices([]); // Set empty array on error
+    }
+    setLoadingServices(false);
   };
 
   const fetchRoomTypes = async () => {
@@ -1104,6 +1150,152 @@ const AdminDashboard = ({ user }) => {
     setSelectedBranch(null);
   };
 
+  // Service Management Functions
+  const processServiceImageFile = (file) => {
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setServiceFormErrors(prev => ({
+        ...prev,
+        photo: 'Please upload a valid image file (JPEG, PNG, GIF, or WebP)'
+      }));
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setServiceFormErrors(prev => ({
+        ...prev,
+        photo: 'Image size must be less than 5MB'
+      }));
+      return;
+    }
+
+    // Clear any previous photo errors
+    setServiceFormErrors(prev => ({
+      ...prev,
+      photo: ''
+    }));
+
+    // Convert to base64
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result;
+      setServicePhotoPreview(base64String);
+      setServiceFormData(prev => ({
+        ...prev,
+        photo: base64String
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleServiceDragOver = (e) => {
+    e.preventDefault();
+    setServiceIsDragging(true);
+  };
+
+  const handleServiceDragLeave = (e) => {
+    e.preventDefault();
+    setServiceIsDragging(false);
+  };
+
+  const handleServiceDrop = (e) => {
+    e.preventDefault();
+    setServiceIsDragging(false);
+    
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      processServiceImageFile(file);
+    }
+  };
+
+  const handleRemoveServicePhoto = () => {
+    setServicePhotoPreview(null);
+    setServiceFormData(prev => ({
+      ...prev,
+      photo: ''
+    }));
+  };
+
+  const handleAddServiceClick = () => {
+    setShowAddServiceModal(true);
+    setServiceFormData({
+      service_name: '',
+      price: '',
+      branch_id: '',
+      photo: '',
+      description: ''
+    });
+    setServiceFormErrors({});
+    setServiceSubmitMessage({ type: '', text: '' });
+    setServicePhotoPreview(null);
+  };
+
+  const handleServiceInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setServiceFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+    
+    // Clear error for this field
+    if (serviceFormErrors[name]) {
+      setServiceFormErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+  };
+
+  const validateServiceForm = () => {
+    const errors = {};
+    
+    if (!serviceFormData.service_name?.trim()) {
+      errors.service_name = 'Service name is required';
+    }
+
+    if (!serviceFormData.branch_id?.trim()) {
+      errors.branch_id = 'Branch selection is required';
+    }
+    
+    if (!serviceFormData.price || parseFloat(serviceFormData.price) <= 0) {
+      errors.price = 'Valid price is required';
+    }
+    
+    setServiceFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmitService = async (e) => {
+    e.preventDefault();
+    
+    if (!validateServiceForm()) {
+      return;
+    }
+
+    setLoadingServices(true);
+    setServiceSubmitMessage({ type: '', text: '' });
+    
+    const result = await serviceCatalogueService.createService({
+      ...serviceFormData,
+      price: parseFloat(serviceFormData.price)
+    });
+    
+    if (result.success) {
+      setServiceSubmitMessage({ type: 'success', text: 'Service created successfully!' });
+      setTimeout(() => {
+        setShowAddServiceModal(false);
+        fetchServices();
+      }, 1500);
+    } else {
+      setServiceSubmitMessage({ type: 'error', text: result.message || 'Failed to create service' });
+    }
+    
+    setLoadingServices(false);
+  };
+
   const getRoleBadgeColor = (role) => {
     switch(role) {
       case 'ADMIN': return 'bg-purple-100 text-purple-800';
@@ -1267,6 +1459,17 @@ const AdminDashboard = ({ user }) => {
               >
                 <Users className="w-5 h-5 inline-block mr-2" />
                 Users
+              </button>
+              <button
+                onClick={() => setActiveTab('services')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'services'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <Briefcase className="w-5 h-5 inline-block mr-2" />
+                Services
               </button>
               <button
                 onClick={() => setActiveTab('financial')}
@@ -2131,6 +2334,114 @@ const AdminDashboard = ({ user }) => {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Services Tab */}
+            {activeTab === 'services' && (
+              <div className="space-y-6">
+                {/* Header with Add Service Button */}
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Service Management</h2>
+                    <p className="text-gray-600 mt-1">Manage hotel services and amenities</p>
+                  </div>
+                  <button
+                    onClick={handleAddServiceClick}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center"
+                  >
+                    <Plus className="w-5 h-5 mr-2" />
+                    Add Service
+                  </button>
+                </div>
+
+                {/* Search and Filters */}
+                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                  <div className="flex flex-col md:flex-row gap-4">
+                    <div className="flex-1 relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="text"
+                        placeholder="Search services..."
+                        value={serviceSearchQuery}
+                        onChange={(e) => setServiceSearchQuery(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Services Table */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                  {loadingServices ? (
+                    <div className="p-8 text-center">
+                      <p className="text-gray-500">Loading services...</p>
+                    </div>
+                  ) : services.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <Briefcase className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-gray-500">No services found</p>
+                      <p className="text-sm text-gray-400 mt-1">Click "Add Service" to create a new service</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Photo
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Service Name
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Branch
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Price
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Description
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {Array.isArray(services) && services.map((service) => (
+                            <tr key={service.service_type_id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                {service.photo ? (
+                                  <img 
+                                    src={`data:image/jpeg;base64,${service.photo}`} 
+                                    alt={service.service_name}
+                                    className="w-12 h-12 object-cover rounded"
+                                  />
+                                ) : (
+                                  <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center">
+                                    <Briefcase className="w-6 h-6 text-gray-400" />
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">{service.service_name}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-600">{service.branch_name || 'Unknown Branch'}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">${Number(service.price).toFixed(2)}</div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="text-sm text-gray-500 max-w-xs truncate">
+                                  {service.description || '-'}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -4127,6 +4438,213 @@ const AdminDashboard = ({ user }) => {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Service Modal */}
+        {showAddServiceModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-semibold text-gray-900">Add New Service</h3>
+                  <button
+                    onClick={() => setShowAddServiceModal(false)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              <form onSubmit={handleSubmitService} className="p-6 space-y-4">
+                {/* Service Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Service Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="service_name"
+                    value={serviceFormData.service_name}
+                    onChange={handleServiceInputChange}
+                    placeholder="e.g., Room Service, Spa Treatment"
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      serviceFormErrors.service_name ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                  />
+                  {serviceFormErrors.service_name && (
+                    <p className="text-red-500 text-xs mt-1">{serviceFormErrors.service_name}</p>
+                  )}
+                </div>
+
+                {/* Branch Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Branch *
+                  </label>
+                  <select
+                    name="branch_id"
+                    value={serviceFormData.branch_id}
+                    onChange={handleServiceInputChange}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      serviceFormErrors.branch_id ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                  >
+                    <option value="">Select Branch</option>
+                    {branches.map(branch => (
+                      <option key={branch.branch_id} value={branch.branch_id}>
+                        {branch.branch_name}
+                      </option>
+                    ))}
+                  </select>
+                  {serviceFormErrors.branch_id && (
+                    <p className="text-red-500 text-xs mt-1">{serviceFormErrors.branch_id}</p>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">Select the branch where this service is available</p>
+                </div>
+
+                {/* Price */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Price ($) *
+                  </label>
+                  <input
+                    type="number"
+                    name="price"
+                    value={serviceFormData.price}
+                    onChange={handleServiceInputChange}
+                    placeholder="0.00"
+                    step="0.01"
+                    min="0"
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      serviceFormErrors.price ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                  />
+                  {serviceFormErrors.price && (
+                    <p className="text-red-500 text-xs mt-1">{serviceFormErrors.price}</p>
+                  )}
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    name="description"
+                    value={serviceFormData.description}
+                    onChange={handleServiceInputChange}
+                    rows="3"
+                    placeholder="Service description..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  />
+                </div>
+
+                {/* Photo Upload */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Service Photo
+                  </label>
+                  
+                  {!servicePhotoPreview ? (
+                    <div
+                      onDragOver={handleServiceDragOver}
+                      onDragLeave={handleServiceDragLeave}
+                      onDrop={handleServiceDrop}
+                      className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                        serviceIsDragging 
+                          ? 'border-blue-500 bg-blue-50' 
+                          : 'border-gray-300 hover:border-gray-400'
+                      }`}
+                    >
+                      <Briefcase className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-sm text-gray-600 mb-2">
+                        Drag and drop an image here, or
+                      </p>
+                      <label className="inline-block">
+                        <span className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">
+                          Choose File
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            if (e.target.files[0]) {
+                              processServiceImageFile(e.target.files[0]);
+                            }
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                      <p className="text-xs text-gray-500 mt-2">
+                        PNG, JPG, GIF or WebP (Max 5MB)
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="relative inline-block">
+                      <img
+                        src={servicePhotoPreview}
+                        alt="Service preview"
+                        className="w-full h-48 object-cover rounded-lg border border-gray-300"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleRemoveServicePhoto}
+                        className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow-lg transition-colors"
+                        title="Remove photo"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                  
+                  {serviceFormErrors.photo && (
+                    <p className="text-red-500 text-xs mt-1">{serviceFormErrors.photo}</p>
+                  )}
+                </div>
+
+                {/* Success/Error Messages */}
+                {serviceSubmitMessage.text && (
+                  <div className={`p-3 rounded-lg ${
+                    serviceSubmitMessage.type === 'success'
+                      ? 'bg-green-50 text-green-800 border border-green-200'
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}>
+                    {serviceSubmitMessage.text}
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddServiceModal(false)}
+                    disabled={loadingServices}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loadingServices}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    {loadingServices ? (
+                      <>
+                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                        Adding...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Service
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
