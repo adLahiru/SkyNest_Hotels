@@ -23,6 +23,7 @@ const App = () => {
   // Booking flow state
   const [selectedBranch, setSelectedBranch] = useState(null);
   const [selectedRoom, setSelectedRoom] = useState(null);
+  const [selectedDates, setSelectedDates] = useState({ checkIn: '', checkOut: '' }); // Store selected dates
   const [pendingBookingRoom, setPendingBookingRoom] = useState(null); // For login redirect
   const [returnToPage, setReturnToPage] = useState(null); // For login redirect
 
@@ -89,9 +90,12 @@ const App = () => {
     setCurrentPage('room-selection');
   };
 
-  const handleRoomSelect = (room, branch) => {
+  const handleRoomSelect = (room, branch, dates) => {
     setSelectedRoom(room);
     setSelectedBranch(branch);
+    if (dates) {
+      setSelectedDates(dates);
+    }
     setCurrentPage('booking-form');
   };
 
@@ -103,11 +107,13 @@ const App = () => {
   const handleBackToBranches = () => {
     setSelectedBranch(null);
     setSelectedRoom(null);
+    setSelectedDates({ checkIn: '', checkOut: '' });
     setCurrentPage('branch-selection');
   };
 
   const handleBackToRooms = () => {
     setSelectedRoom(null);
+    // Keep the selected dates when going back to room selection
     setCurrentPage('room-selection');
   };
 
@@ -144,6 +150,7 @@ const App = () => {
             user={user}
             selectedRoom={selectedRoom}
             selectedBranch={selectedBranch}
+            selectedDates={selectedDates}
             onBackToRooms={handleBackToRooms}
           />
         );

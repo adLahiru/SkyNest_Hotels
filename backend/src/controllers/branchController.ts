@@ -219,9 +219,11 @@ export class BranchController {
       const connection = await db.getConnection();
 
       try {
+        // Fetch photos for display in branch selection
         const [rows] = await connection.execute<DatabaseBranchRow[]>(
           `SELECT hb.branch_id, hb.branch_name, hb.address, hb.email, hb.phone, 
-                  hb.manager_id, hb.photo, hb.created_at, hb.updated_at,
+                  hb.manager_id, hb.photo,
+                  hb.created_at, hb.updated_at,
                   u.name as manager_name, u.username as manager_username
            FROM hotel_branches hb
            LEFT JOIN users u ON hb.manager_id = u.user_id

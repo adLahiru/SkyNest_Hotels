@@ -25,26 +25,59 @@ const ContactPage = () => {
     const fetchUserData = async () => {
       try {
         setLoadingUserData(true);
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('accessToken'); // Fixed: use 'accessToken' not 'token'
         
         if (token) {
           setIsLoggedIn(true);
           
+          // Always fetch from API to get latest data (including phone)
           const response = await userService.getCurrentUserProfile();
           
           if (response.success && response.user) {
+            // Use fresh API data
             setContactForm(prev => ({
               ...prev,
               name: response.user.name || '',
               email: response.user.email || '',
               phone: response.user.phone || ''
             }));
+          } else {
+            // Fallback to localStorage only if API fails
+            const storedUser = localStorage.getItem('user');
+            if (storedUser) {
+              const userData = JSON.parse(storedUser);
+              setContactForm(prev => ({
+                ...prev,
+                name: userData.name || '',
+                email: userData.email || '',
+                phone: userData.phone || ''
+              }));
+            }
           }
         } else {
+          // No token - user is guest
           setIsLoggedIn(false);
         }
       } catch (error) {
-        setIsLoggedIn(false);
+        console.error('Error fetching user data:', error);
+        // Fallback to localStorage on error
+        try {
+          const storedUser = localStorage.getItem('user');
+          if (storedUser) {
+            const userData = JSON.parse(storedUser);
+            setIsLoggedIn(true);
+            setContactForm(prev => ({
+              ...prev,
+              name: userData.name || '',
+              email: userData.email || '',
+              phone: userData.phone || ''
+            }));
+          } else {
+            setIsLoggedIn(false);
+          }
+        } catch (parseError) {
+          setIsLoggedIn(false);
+        }
       } finally {
         setLoadingUserData(false);
       }
@@ -91,14 +124,28 @@ const ContactPage = () => {
     if (result.success) {
       setShowSuccess(true);
       setIsSubmitting(false);
-      setContactForm({
-        name: '',
-        email: '',
-        phone: '',
-        subject: '',
-        message: '',
-        inquiry_type: 'general'
-      });
+      
+      // If user is logged in, preserve their auto-filled data
+      // Only reset subject, message, and inquiry_type
+      if (isLoggedIn) {
+        setContactForm(prev => ({
+          ...prev,
+          subject: '',
+          message: '',
+          inquiry_type: 'general'
+        }));
+      } else {
+        // For non-logged-in users, reset everything
+        setContactForm({
+          name: '',
+          email: '',
+          phone: '',
+          subject: '',
+          message: '',
+          inquiry_type: 'general'
+        });
+      }
+      
       setFormErrors({});
       
       // Hide success message after 5 seconds

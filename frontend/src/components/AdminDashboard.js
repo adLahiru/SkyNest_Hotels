@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2, Search, Filter, X, Eye, EyeOff, Home, Bed, Upload } from 'lucide-react';
+import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2, Search, Filter, X, Eye, EyeOff, Home, Bed, Upload, FileText, Briefcase, MessageSquare, Mail, Phone, Clock } from 'lucide-react';
 import dashboardService from '../services/dashboardService';
 import userService from '../services/userService';
 import branchService from '../services/branchService';
 import roomService from '../services/roomService';
 import roomTypeService from '../services/roomTypeService';
+import serviceCatalogueService from '../services/serviceCatalogueService';
+import contactService from '../services/contactService';
+import ReportsMain from './Reports/ReportsMain';
 
 const AdminDashboard = ({ user }) => {
   const [stats, setStats] = useState(null);
@@ -107,6 +110,34 @@ const AdminDashboard = ({ user }) => {
   const [branchIsDragging, setBranchIsDragging] = useState(false);
   const [branchPhotoPreview, setBranchPhotoPreview] = useState(null);
 
+  // Service management states
+  const [services, setServices] = useState([]);
+  const [loadingServices, setLoadingServices] = useState(false);
+  const [serviceSearchQuery, setServiceSearchQuery] = useState('');
+  const [showAddServiceModal, setShowAddServiceModal] = useState(false);
+  const [showEditServiceModal, setShowEditServiceModal] = useState(false);
+  const [showDeleteServiceModal, setShowDeleteServiceModal] = useState(false);
+  const [selectedService, setSelectedService] = useState(null);
+  const [serviceFormData, setServiceFormData] = useState({
+    service_name: '',
+    price: '',
+    branch_id: '',
+    photo: '',
+    description: ''
+  });
+  const [serviceFormErrors, setServiceFormErrors] = useState({});
+  const [serviceSubmitMessage, setServiceSubmitMessage] = useState({ type: '', text: '' });
+  const [serviceIsDragging, setServiceIsDragging] = useState(false);
+  const [servicePhotoPreview, setServicePhotoPreview] = useState(null);
+
+  // Contact/Reviews management states
+  const [contactMessages, setContactMessages] = useState([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [messageFilter, setMessageFilter] = useState('pending'); // 'pending' or 'read'
+  const [messageSearchQuery, setMessageSearchQuery] = useState('');
+  const [showDeleteMessageModal, setShowDeleteMessageModal] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+
   useEffect(() => {
     fetchDashboardStats();
     fetchBranches();
@@ -123,9 +154,12 @@ const AdminDashboard = ({ user }) => {
       fetchRoomTypes();
     } else if (activeTab === 'branches') {
       fetchBranches();
+    } else if (activeTab === 'services') {
+      fetchServices();
+    } else if (activeTab === 'messages') {
+      fetchContactMessages();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, searchQuery, roleFilter, roomSearchQuery, roomStateFilter, roomTypeFilter, roomBranchFilter, roomFloorFilter, roomTypeSearchQuery, minCapacityFilter, maxCapacityFilter, minPriceFilter, maxPriceFilter, branchSearchQuery]);
+  }, [activeTab, searchQuery, roleFilter, roomSearchQuery, roomStateFilter, roomTypeFilter, roomBranchFilter, roomFloorFilter, roomTypeSearchQuery, minCapacityFilter, maxCapacityFilter, minPriceFilter, maxPriceFilter, branchSearchQuery, serviceSearchQuery, messageFilter, messageSearchQuery]);
 
   const fetchDashboardStats = async () => {
     setLoading(true);
@@ -157,6 +191,32 @@ const AdminDashboard = ({ user }) => {
       setBranches(result.branches);
     }
     setLoadingBranches(false);
+  };
+
+  const fetchServices = async () => {
+    setLoadingServices(true);
+    try {
+      const result = await serviceCatalogueService.getAllServices();
+      if (result.success) {
+        let filteredServices = result.services || [];
+        
+        // Apply search filter
+        if (serviceSearchQuery) {
+          filteredServices = filteredServices.filter(service =>
+            service.service_name.toLowerCase().includes(serviceSearchQuery.toLowerCase())
+          );
+        }
+        
+        setServices(filteredServices);
+      } else {
+        console.error('Failed to fetch services:', result.message);
+        setServices([]); // Set empty array on failure
+      }
+    } catch (error) {
+      console.error('Error fetching services:', error);
+      setServices([]); // Set empty array on error
+    }
+    setLoadingServices(false);
   };
 
   const fetchRoomTypes = async () => {
@@ -1098,6 +1158,295 @@ const AdminDashboard = ({ user }) => {
     setSelectedBranch(null);
   };
 
+  // Service Management Functions
+  const processServiceImageFile = (file) => {
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setServiceFormErrors(prev => ({
+        ...prev,
+        photo: 'Please upload a valid image file (JPEG, PNG, GIF, or WebP)'
+      }));
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setServiceFormErrors(prev => ({
+        ...prev,
+        photo: 'Image size must be less than 5MB'
+      }));
+      return;
+    }
+
+    // Clear any previous photo errors
+    setServiceFormErrors(prev => ({
+      ...prev,
+      photo: ''
+    }));
+
+    // Convert to base64
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result;
+      setServicePhotoPreview(base64String);
+      setServiceFormData(prev => ({
+        ...prev,
+        photo: base64String
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleServiceDragOver = (e) => {
+    e.preventDefault();
+    setServiceIsDragging(true);
+  };
+
+  const handleServiceDragLeave = (e) => {
+    e.preventDefault();
+    setServiceIsDragging(false);
+  };
+
+  const handleServiceDrop = (e) => {
+    e.preventDefault();
+    setServiceIsDragging(false);
+    
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      processServiceImageFile(file);
+    }
+  };
+
+  const handleRemoveServicePhoto = () => {
+    setServicePhotoPreview(null);
+    setServiceFormData(prev => ({
+      ...prev,
+      photo: ''
+    }));
+  };
+
+  const handleAddServiceClick = () => {
+    setShowAddServiceModal(true);
+    setServiceFormData({
+      service_name: '',
+      price: '',
+      branch_id: '',
+      photo: '',
+      description: ''
+    });
+    setServiceFormErrors({});
+    setServiceSubmitMessage({ type: '', text: '' });
+    setServicePhotoPreview(null);
+  };
+
+  const handleServiceInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setServiceFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+    
+    // Clear error for this field
+    if (serviceFormErrors[name]) {
+      setServiceFormErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+  };
+
+  const validateServiceForm = () => {
+    const errors = {};
+    
+    if (!serviceFormData.service_name?.trim()) {
+      errors.service_name = 'Service name is required';
+    }
+
+    if (!serviceFormData.branch_id?.trim()) {
+      errors.branch_id = 'Branch selection is required';
+    }
+    
+    if (!serviceFormData.price || parseFloat(serviceFormData.price) <= 0) {
+      errors.price = 'Valid price is required';
+    }
+    
+    setServiceFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmitService = async (e) => {
+    e.preventDefault();
+    
+    if (!validateServiceForm()) {
+      return;
+    }
+
+    setLoadingServices(true);
+    setServiceSubmitMessage({ type: '', text: '' });
+    
+    const result = await serviceCatalogueService.createService({
+      ...serviceFormData,
+      price: parseFloat(serviceFormData.price)
+    });
+    
+    if (result.success) {
+      setServiceSubmitMessage({ type: 'success', text: 'Service created successfully!' });
+      setTimeout(() => {
+        setShowAddServiceModal(false);
+        fetchServices();
+      }, 1500);
+    } else {
+      setServiceSubmitMessage({ type: 'error', text: result.message || 'Failed to create service' });
+    }
+    
+    setLoadingServices(false);
+  };
+
+  const handleEditServiceClick = (service) => {
+    setSelectedService(service);
+    setServiceFormData({
+      service_name: service.service_name,
+      price: service.price,
+      branch_id: service.branch_id,
+      photo: service.photo || '',
+      description: service.description || ''
+    });
+    setServicePhotoPreview(service.photo ? `data:image/jpeg;base64,${service.photo}` : null);
+    setServiceFormErrors({});
+    setServiceSubmitMessage({ type: '', text: '' });
+    setShowEditServiceModal(true);
+  };
+
+  const handleSubmitEditService = async (e) => {
+    e.preventDefault();
+    
+    if (!validateServiceForm()) {
+      return;
+    }
+
+    if (!selectedService) return;
+
+    setLoadingServices(true);
+    setServiceSubmitMessage({ type: '', text: '' });
+    
+    const result = await serviceCatalogueService.updateService(selectedService.service_type_id, {
+      ...serviceFormData,
+      price: parseFloat(serviceFormData.price)
+    });
+    
+    if (result.success) {
+      setServiceSubmitMessage({ type: 'success', text: 'Service updated successfully!' });
+      setTimeout(() => {
+        setShowEditServiceModal(false);
+        setSelectedService(null);
+        fetchServices();
+      }, 1500);
+    } else {
+      setServiceSubmitMessage({ type: 'error', text: result.message || 'Failed to update service' });
+    }
+    
+    setLoadingServices(false);
+  };
+
+  const handleDeleteServiceClick = (service) => {
+    setSelectedService(service);
+    setShowDeleteServiceModal(true);
+  };
+
+  const handleConfirmDeleteService = async () => {
+    if (!selectedService) return;
+
+    setLoadingServices(true);
+    
+    const result = await serviceCatalogueService.deleteService(selectedService.service_type_id);
+    
+    if (result.success) {
+      setShowDeleteServiceModal(false);
+      setSelectedService(null);
+      setTimeout(() => {
+        fetchServices();
+      }, 500);
+    } else {
+      setServiceSubmitMessage({ type: 'error', text: result.message || 'Failed to delete service' });
+    }
+    
+    setLoadingServices(false);
+  };
+
+  const handleCancelDeleteService = () => {
+    setShowDeleteServiceModal(false);
+    setSelectedService(null);
+  };
+
+  // Contact Messages Functions
+  const fetchContactMessages = async () => {
+    setLoadingMessages(true);
+    try {
+      const result = await contactService.getAllContactMessages({ status: messageFilter });
+      if (result.success) {
+        let filtered = result.messages || [];
+        
+        // Apply search filter
+        if (messageSearchQuery) {
+          filtered = filtered.filter(msg =>
+            msg.name.toLowerCase().includes(messageSearchQuery.toLowerCase()) ||
+            msg.email.toLowerCase().includes(messageSearchQuery.toLowerCase()) ||
+            msg.subject.toLowerCase().includes(messageSearchQuery.toLowerCase()) ||
+            msg.message.toLowerCase().includes(messageSearchQuery.toLowerCase())
+          );
+        }
+        
+        setContactMessages(filtered);
+      } else {
+        console.error('Failed to fetch messages:', result.message);
+        setContactMessages([]);
+      }
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      setContactMessages([]);
+    }
+    setLoadingMessages(false);
+  };
+
+  const handleMarkAsRead = async (messageId) => {
+    const result = await contactService.updateContactStatus(messageId, 'read');
+    if (result.success) {
+      fetchContactMessages();
+    } else {
+      console.error('Failed to mark message as read:', result.message);
+    }
+  };
+
+  const handleDeleteMessageClick = (message) => {
+    setSelectedMessage(message);
+    setShowDeleteMessageModal(true);
+  };
+
+  const handleConfirmDeleteMessage = async () => {
+    if (!selectedMessage) return;
+
+    setLoadingMessages(true);
+    
+    const result = await contactService.deleteContactMessage(selectedMessage.contact_id);
+    
+    if (result.success) {
+      setShowDeleteMessageModal(false);
+      setSelectedMessage(null);
+      setTimeout(() => {
+        fetchContactMessages();
+      }, 500);
+    }
+    
+    setLoadingMessages(false);
+  };
+
+  const handleCancelDeleteMessage = () => {
+    setShowDeleteMessageModal(false);
+    setSelectedMessage(null);
+  };
+
   const getRoleBadgeColor = (role) => {
     switch(role) {
       case 'ADMIN': return 'bg-purple-100 text-purple-800';
@@ -1263,6 +1612,28 @@ const AdminDashboard = ({ user }) => {
                 Users
               </button>
               <button
+                onClick={() => setActiveTab('services')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'services'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <Briefcase className="w-5 h-5 inline-block mr-2" />
+                Services
+              </button>
+              <button
+                onClick={() => setActiveTab('messages')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'messages'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <MessageSquare className="w-5 h-5 inline-block mr-2" />
+                Messages
+              </button>
+              <button
                 onClick={() => setActiveTab('financial')}
                 className={`py-4 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'financial'
@@ -1272,6 +1643,17 @@ const AdminDashboard = ({ user }) => {
               >
                 <TrendingUp className="w-5 h-5 inline-block mr-2" />
                 Financial
+              </button>
+              <button
+                onClick={() => setActiveTab('reports')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'reports'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <FileText className="w-5 h-5 inline-block mr-2" />
+                Reports
               </button>
             </nav>
           </div>
@@ -1303,47 +1685,98 @@ const AdminDashboard = ({ user }) => {
                   </div>
                 </div>
 
-                {/* Recent Bookings */}
+                {/* Recent Bookings by Branch */}
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Bookings</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Guest</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Branch</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Room</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check-in</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {stats?.recentBookings?.slice(0, 5).map((booking) => (
-                          <tr key={booking.booking_id} className="hover:bg-gray-50">
-                            <td className="px-4 py-3 text-sm text-gray-900">{booking.guest_name}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{booking.branch_name}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{booking.room_number}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600">
-                              {new Date(booking.check_in).toLocaleDateString()}
-                            </td>
-                            <td className="px-4 py-3">
-                              <span className={`px-2 py-1 text-xs rounded-full ${
-                                booking.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' :
-                                booking.status === 'CHECKED_IN' ? 'bg-blue-100 text-blue-800' :
-                                booking.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
-                                'bg-gray-100 text-gray-800'
-                              }`}>
-                                {booking.status}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                              ${Number(booking.total_amount).toFixed(2)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Bookings by Branch</h3>
+                  <div className="space-y-6">
+                    {stats?.recentBookingsByBranch?.map((branchData) => (
+                      <div key={branchData.branch_id} className="bg-white rounded-lg shadow border border-gray-200">
+                        {/* Branch Header */}
+                        <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                          <div>
+                            <h4 className="text-base font-semibold text-gray-900">{branchData.branch_name}</h4>
+                            <p className="text-sm text-gray-600 mt-1">
+                              Showing {Math.min(5, branchData.bookings.length)} of {branchData.total_count} bookings
+                            </p>
+                          </div>
+                          {branchData.total_count > 5 && (
+                            <button
+                              onClick={() => {
+                                setActiveTab('bookings');
+                                // You can add additional filtering logic here if needed
+                              }}
+                              className="flex items-center px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                            >
+                              See More ({branchData.total_count - 5} more)
+                            </button>
+                          )}
+                        </div>
+                        
+                        {/* Bookings Table */}
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Guest</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Room</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check-in</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check-out</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {branchData.bookings.length === 0 ? (
+                                <tr>
+                                  <td colSpan="6" className="px-6 py-8 text-center text-sm text-gray-500">
+                                    No bookings found for this branch
+                                  </td>
+                                </tr>
+                              ) : (
+                                branchData.bookings.map((booking) => (
+                                  <tr key={booking.booking_id} className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                      {booking.guest_name}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                      {booking.room_number}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                      {new Date(booking.check_in).toLocaleDateString()}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                      {new Date(booking.check_out).toLocaleDateString()}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                        booking.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' :
+                                        booking.status === 'CHECKED_IN' ? 'bg-blue-100 text-blue-800' :
+                                        booking.status === 'CHECKED_OUT' ? 'bg-purple-100 text-purple-800' :
+                                        booking.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
+                                        booking.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
+                                        'bg-gray-100 text-gray-800'
+                                      }`}>
+                                        {booking.status}
+                                      </span>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                                      ${Number(booking.total_amount || 0).toFixed(2)}
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {(!stats?.recentBookingsByBranch || stats.recentBookingsByBranch.length === 0) && (
+                      <div className="bg-white rounded-lg shadow border border-gray-200 p-12 text-center">
+                        <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                        <p className="text-gray-500 text-lg">No recent bookings found</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2066,6 +2499,296 @@ const AdminDashboard = ({ user }) => {
               </div>
             )}
 
+            {/* Services Tab */}
+            {activeTab === 'services' && (
+              <div className="space-y-6">
+                {/* Header with Add Service Button */}
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Service Management</h2>
+                    <p className="text-gray-600 mt-1">Manage hotel services and amenities</p>
+                  </div>
+                  <button
+                    onClick={handleAddServiceClick}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center"
+                  >
+                    <Plus className="w-5 h-5 mr-2" />
+                    Add Service
+                  </button>
+                </div>
+
+                {/* Search and Filters */}
+                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                  <div className="flex flex-col md:flex-row gap-4">
+                    <div className="flex-1 relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="text"
+                        placeholder="Search services..."
+                        value={serviceSearchQuery}
+                        onChange={(e) => setServiceSearchQuery(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Services Table */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                  {loadingServices ? (
+                    <div className="p-8 text-center">
+                      <p className="text-gray-500">Loading services...</p>
+                    </div>
+                  ) : services.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <Briefcase className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-gray-500">No services found</p>
+                      <p className="text-sm text-gray-400 mt-1">Click "Add Service" to create a new service</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Photo
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Service Name
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Branch
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Price
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Description
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {Array.isArray(services) && services.map((service) => (
+                            <tr key={service.service_type_id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                {service.photo ? (
+                                  <img 
+                                    src={`data:image/jpeg;base64,${service.photo}`} 
+                                    alt={service.service_name}
+                                    className="w-12 h-12 object-cover rounded"
+                                  />
+                                ) : (
+                                  <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center">
+                                    <Briefcase className="w-6 h-6 text-gray-400" />
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">{service.service_name}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-600">{service.branch_name || 'Unknown Branch'}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">${Number(service.price).toFixed(2)}</div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="text-sm text-gray-500 max-w-xs truncate">
+                                  {service.description || '-'}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                <button 
+                                  onClick={() => handleEditServiceClick(service)}
+                                  className="text-blue-600 hover:text-blue-800 mr-3"
+                                  title="Edit Service"
+                                >
+                                  <Edit className="w-4 h-4 inline" />
+                                </button>
+                                <button 
+                                  onClick={() => handleDeleteServiceClick(service)}
+                                  className="text-red-600 hover:text-red-800"
+                                  title="Delete Service"
+                                >
+                                  <Trash2 className="w-4 h-4 inline" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Messages Tab */}
+            {activeTab === 'messages' && (
+              <div>
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Contact Messages</h3>
+                  
+                  {/* Filter buttons */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setMessageFilter('pending')}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                        messageFilter === 'pending'
+                          ? 'bg-orange-600 text-white'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      <Clock className="w-4 h-4 inline mr-2" />
+                      Needs Review
+                    </button>
+                    <button
+                      onClick={() => setMessageFilter('read')}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                        messageFilter === 'read'
+                          ? 'bg-green-600 text-white'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      <Eye className="w-4 h-4 inline mr-2" />
+                      Reviewed
+                    </button>
+                  </div>
+                </div>
+
+                {/* Search Bar */}
+                <div className="mb-6">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      placeholder="Search messages by name, email, subject, or message..."
+                      value={messageSearchQuery}
+                      onChange={(e) => setMessageSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Messages Table */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                  {loadingMessages ? (
+                    <div className="p-8 text-center">
+                      <p className="text-gray-500">Loading messages...</p>
+                    </div>
+                  ) : contactMessages.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-gray-500">No messages found</p>
+                      <p className="text-sm text-gray-400 mt-1">
+                        {messageFilter === 'pending' ? 'All messages have been reviewed' : 'No reviewed messages yet'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Date
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Name
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Contact
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Inquiry Type
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Subject
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Message
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {contactMessages.map((message) => (
+                            <tr key={message.contact_id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                                {new Date(message.created_at).toLocaleDateString()}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">{message.name}</div>
+                                {message.user_id && (
+                                  <div className="text-xs text-gray-500">User ID: {message.user_id.slice(0, 8)}...</div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <div className="text-sm text-gray-600">
+                                  <Mail className="w-3 h-3 inline mr-1" />
+                                  {message.email}
+                                </div>
+                                {message.phone && (
+                                  <div className="text-sm text-gray-600">
+                                    <Phone className="w-3 h-3 inline mr-1" />
+                                    {message.phone}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                  {message.inquiry_type || 'General'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="text-sm text-gray-900 max-w-xs truncate">
+                                  {message.subject}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="text-sm text-gray-600 max-w-md truncate">
+                                  {message.message}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                {messageFilter === 'pending' && (
+                                  <button 
+                                    onClick={() => handleMarkAsRead(message.contact_id)}
+                                    className="text-green-600 hover:text-green-800 mr-3"
+                                    title="Mark as Read"
+                                  >
+                                    <Eye className="w-4 h-4 inline" /> Read
+                                  </button>
+                                )}
+                                <button 
+                                  onClick={() => handleDeleteMessageClick(message)}
+                                  className="text-red-600 hover:text-red-800"
+                                  title="Delete Message"
+                                >
+                                  <Trash2 className="w-4 h-4 inline" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Message count */}
+                {contactMessages.length > 0 && (
+                  <div className="mt-4 text-sm text-gray-600 text-center">
+                    Showing {contactMessages.length} {messageFilter === 'pending' ? 'pending' : 'reviewed'} message{contactMessages.length !== 1 ? 's' : ''}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Financial Tab */}
             {activeTab === 'financial' && (
               <div className="space-y-6">
@@ -2113,6 +2836,11 @@ const AdminDashboard = ({ user }) => {
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Reports Tab */}
+            {activeTab === 'reports' && (
+              <ReportsMain user={user} />
             )}
           </div>
         </div>
@@ -4053,6 +4781,507 @@ const AdminDashboard = ({ user }) => {
                     )}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Service Modal */}
+        {showAddServiceModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-semibold text-gray-900">Add New Service</h3>
+                  <button
+                    onClick={() => setShowAddServiceModal(false)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              <form onSubmit={handleSubmitService} className="p-6 space-y-4">
+                {/* Service Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Service Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="service_name"
+                    value={serviceFormData.service_name}
+                    onChange={handleServiceInputChange}
+                    placeholder="e.g., Room Service, Spa Treatment"
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      serviceFormErrors.service_name ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                  />
+                  {serviceFormErrors.service_name && (
+                    <p className="text-red-500 text-xs mt-1">{serviceFormErrors.service_name}</p>
+                  )}
+                </div>
+
+                {/* Branch Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Branch *
+                  </label>
+                  <select
+                    name="branch_id"
+                    value={serviceFormData.branch_id}
+                    onChange={handleServiceInputChange}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      serviceFormErrors.branch_id ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                  >
+                    <option value="">Select Branch</option>
+                    {branches.map(branch => (
+                      <option key={branch.branch_id} value={branch.branch_id}>
+                        {branch.branch_name}
+                      </option>
+                    ))}
+                  </select>
+                  {serviceFormErrors.branch_id && (
+                    <p className="text-red-500 text-xs mt-1">{serviceFormErrors.branch_id}</p>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">Select the branch where this service is available</p>
+                </div>
+
+                {/* Price */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Price ($) *
+                  </label>
+                  <input
+                    type="number"
+                    name="price"
+                    value={serviceFormData.price}
+                    onChange={handleServiceInputChange}
+                    placeholder="0.00"
+                    step="0.01"
+                    min="0"
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      serviceFormErrors.price ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                  />
+                  {serviceFormErrors.price && (
+                    <p className="text-red-500 text-xs mt-1">{serviceFormErrors.price}</p>
+                  )}
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    name="description"
+                    value={serviceFormData.description}
+                    onChange={handleServiceInputChange}
+                    rows="3"
+                    placeholder="Service description..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  />
+                </div>
+
+                {/* Photo Upload */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Service Photo
+                  </label>
+                  
+                  {!servicePhotoPreview ? (
+                    <div
+                      onDragOver={handleServiceDragOver}
+                      onDragLeave={handleServiceDragLeave}
+                      onDrop={handleServiceDrop}
+                      className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                        serviceIsDragging 
+                          ? 'border-blue-500 bg-blue-50' 
+                          : 'border-gray-300 hover:border-gray-400'
+                      }`}
+                    >
+                      <Briefcase className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-sm text-gray-600 mb-2">
+                        Drag and drop an image here, or
+                      </p>
+                      <label className="inline-block">
+                        <span className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">
+                          Choose File
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            if (e.target.files[0]) {
+                              processServiceImageFile(e.target.files[0]);
+                            }
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                      <p className="text-xs text-gray-500 mt-2">
+                        PNG, JPG, GIF or WebP (Max 5MB)
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="relative inline-block">
+                      <img
+                        src={servicePhotoPreview}
+                        alt="Service preview"
+                        className="w-full h-48 object-cover rounded-lg border border-gray-300"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleRemoveServicePhoto}
+                        className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow-lg transition-colors"
+                        title="Remove photo"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                  
+                  {serviceFormErrors.photo && (
+                    <p className="text-red-500 text-xs mt-1">{serviceFormErrors.photo}</p>
+                  )}
+                </div>
+
+                {/* Success/Error Messages */}
+                {serviceSubmitMessage.text && (
+                  <div className={`p-3 rounded-lg ${
+                    serviceSubmitMessage.type === 'success'
+                      ? 'bg-green-50 text-green-800 border border-green-200'
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}>
+                    {serviceSubmitMessage.text}
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddServiceModal(false)}
+                    disabled={loadingServices}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loadingServices}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    {loadingServices ? (
+                      <>
+                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                        Adding...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Service
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Service Modal */}
+        {showEditServiceModal && selectedService && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-semibold text-gray-900">Edit Service</h3>
+                  <button
+                    onClick={() => {
+                      setShowEditServiceModal(false);
+                      setSelectedService(null);
+                    }}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              <form onSubmit={handleSubmitEditService} className="p-6 space-y-4">
+                {/* Service Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Service Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="service_name"
+                    value={serviceFormData.service_name}
+                    onChange={handleServiceInputChange}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      serviceFormErrors.service_name ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                  />
+                  {serviceFormErrors.service_name && (
+                    <p className="text-red-500 text-xs mt-1">{serviceFormErrors.service_name}</p>
+                  )}
+                </div>
+
+                {/* Branch Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Branch *
+                  </label>
+                  <select
+                    name="branch_id"
+                    value={serviceFormData.branch_id}
+                    onChange={handleServiceInputChange}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      serviceFormErrors.branch_id ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                  >
+                    <option value="">Select Branch</option>
+                    {branches.map(branch => (
+                      <option key={branch.branch_id} value={branch.branch_id}>
+                        {branch.branch_name}
+                      </option>
+                    ))}
+                  </select>
+                  {serviceFormErrors.branch_id && (
+                    <p className="text-red-500 text-xs mt-1">{serviceFormErrors.branch_id}</p>
+                  )}
+                </div>
+
+                {/* Price */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Price ($) *
+                  </label>
+                  <input
+                    type="number"
+                    name="price"
+                    value={serviceFormData.price}
+                    onChange={handleServiceInputChange}
+                    step="0.01"
+                    min="0"
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      serviceFormErrors.price ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                  />
+                  {serviceFormErrors.price && (
+                    <p className="text-red-500 text-xs mt-1">{serviceFormErrors.price}</p>
+                  )}
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    name="description"
+                    value={serviceFormData.description}
+                    onChange={handleServiceInputChange}
+                    rows="3"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  />
+                </div>
+
+                {/* Photo Upload */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Service Photo
+                  </label>
+                  
+                  {!servicePhotoPreview ? (
+                    <div
+                      onDragOver={handleServiceDragOver}
+                      onDragLeave={handleServiceDragLeave}
+                      onDrop={handleServiceDrop}
+                      className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                        serviceIsDragging 
+                          ? 'border-blue-500 bg-blue-50' 
+                          : 'border-gray-300 hover:border-gray-400'
+                      }`}
+                    >
+                      <Briefcase className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-sm text-gray-600 mb-2">
+                        Drag and drop an image here, or
+                      </p>
+                      <label className="inline-block">
+                        <span className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">
+                          Choose File
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            if (e.target.files[0]) {
+                              processServiceImageFile(e.target.files[0]);
+                            }
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="relative inline-block">
+                      <img
+                        src={servicePhotoPreview}
+                        alt="Service preview"
+                        className="w-full h-48 object-cover rounded-lg border border-gray-300"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleRemoveServicePhoto}
+                        className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow-lg transition-colors"
+                        title="Remove photo"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Success/Error Messages */}
+                {serviceSubmitMessage.text && (
+                  <div className={`p-3 rounded-lg ${
+                    serviceSubmitMessage.type === 'success'
+                      ? 'bg-green-50 text-green-800 border border-green-200'
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}>
+                    {serviceSubmitMessage.text}
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditServiceModal(false);
+                      setSelectedService(null);
+                    }}
+                    disabled={loadingServices}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loadingServices}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    {loadingServices ? (
+                      <>
+                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                        Updating...
+                      </>
+                    ) : (
+                      <>
+                        <Edit className="w-4 h-4 mr-2" />
+                        Update Service
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Service Confirmation Modal */}
+        {showDeleteServiceModal && selectedService && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+              <div className="flex items-center justify-center w-12 h-12 bg-red-100 rounded-full mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              
+              <h3 className="text-xl font-semibold text-gray-900 text-center mb-2">
+                Delete Service
+              </h3>
+              
+              <p className="text-gray-600 text-center mb-6">
+                Are you sure you want to delete <strong>{selectedService.service_name}</strong>? This action cannot be undone.
+              </p>
+              
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleCancelDeleteService}
+                  disabled={loadingServices}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmDeleteService}
+                  disabled={loadingServices}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  {loadingServices ? (
+                    <>
+                      <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Message Confirmation Modal */}
+        {showDeleteMessageModal && selectedMessage && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+              <div className="flex items-center justify-center w-12 h-12 bg-red-100 rounded-full mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              
+              <h3 className="text-xl font-semibold text-gray-900 text-center mb-2">
+                Delete Message
+              </h3>
+              
+              <p className="text-gray-600 text-center mb-6">
+                Are you sure you want to delete the message from <strong>{selectedMessage.name}</strong>? This action cannot be undone.
+              </p>
+              
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleCancelDeleteMessage}
+                  disabled={loadingMessages}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmDeleteMessage}
+                  disabled={loadingMessages}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400 disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  {loadingMessages ? (
+                    <>
+                      <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>

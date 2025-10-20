@@ -60,15 +60,6 @@ interface BranchRow extends RowDataPacket {
 }
 
 export class UserController {
-  private connection: PoolConnection | null = null;
-
-  // Initialize database connection
-  private async initConnection(): Promise<void> {
-    if (!this.connection) {
-      this.connection = await db.getConnection();
-    }
-  }
-
   // Validate if user can create another user with specified role
   private canCreateUserRole(creatorRole: UserRole, targetRole: UserRole): boolean {
     const creatorLevel = RoleHierarchy[creatorRole];
@@ -90,10 +81,8 @@ export class UserController {
 
   // Validate branch ownership for managers
   private async validateBranchAccess(userId: string, branchId: string): Promise<boolean> {
-    await this.initConnection();
-
     try {
-      const [rows] = await this.connection!.execute<BranchRow[]>(
+      const [rows] = await db.execute<BranchRow[]>(
         `SELECT branch_id, manager_id FROM hotel_branches WHERE branch_id = ?`,
         [branchId]
       );
@@ -112,10 +101,8 @@ export class UserController {
 
   // Check if username/email already exists
   private async checkUserExists(username: string, email: string, nicNo: string): Promise<boolean> {
-    await this.initConnection();
-
     try {
-      const [rows] = await this.connection!.execute<RowDataPacket[]>(
+      const [rows] = await db.execute<RowDataPacket[]>(
         `SELECT user_id FROM users WHERE username = ? OR email = ? OR nic_no = ?`,
         [username, email, nicNo]
       );
@@ -129,10 +116,8 @@ export class UserController {
 
   // Check if branch already has a manager
   private async checkBranchHasManager(branchId: string): Promise<boolean> {
-    await this.initConnection();
-
     try {
-      const [rows] = await this.connection!.execute<RowDataPacket[]>(
+      const [rows] = await db.execute<RowDataPacket[]>(
         `SELECT manager_id FROM hotel_branches WHERE branch_id = ? AND manager_id IS NOT NULL`,
         [branchId]
       );
@@ -240,83 +225,89 @@ export class UserController {
         return;
       }
 
-      await this.initConnection();
-
-      // Start transaction
-      await this.connection!.beginTransaction();
+      // Get a connection from pool for transaction
+      const connection = await db.getConnection();
 
       try {
-        // Hash password
-        const hashedPassword = await bcrypt.hash(password, 12);
-        const userId = uuidv4();
-        const isGuest = role === UserRole.GUEST ? 1 : 0;
+        // Start transaction
+        await connection.beginTransaction();
 
-        // Insert user
-        await this.connection!.execute(
-          `INSERT INTO users (user_id, name, is_guest, email, phone, nic_no, nic_dl_photo, username, password)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [userId, name, isGuest, email, phone || null, nic_no, nic_dl_photo || null, username, hashedPassword]
-        );
+        try {
+          // Hash password
+          const hashedPassword = await bcrypt.hash(password, 12);
+          const userId = uuidv4();
+          const isGuest = role === UserRole.GUEST ? 1 : 0;
 
-        // Insert staff record if not guest
-        if (role !== UserRole.GUEST) {
-          await this.connection!.execute(
-            `INSERT INTO staff (staff_id, branch_id, role, hire_date, salary)
-             VALUES (?, ?, ?, ?, ?)`,
-            [userId, branch_id, role, hire_date || null, salary || null]
+          // Insert user
+          await connection.execute(
+            `INSERT INTO users (user_id, name, is_guest, email, phone, nic_no, nic_dl_photo, username, password)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [userId, name, isGuest, email, phone || null, nic_no, nic_dl_photo || null, username, hashedPassword]
           );
 
-          // If creating a manager, update the branch table to assign this manager
-          if (role === UserRole.MANAGER && branch_id) {
-            await this.connection!.execute(
-              `UPDATE hotel_branches SET manager_id = ? WHERE branch_id = ?`,
-              [userId, branch_id]
+          // Insert staff record if not guest
+          if (role !== UserRole.GUEST) {
+            await connection.execute(
+              `INSERT INTO staff (staff_id, branch_id, role, hire_date, salary)
+               VALUES (?, ?, ?, ?, ?)`,
+              [userId, branch_id, role, hire_date || null, salary || null]
             );
-            
-            console.log(`✅ Manager ${userId} assigned to branch ${branch_id}`);
+
+            // If creating a manager, update the branch table to assign this manager
+            if (role === UserRole.MANAGER && branch_id) {
+              await connection.execute(
+                `UPDATE hotel_branches SET manager_id = ? WHERE branch_id = ?`,
+                [userId, branch_id]
+              );
+              
+              console.log(`✅ Manager ${userId} assigned to branch ${branch_id}`);
+            }
           }
-        }
 
-        // Commit transaction
-        await this.connection!.commit();
+          // Commit transaction
+          await connection.commit();
 
-        // Fetch created user details
-        const [userRows] = await this.connection!.execute<DatabaseUserRow[]>(
-          `SELECT u.user_id, u.name, u.email, u.username, u.is_guest, u.created_at,
-                  s.role, s.branch_id, s.hire_date, s.salary
-           FROM users u
-           LEFT JOIN staff s ON u.user_id = s.staff_id
-           WHERE u.user_id = ?`,
-          [userId]
-        );
+          // Fetch created user details
+          const [userRows] = await connection.execute<DatabaseUserRow[]>(
+            `SELECT u.user_id, u.name, u.email, u.username, u.is_guest, u.created_at,
+                    s.role, s.branch_id, s.hire_date, s.salary
+             FROM users u
+             LEFT JOIN staff s ON u.user_id = s.staff_id
+             WHERE u.user_id = ?`,
+            [userId]
+          );
 
-        const newUser = userRows[0];
+          const newUser = userRows[0];
 
-        if (!newUser) {
-          throw new Error('Failed to retrieve created user');
-        }
-
-        res.status(201).json({
-          success: true,
-          message: 'User created successfully',
-          data: {
-            user_id: newUser.user_id,
-            name: newUser.name,
-            email: newUser.email,
-            username: newUser.username,
-            role: newUser.role || UserRole.GUEST,
-            branch_id: newUser.branch_id,
-            is_guest: newUser.is_guest === 1,
-            hire_date: newUser.hire_date,
-            salary: newUser.salary,
-            created_at: newUser.created_at
+          if (!newUser) {
+            throw new Error('Failed to retrieve created user');
           }
-        } as ApiResponse);
 
-      } catch (error) {
-        // Rollback transaction
-        await this.connection!.rollback();
-        throw error;
+          res.status(201).json({
+            success: true,
+            message: 'User created successfully',
+            data: {
+              user_id: newUser.user_id,
+              name: newUser.name,
+              email: newUser.email,
+              username: newUser.username,
+              role: newUser.role || UserRole.GUEST,
+              branch_id: newUser.branch_id,
+              is_guest: newUser.is_guest === 1,
+              hire_date: newUser.hire_date,
+              salary: newUser.salary,
+              created_at: newUser.created_at
+            }
+          } as ApiResponse);
+
+        } catch (error) {
+          // Rollback transaction
+          await connection.rollback();
+          throw error;
+        }
+      } finally {
+        // Always release connection back to pool
+        connection.release();
       }
 
     } catch (error) {
@@ -331,8 +322,6 @@ export class UserController {
   // Get all users (with role-based filtering, search, and filter)
   public getUsers = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      await this.initConnection();
-
       const creatorRole = req.user?.role;
       const creatorUserId = req.user?.user_id;
       const creatorBranchId = req.user?.branch_id;
@@ -403,7 +392,7 @@ export class UserController {
 
       query += ` ORDER BY u.created_at DESC`;
 
-      const [rows] = await this.connection!.execute<DatabaseUserRow[]>(query, queryParams);
+      const [rows] = await db.execute<DatabaseUserRow[]>(query, queryParams);
 
       const users = rows.map(row => ({
         user_id: row.user_id,
@@ -458,8 +447,6 @@ export class UserController {
         return;
       }
 
-      await this.initConnection();
-
       const creatorRole = req.user?.role;
       const creatorBranchId = req.user?.branch_id;
 
@@ -473,7 +460,7 @@ export class UserController {
         WHERE u.user_id = ?
       `;
 
-      const [rows] = await this.connection!.execute<DatabaseUserRow[]>(query, [userId]);
+      const [rows] = await db.execute<DatabaseUserRow[]>(query, [userId]);
 
       const user = rows[0];
 
@@ -596,58 +583,64 @@ export class UserController {
         return;
       }
 
-      await this.initConnection();
-
-      // Start transaction
-      await this.connection!.beginTransaction();
+      // Get a connection from pool for transaction
+      const connection = await db.getConnection();
 
       try {
-        // Hash password
-        const hashedPassword = await bcrypt.hash(password, 12);
-        const userId = uuidv4();
+        // Start transaction
+        await connection.beginTransaction();
 
-        // Insert guest user (is_guest = 1, no staff record needed)
-        await this.connection!.execute(
-          `INSERT INTO users (user_id, name, is_guest, email, phone, nic_no, username, password)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [userId, name, 1, email, phone || null, nic_no, username, hashedPassword]
-        );
+        try {
+          // Hash password
+          const hashedPassword = await bcrypt.hash(password, 12);
+          const userId = uuidv4();
 
-        // Commit transaction
-        await this.connection!.commit();
+          // Insert guest user (is_guest = 1, no staff record needed)
+          await connection.execute(
+            `INSERT INTO users (user_id, name, is_guest, email, phone, nic_no, username, password)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [userId, name, 1, email, phone || null, nic_no, username, hashedPassword]
+          );
 
-        // Fetch created user details (without sensitive information)
-        const [userRows] = await this.connection!.execute<DatabaseUserRow[]>(
-          `SELECT user_id, name, email, username, is_guest, phone, created_at
-           FROM users
-           WHERE user_id = ?`,
-          [userId]
-        );
+          // Commit transaction
+          await connection.commit();
 
-        const newUser = userRows[0];
+          // Fetch created user details (without sensitive information)
+          const [userRows] = await connection.execute<DatabaseUserRow[]>(
+            `SELECT user_id, name, email, username, is_guest, phone, created_at
+             FROM users
+             WHERE user_id = ?`,
+            [userId]
+          );
 
-        if (!newUser) {
-          throw new Error('Failed to retrieve registered user');
-        }
+          const newUser = userRows[0];
 
-        res.status(201).json({
-          success: true,
-          message: 'Guest registration successful! You can now log in.',
-          data: {
-            user_id: newUser.user_id,
-            name: newUser.name,
-            email: newUser.email,
-            username: newUser.username,
-            is_guest: newUser.is_guest === 1,
-            phone: newUser.phone,
-            created_at: newUser.created_at
+          if (!newUser) {
+            throw new Error('Failed to retrieve registered user');
           }
-        } as ApiResponse);
 
-      } catch (error) {
-        // Rollback transaction
-        await this.connection!.rollback();
-        throw error;
+          res.status(201).json({
+            success: true,
+            message: 'Guest registration successful! You can now log in.',
+            data: {
+              user_id: newUser.user_id,
+              name: newUser.name,
+              email: newUser.email,
+              username: newUser.username,
+              is_guest: newUser.is_guest === 1,
+              phone: newUser.phone,
+              created_at: newUser.created_at
+            }
+          } as ApiResponse);
+
+        } catch (error) {
+          // Rollback transaction
+          await connection.rollback();
+          throw error;
+        }
+      } finally {
+        // Always release connection back to pool
+        connection.release();
       }
 
     } catch (error) {
@@ -699,10 +692,8 @@ export class UserController {
         return;
       }
 
-      await this.initConnection();
-
       // Check if email or username is already taken by another user
-      const [existingUsers] = await this.connection!.execute<RowDataPacket[]>(
+      const [existingUsers] = await db.execute<RowDataPacket[]>(
         `SELECT user_id FROM users WHERE (email = ? OR username = ?) AND user_id != ?`,
         [email, username, userId]
       );
@@ -717,7 +708,7 @@ export class UserController {
 
       // Check if NIC is already taken by another user (if provided)
       if (nic_no) {
-        const [existingNic] = await this.connection!.execute<RowDataPacket[]>(
+        const [existingNic] = await db.execute<RowDataPacket[]>(
           `SELECT user_id FROM users WHERE nic_no = ? AND user_id != ?`,
           [nic_no, userId]
         );
@@ -732,7 +723,7 @@ export class UserController {
       }
 
       // Update user profile
-      await this.connection!.execute(
+      await db.execute(
         `UPDATE users 
          SET name = ?, email = ?, phone = ?, username = ?, nic_no = ?
          WHERE user_id = ?`,
@@ -740,7 +731,7 @@ export class UserController {
       );
 
       // Fetch updated user data
-      const [userRows] = await this.connection!.execute<DatabaseUserRow[]>(
+      const [userRows] = await db.execute<DatabaseUserRow[]>(
         `SELECT u.user_id, u.name, u.email, u.username, u.phone, u.nic_no, u.is_guest, u.created_at,
                 s.role, s.branch_id
          FROM users u
@@ -827,10 +818,8 @@ export class UserController {
         return;
       }
 
-      await this.initConnection();
-
       // Get current user password
-      const [userRows] = await this.connection!.execute<RowDataPacket[]>(
+      const [userRows] = await db.execute<RowDataPacket[]>(
         `SELECT password FROM users WHERE user_id = ?`,
         [userId]
       );
@@ -868,7 +857,7 @@ export class UserController {
       const newHashedPassword = await bcrypt.hash(newPassword, 12);
 
       // Update password
-      await this.connection!.execute(
+      await db.execute(
         `UPDATE users SET password = ? WHERE user_id = ?`,
         [newHashedPassword, userId]
       );
@@ -911,10 +900,8 @@ export class UserController {
         return;
       }
 
-      await this.initConnection();
-
       // Get existing user data
-      const [existingUserRows] = await this.connection!.execute<DatabaseUserRow[]>(
+      const [existingUserRows] = await db.execute<DatabaseUserRow[]>(
         `SELECT u.*, s.role, s.branch_id
          FROM users u
          LEFT JOIN staff s ON u.user_id = s.staff_id
@@ -983,7 +970,7 @@ export class UserController {
       }
 
       // Check if email/username is taken by another user
-      const [duplicateCheck] = await this.connection!.execute<RowDataPacket[]>(
+      const [duplicateCheck] = await db.execute<RowDataPacket[]>(
         `SELECT user_id FROM users WHERE (email = ? OR username = ?) AND user_id != ?`,
         [email, username, userId]
       );
@@ -998,7 +985,7 @@ export class UserController {
 
       // Check if NIC is taken by another user (if provided)
       if (nic_no) {
-        const [nicCheck] = await this.connection!.execute<RowDataPacket[]>(
+        const [nicCheck] = await db.execute<RowDataPacket[]>(
           `SELECT user_id FROM users WHERE nic_no = ? AND user_id != ?`,
           [nic_no, userId]
         );
@@ -1023,84 +1010,92 @@ export class UserController {
         }
       }
 
-      // Start transaction
-      await this.connection!.beginTransaction();
+      // Get a connection from pool for transaction
+      const connection = await db.getConnection();
 
       try {
-        // Update user table
-        await this.connection!.execute(
-          `UPDATE users 
-           SET name = ?, email = ?, phone = ?, username = ?, nic_no = ?
-           WHERE user_id = ?`,
-          [name, email, phone || null, username, nic_no || existingUser.nic_no, userId]
-        );
+        // Start transaction
+        await connection.beginTransaction();
 
-        // Update staff table if not a guest
-        if (!existingUser.is_guest) {
-          const updateRole = role || existingUser.role;
-          const updateBranchId = branch_id || existingUser.branch_id;
-
-          await this.connection!.execute(
-            `UPDATE staff 
-             SET role = ?, branch_id = ?, hire_date = ?, salary = ?
-             WHERE staff_id = ?`,
-            [updateRole, updateBranchId, hire_date || existingUser.hire_date, salary || existingUser.salary, userId]
+        try {
+          // Update user table
+          await connection.execute(
+            `UPDATE users 
+             SET name = ?, email = ?, phone = ?, username = ?, nic_no = ?
+             WHERE user_id = ?`,
+            [name, email, phone || null, username, nic_no || existingUser.nic_no, userId]
           );
 
-          // If role changed to MANAGER, update branch manager
-          if (role === UserRole.MANAGER && role !== existingUser.role && branch_id) {
-            await this.connection!.execute(
-              `UPDATE hotel_branches SET manager_id = ? WHERE branch_id = ?`,
-              [userId, branch_id]
+          // Update staff table if not a guest
+          if (!existingUser.is_guest) {
+            const updateRole = role || existingUser.role;
+            const updateBranchId = branch_id || existingUser.branch_id;
+
+            await connection.execute(
+              `UPDATE staff 
+               SET role = ?, branch_id = ?, hire_date = ?, salary = ?
+               WHERE staff_id = ?`,
+              [updateRole, updateBranchId, hire_date || existingUser.hire_date, salary || existingUser.salary, userId]
             );
+
+            // If role changed to MANAGER, update branch manager
+            if (role === UserRole.MANAGER && role !== existingUser.role && branch_id) {
+              await connection.execute(
+                `UPDATE hotel_branches SET manager_id = ? WHERE branch_id = ?`,
+                [userId, branch_id]
+              );
+            }
           }
-        }
 
-        // Commit transaction
-        await this.connection!.commit();
+          // Commit transaction
+          await connection.commit();
 
-        // Fetch updated user details
-        const [updatedUserRows] = await this.connection!.execute<DatabaseUserRow[]>(
-          `SELECT u.user_id, u.name, u.email, u.username, u.is_guest, u.phone, u.nic_no, u.created_at,
-                  s.role, s.branch_id, s.hire_date, s.salary,
-                  hb.branch_name
-           FROM users u
-           LEFT JOIN staff s ON u.user_id = s.staff_id
-           LEFT JOIN hotel_branches hb ON s.branch_id = hb.branch_id
-           WHERE u.user_id = ?`,
-          [userId]
-        );
+          // Fetch updated user details
+          const [updatedUserRows] = await connection.execute<DatabaseUserRow[]>(
+            `SELECT u.user_id, u.name, u.email, u.username, u.is_guest, u.phone, u.nic_no, u.created_at,
+                    s.role, s.branch_id, s.hire_date, s.salary,
+                    hb.branch_name
+             FROM users u
+             LEFT JOIN staff s ON u.user_id = s.staff_id
+             LEFT JOIN hotel_branches hb ON s.branch_id = hb.branch_id
+             WHERE u.user_id = ?`,
+            [userId]
+          );
 
-        const updatedUser = updatedUserRows[0];
+          const updatedUser = updatedUserRows[0];
 
-        if (!updatedUser) {
-          throw new Error('Failed to retrieve updated user');
-        }
-
-        res.status(200).json({
-          success: true,
-          message: 'User updated successfully',
-          data: {
-            user_id: updatedUser.user_id,
-            name: updatedUser.name,
-            email: updatedUser.email,
-            username: updatedUser.username,
-            role: updatedUser.role || UserRole.GUEST,
-            branch_id: updatedUser.branch_id,
-            branch_name: updatedUser.branch_name,
-            is_guest: updatedUser.is_guest === 1,
-            phone: updatedUser.phone,
-            nic_no: updatedUser.nic_no,
-            hire_date: updatedUser.hire_date,
-            salary: updatedUser.salary,
-            created_at: updatedUser.created_at
+          if (!updatedUser) {
+            throw new Error('Failed to retrieve updated user');
           }
-        } as ApiResponse);
 
-      } catch (error) {
-        // Rollback transaction
-        await this.connection!.rollback();
-        throw error;
+          res.status(200).json({
+            success: true,
+            message: 'User updated successfully',
+            data: {
+              user_id: updatedUser.user_id,
+              name: updatedUser.name,
+              email: updatedUser.email,
+              username: updatedUser.username,
+              role: updatedUser.role || UserRole.GUEST,
+              branch_id: updatedUser.branch_id,
+              branch_name: updatedUser.branch_name,
+              is_guest: updatedUser.is_guest === 1,
+              phone: updatedUser.phone,
+              nic_no: updatedUser.nic_no,
+              hire_date: updatedUser.hire_date,
+              salary: updatedUser.salary,
+              created_at: updatedUser.created_at
+            }
+          } as ApiResponse);
+
+        } catch (error) {
+          // Rollback transaction
+          await connection.rollback();
+          throw error;
+        }
+      } finally {
+        // Always release connection back to pool
+        connection.release();
       }
 
     } catch (error) {
@@ -1145,10 +1140,8 @@ export class UserController {
         return;
       }
 
-      await this.initConnection();
-
       // Check if user exists
-      const [userRows] = await this.connection!.execute<DatabaseUserRow[]>(
+      const [userRows] = await db.execute<DatabaseUserRow[]>(
         `SELECT u.*, s.role, s.branch_id
          FROM users u
          LEFT JOIN staff s ON u.user_id = s.staff_id
@@ -1174,77 +1167,85 @@ export class UserController {
         return;
       }
 
-      // Start transaction
-      await this.connection!.beginTransaction();
+      // Get a connection from pool for transaction
+      const connection = await db.getConnection();
 
       try {
-        // If user is assigned as a branch manager, remove the assignment
-        // (applicable for MANAGER or ADMIN roles who manage branches)
-        await this.connection!.execute(
-          `UPDATE hotel_branches SET manager_id = NULL WHERE manager_id = ?`,
-          [userId]
-        );
+        // Start transaction
+        await connection.beginTransaction();
 
-        // Soft delete: mark as retired in staff table
-        if (!userToDelete.is_guest) {
-          await this.connection!.execute(
-            `UPDATE staff SET retired_date = CURRENT_DATE WHERE staff_id = ?`,
+        try {
+          // If user is assigned as a branch manager, remove the assignment
+          // (applicable for MANAGER or ADMIN roles who manage branches)
+          await connection.execute(
+            `UPDATE hotel_branches SET manager_id = NULL WHERE manager_id = ?`,
             [userId]
           );
-        }
 
-        // Option 1: Soft delete - Add a deleted_at column and set it
-        // await this.connection!.execute(
-        //   `UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE user_id = ?`,
-        //   [userId]
-        // );
-
-        // Option 2: Hard delete (if you prefer complete removal)
-        // Delete all foreign key dependencies first
-
-        // 1. Delete refresh tokens FIRST (must come before user_session)
-        await this.connection!.execute(
-          `DELETE FROM refresh_token WHERE session_id IN 
-          (SELECT session_id FROM user_session WHERE user_id = ?)`,
-          [userId]
-        );
-
-        // 2. Delete user sessions SECOND (after refresh tokens are gone)
-        await this.connection!.execute(
-          `DELETE FROM user_session WHERE user_id = ?`,
-          [userId]
-        );
-
-        // 3. Delete from staff table (if applicable)
-        if (!userToDelete.is_guest) {
-          await this.connection!.execute(
-            `DELETE FROM staff WHERE staff_id = ?`,
-            [userId]
-          );
-        }
-
-        // 4. Delete from users table LAST
-        await this.connection!.execute(
-          `DELETE FROM users WHERE user_id = ?`,
-          [userId]
-        );
-
-        // Commit transaction
-        await this.connection!.commit();
-
-        res.status(200).json({
-          success: true,
-          message: 'User deleted successfully',
-          data: {
-            deleted_user_id: userId,
-            deleted_user_name: userToDelete.name
+          // Soft delete: mark as retired in staff table
+          if (!userToDelete.is_guest) {
+            await connection.execute(
+              `UPDATE staff SET retired_date = CURRENT_DATE WHERE staff_id = ?`,
+              [userId]
+            );
           }
-        } as ApiResponse);
 
-      } catch (error) {
-        // Rollback transaction
-        await this.connection!.rollback();
-        throw error;
+          // Option 1: Soft delete - Add a deleted_at column and set it
+          // await connection.execute(
+          //   `UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE user_id = ?`,
+          //   [userId]
+          // );
+
+          // Option 2: Hard delete (if you prefer complete removal)
+          // Delete all foreign key dependencies first
+
+          // 1. Delete refresh tokens FIRST (must come before user_session)
+          await connection.execute(
+            `DELETE FROM refresh_token WHERE session_id IN 
+            (SELECT session_id FROM user_session WHERE user_id = ?)`,
+            [userId]
+          );
+
+          // 2. Delete user sessions SECOND (after refresh tokens are gone)
+          await connection.execute(
+            `DELETE FROM user_session WHERE user_id = ?`,
+            [userId]
+          );
+
+          // 3. Delete from staff table (if applicable)
+          if (!userToDelete.is_guest) {
+            await connection.execute(
+              `DELETE FROM staff WHERE staff_id = ?`,
+              [userId]
+            );
+          }
+
+          // 4. Delete from users table LAST
+          await connection.execute(
+            `DELETE FROM users WHERE user_id = ?`,
+            [userId]
+          );
+
+          // Commit transaction
+          await connection.commit();
+
+          res.status(200).json({
+            success: true,
+            message: 'User deleted successfully',
+            data: {
+              deleted_user_id: userId,
+              deleted_user_name: userToDelete.name
+            }
+          } as ApiResponse);
+
+        } catch (error) {
+          // Rollback transaction
+          await connection.rollback();
+          throw error;
+        }
+      } finally {
+        // Always release connection back to pool
+        connection.release();
       }
 
     } catch (error) {

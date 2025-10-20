@@ -9,7 +9,7 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000, // Increased to 30 seconds for slow connections
+  timeout: 60000, // Increased to 60 seconds for remote database connections
 });
 
 // Request interceptor - Add auth token to requests (except public endpoints)

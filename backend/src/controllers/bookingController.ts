@@ -248,8 +248,9 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
       }
     }
 
-    // Calculate total cost
+    // Calculate room charges (daily_rate × number of days)
     const dailyRate = room.daily_rate ? parseFloat(room.daily_rate.toString()) : 0;
+    const roomCharges = dailyRate * totalDays;
     const totalCost = calculateTotalCost(dailyRate, totalDays);
 
     // Generate UUID for booking
@@ -265,15 +266,17 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
       booking_status: BookingStatus.CONFIRMED,
       branch_id: room.branch_id,
       number_of_guests: number_of_guests || 1,
-      special_requests: special_requests || null
+      special_requests: special_requests || null,
+      room_charges: roomCharges
+      // Note: total_amount is auto-calculated by database (generated column)
     });
 
-    // Create the booking
+    // Create the booking with room_charges (total_amount is auto-calculated)
     const [result] = await connection.query<ResultSetHeader>(
       `INSERT INTO booking 
-       (booking_id, user_id, room_id, staff_id, checking_datetime, checkout_datetime, booking_status, booking_date, branch_id, number_of_guests, special_requests) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?)`,
-      [booking_id, user_id, room_id, staff_id || null, checking_datetime, checkout_datetime, BookingStatus.CONFIRMED, room.branch_id, number_of_guests || 1, special_requests || null]
+       (booking_id, user_id, room_id, staff_id, checking_datetime, checkout_datetime, booking_status, booking_date, branch_id, number_of_guests, special_requests, room_charges) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?)`,
+      [booking_id, user_id, room_id, staff_id || null, checking_datetime, checkout_datetime, BookingStatus.CONFIRMED, room.branch_id, number_of_guests || 1, special_requests || null, roomCharges]
     );
 
     // Fetch the created booking with joined data
@@ -317,11 +320,15 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
           branch_name: booking?.branch_name,
           checking_datetime: booking?.checking_datetime,
           checkout_datetime: booking?.checkout_datetime,
+          number_of_guests: booking?.number_of_guests || number_of_guests || 1,
           booking_status: booking?.booking_status,
           booking_date: booking?.booking_date,
           staff_id: booking?.staff_id,
           staff_name: booking?.staff_name,
           daily_rate: booking?.daily_rate ? parseFloat(booking.daily_rate.toString()) : null,
+          room_charges: booking?.room_charges || roomCharges,
+          service_charges: booking?.service_charges || 0,
+          total_amount: booking?.total_amount || roomCharges, // Auto-calculated by database
           total_days: totalDays,
           total_cost: totalCost,
           created_at: booking?.created_at,
@@ -1031,6 +1038,417 @@ export const getMyBookings = async (req: AuthenticatedRequest, res: Response): P
     res.status(500).json({
       success: false,
       message: 'An error occurred while retrieving your bookings.',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+/**
+ * Check in a guest
+ * PATCH /api/bookings/:booking_id/checkin
+ */
+export const checkInGuest = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const connection = await db.getConnection();
+  
+  try {
+    const { booking_id } = req.params;
+    const staffId = req.user?.staff_id || req.user?.user_id;
+    
+    if (!booking_id) {
+      res.status(400).json({ error: 'Booking ID is required' });
+      return;
+    }
+    
+    await connection.beginTransaction();
+    
+    // Get booking details
+    const [bookings] = await connection.query<Booking[]>(
+      `SELECT * FROM booking WHERE booking_id = ?`,
+      [booking_id]
+    );
+    
+    if (bookings.length === 0) {
+      await connection.rollback();
+      res.status(404).json({ error: 'Booking not found' });
+      return;
+    }
+    
+    const booking = bookings[0];
+    
+    if (!booking) {
+      await connection.rollback();
+      res.status(404).json({ error: 'Booking not found' });
+      return;
+    }
+    
+    // Check if user has access
+    if (!canAccessBooking(req, booking)) {
+      await connection.rollback();
+      res.status(403).json({ error: 'Access denied' });
+      return;
+    }
+    
+    // Validate booking status
+    if (booking.booking_status !== BookingStatus.CONFIRMED) {
+      await connection.rollback();
+      res.status(400).json({ 
+        error: `Cannot check in booking with status: ${booking.booking_status}. Only confirmed bookings can be checked in.` 
+      });
+      return;
+    }
+    
+    // Update booking status to checked_in
+    // The trigger will automatically update room status to 'occupied'
+    await connection.query(
+      `UPDATE booking 
+       SET booking_status = ?,
+           staff_id = ?,
+           checking_datetime = NOW()
+       WHERE booking_id = ?`,
+      [BookingStatus.CHECKED_IN, staffId, booking_id]
+    );
+    
+    await connection.commit();
+    
+    // Fetch updated booking with room details
+    const [updatedBooking] = await connection.query<Booking[]>(
+      `SELECT b.*, r.room_no, r.state as room_state, rt.type as room_type
+       FROM booking b
+       JOIN rooms r ON b.room_id = r.room_id
+       JOIN room_types rt ON r.room_type_id = rt.room_type_id
+       WHERE b.booking_id = ?`,
+      [booking_id]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Check-in successful',
+      booking: updatedBooking[0],
+      roomStatus: 'occupied'
+    });
+    
+  } catch (error: any) {
+    await connection.rollback();
+    
+    // Handle trigger errors (double-booking)
+    if (error.sqlState === '45000') {
+      res.status(400).json({
+        error: 'Check-in validation failed',
+        message: error.sqlMessage
+      });
+      return;
+    }
+    
+    console.error('Check-in error:', error);
+    res.status(500).json({ error: 'Check-in failed' });
+  } finally {
+    connection.release();
+  }
+};
+
+/**
+ * Check out a guest
+ * PATCH /api/bookings/:booking_id/checkout
+ */
+export const checkOutGuest = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const connection = await db.getConnection();
+  
+  try {
+    const { booking_id } = req.params;
+    const staffId = req.user?.staff_id || req.user?.user_id;
+    
+    if (!booking_id) {
+      res.status(400).json({ error: 'Booking ID is required' });
+      return;
+    }
+    
+    await connection.beginTransaction();
+    
+    // Get booking details
+    const [bookings] = await connection.query<Booking[]>(
+      `SELECT * FROM booking WHERE booking_id = ?`,
+      [booking_id]
+    );
+    
+    if (bookings.length === 0) {
+      await connection.rollback();
+      res.status(404).json({ error: 'Booking not found' });
+      return;
+    }
+    
+    const booking = bookings[0];
+    
+    if (!booking) {
+      await connection.rollback();
+      res.status(404).json({ error: 'Booking not found' });
+      return;
+    }
+    
+    // Check if user has access
+    if (!canAccessBooking(req, booking)) {
+      await connection.rollback();
+      res.status(403).json({ error: 'Access denied' });
+      return;
+    }
+    
+    // Validate booking status
+    if (booking.booking_status !== BookingStatus.CHECKED_IN) {
+      await connection.rollback();
+      res.status(400).json({ 
+        error: `Cannot check out booking with status: ${booking.booking_status}. Only checked-in bookings can be checked out.` 
+      });
+      return;
+    }
+    
+    // Pre-validate payment (for better error messages)
+    const [payment] = await connection.query<RowDataPacket[]>(
+      `SELECT payment_status, due_amount, total_charges 
+       FROM payments 
+       WHERE booking_id = ?`,
+      [booking_id]
+    );
+    
+    if (payment.length === 0) {
+      await connection.rollback();
+      res.status(400).json({
+        error: 'No payment record found',
+        message: 'Please generate the bill before checkout'
+      });
+      return;
+    }
+    
+    if (payment[0]?.payment_status !== 'paid' || (payment[0]?.due_amount || 0) > 0) {
+      await connection.rollback();
+      res.status(400).json({
+        error: 'Payment incomplete',
+        message: `Outstanding balance: $${payment[0]?.due_amount || 0}`,
+        totalCharges: payment[0]?.total_charges || 0,
+        dueAmount: payment[0]?.due_amount || 0
+      });
+      return;
+    }
+    
+    // Update booking status to checked_out
+    // The trigger will automatically update room status to 'available'
+    // The payment validation trigger will ensure payment is complete
+    await connection.query(
+      `UPDATE booking 
+       SET booking_status = ?,
+           checkout_datetime = NOW(),
+           staff_id = ?
+       WHERE booking_id = ?`,
+      [BookingStatus.CHECKED_OUT, staffId, booking_id]
+    );
+    
+    await connection.commit();
+    
+    // Fetch updated booking with room details
+    const [updatedBooking] = await connection.query<Booking[]>(
+      `SELECT b.*, r.room_no, r.state as room_state, rt.type as room_type,
+              p.total_charges, p.amount_paid
+       FROM booking b
+       JOIN rooms r ON b.room_id = r.room_id
+       JOIN room_types rt ON r.room_type_id = rt.room_type_id
+       LEFT JOIN payments p ON b.booking_id = p.booking_id
+       WHERE b.booking_id = ?`,
+      [booking_id]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Check-out successful',
+      booking: updatedBooking[0],
+      roomStatus: 'available',
+      payment: {
+        totalCharges: updatedBooking[0]?.total_charges || 0,
+        amountPaid: updatedBooking[0]?.amount_paid || 0,
+        status: 'paid'
+      }
+    });
+    
+  } catch (error: any) {
+    await connection.rollback();
+    
+    // Handle trigger errors
+    if (error.sqlState === '45000') {
+      res.status(400).json({
+        error: 'Check-out validation failed',
+        message: error.sqlMessage
+      });
+      return;
+    }
+    
+    console.error('Check-out error:', error);
+    res.status(500).json({ error: 'Check-out failed' });
+  } finally {
+    connection.release();
+  }
+};
+
+/**
+ * Validate checkout eligibility
+ * GET /api/bookings/:booking_id/checkout-validation
+ */
+export const validateCheckout = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { booking_id } = req.params;
+    
+    // Get booking and payment details
+    const [result] = await db.query<RowDataPacket[]>(
+      `SELECT 
+        b.booking_id,
+        b.booking_status,
+        b.user_id,
+        b.branch_id,
+        p.payment_status,
+        p.total_charges,
+        p.amount_paid,
+        p.due_amount
+       FROM booking b
+       LEFT JOIN payments p ON b.booking_id = p.booking_id
+       WHERE b.booking_id = ?`,
+      [booking_id]
+    );
+    
+    if (result.length === 0) {
+      res.status(404).json({ error: 'Booking not found' });
+      return;
+    }
+    
+    const booking = result[0];
+    
+    if (!booking) {
+      res.status(404).json({ error: 'Booking not found' });
+      return;
+    }
+    
+    // Check if user has access
+    const tempBooking: any = {
+      booking_id: booking.booking_id,
+      user_id: booking.user_id,
+      branch_id: booking.branch_id
+    };
+    
+    if (!canAccessBooking(req, tempBooking)) {
+      res.status(403).json({ error: 'Access denied' });
+      return;
+    }
+    
+    // Validation checks
+    const validations = {
+      bookingExists: true,
+      isCheckedIn: booking.booking_status === BookingStatus.CHECKED_IN,
+      paymentRecordExists: booking.payment_status !== null,
+      paymentComplete: booking.payment_status === 'paid' && (booking.due_amount || 0) === 0,
+      canCheckout: false
+    };
+    
+    validations.canCheckout = validations.isCheckedIn 
+                            && validations.paymentRecordExists 
+                            && validations.paymentComplete;
+    
+    res.json({
+      validations,
+      bookingStatus: booking.booking_status,
+      paymentDetails: {
+        status: booking.payment_status,
+        totalCharges: booking.total_charges || 0,
+        amountPaid: booking.amount_paid || 0,
+        dueAmount: booking.due_amount || 0
+      }
+    });
+    
+  } catch (error) {
+    console.error('Validation error:', error);
+    res.status(500).json({ error: 'Validation failed' });
+  }
+};
+
+/**
+ * Get available rooms for a specific date range (Public endpoint)
+ * GET /api/bookings/available-rooms?branch_id=X&check_in=YYYY-MM-DD&check_out=YYYY-MM-DD
+ */
+export const getAvailableRooms = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { branch_id, check_in, check_out } = req.query;
+
+    // If no dates provided, return all available rooms
+    if (!check_in || !check_out) {
+      res.status(400).json({
+        success: false,
+        message: 'Check-in and check-out dates are required'
+      });
+      return;
+    }
+
+    // Validate dates
+    const checkInDate = new Date(check_in as string);
+    const checkOutDate = new Date(check_out as string);
+
+    if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid date format'
+      });
+      return;
+    }
+
+    if (checkOutDate <= checkInDate) {
+      res.status(400).json({
+        success: false,
+        message: 'Check-out date must be after check-in date'
+      });
+      return;
+    }
+
+    // Query to find rooms that are NOT booked for the given date range
+    let query = `
+      SELECT DISTINCT r.room_id, r.room_no, r.floor_no, r.state, r.branch_id, r.room_type_id
+      FROM rooms r
+      WHERE r.state = 'available'
+    `;
+    const params: any[] = [];
+
+    // Add branch filter if provided
+    if (branch_id) {
+      query += ' AND r.branch_id = ?';
+      params.push(branch_id);
+    }
+
+    // Exclude rooms with conflicting bookings
+    query += `
+      AND r.room_id NOT IN (
+        SELECT b.room_id 
+        FROM booking b
+        WHERE b.booking_status NOT IN ('cancelled', 'checked_out')
+        AND (
+          (b.checking_datetime <= ? AND b.checkout_datetime > ?) OR
+          (b.checking_datetime < ? AND b.checkout_datetime >= ?) OR
+          (b.checking_datetime >= ? AND b.checkout_datetime <= ?)
+        )
+      )
+    `;
+    params.push(check_out, check_in, check_out, check_in, check_in, check_out);
+
+    query += ' ORDER BY r.room_no';
+
+    const [availableRooms] = await db.query<RowDataPacket[]>(query, params);
+
+    res.json({
+      success: true,
+      availableRooms,
+      count: availableRooms.length,
+      dateRange: {
+        check_in: checkInDate.toISOString().split('T')[0],
+        check_out: checkOutDate.toISOString().split('T')[0]
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching available rooms:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch available rooms',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
   }

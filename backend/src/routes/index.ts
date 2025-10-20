@@ -9,6 +9,7 @@ import roomRoutes from './roomRoutes';
 import bookingRoutes from './bookingRoutes';
 import dashboardRoutes from './dashboardRoutes';
 import contactRoutes from './contactRoutes';
+import paymentRoutes from './paymentRoutes';
 
 const router: Router = Router();
 
@@ -41,6 +42,8 @@ router.use('/dashboard', dashboardRoutes);
 
 // Mount contact routes
 router.use('/contact', contactRoutes);
+// Mount payment routes
+router.use('/payments', paymentRoutes);
 
 // Health check for the entire API
 router.get('/health', (req, res) => {
@@ -59,7 +62,8 @@ router.get('/health', (req, res) => {
       services: 'Available at /api/services',
       discounts: 'Available at /api/discounts',
       dashboard: 'Available at /api/dashboard',
-      contact: 'Available at /api/contact'
+      contact: 'Available at /api/contact',
+      payments: 'Available at /api/payments'
     }
   });
 });
