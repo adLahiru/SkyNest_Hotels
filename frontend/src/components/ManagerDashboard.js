@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, DoorOpen, Calendar, DollarSign, Home, UserCheck, UserX, FileText, BarChart3 } from 'lucide-react';
+import { Building2, Users, Calendar, DollarSign, Home, UserCheck, UserX, FileText, BarChart3 } from 'lucide-react';
 import dashboardService from '../services/dashboardService';
 import ReportsMain from './Reports/ReportsMain';
 

@@ -1,19 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Award, TrendingUp, Users, DollarSign, Download } from 'lucide-react';
 import reportService from '../../services/reportService';
 
-const TopServicesReport = ({ user }) => {
+const TopServicesReport = () => {
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState(null);
   const [error, setError] = useState(null);
   const [limit, setLimit] = useState(10);
   const [activeTab, setActiveTab] = useState('usage'); // 'usage', 'revenue', 'preferences'
 
-  useEffect(() => {
-    fetchReport();
-  }, []);
-
-  const fetchReport = async () => {
+  const fetchReport = useCallback(async () => {
     setLoading(true);
     setError(null);
     
@@ -31,7 +27,11 @@ const TopServicesReport = ({ user }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [limit]);
+
+  useEffect(() => {
+    fetchReport();
+  }, [fetchReport]);
 
   const getServiceTypeColor = (type) => {
     const colors = {

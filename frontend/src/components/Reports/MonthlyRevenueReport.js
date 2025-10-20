@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, ArrowUp, ArrowDown, Download } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { TrendingUp, ArrowUp, ArrowDown, Download } from 'lucide-react';
 import reportService from '../../services/reportService';
 
-const MonthlyRevenueReport = ({ user }) => {
+const MonthlyRevenueReport = () => {
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState(null);
   const [error, setError] = useState(null);
@@ -11,11 +11,7 @@ const MonthlyRevenueReport = ({ user }) => {
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
 
-  useEffect(() => {
-    fetchReport();
-  }, []);
-
-  const fetchReport = async () => {
+  const fetchReport = useCallback(async () => {
     setLoading(true);
     setError(null);
     
@@ -33,7 +29,11 @@ const MonthlyRevenueReport = ({ user }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedYear, selectedMonth]);
+
+  useEffect(() => {
+    fetchReport();
+  }, [fetchReport]);
 
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',

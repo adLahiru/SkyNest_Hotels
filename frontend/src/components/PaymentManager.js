@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import '../styles/PaymentManager.css';
 
@@ -15,11 +15,7 @@ const PaymentManager = ({ bookingId, onPaymentComplete }) => {
   const [transactionRef, setTransactionRef] = useState('');
   const [notes, setNotes] = useState('');
 
-  useEffect(() => {
-    fetchPaymentHistory();
-  }, [bookingId]);
-
-  const fetchPaymentHistory = async () => {
+  const fetchPaymentHistory = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.get(
@@ -33,7 +29,11 @@ const PaymentManager = ({ bookingId, onPaymentComplete }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [bookingId]);
+
+  useEffect(() => {
+    fetchPaymentHistory();
+  }, [fetchPaymentHistory]);
 
   const handlePayment = async (e) => {
     e.preventDefault();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import '../styles/BillDetails.css';
 
@@ -9,11 +9,7 @@ const BillDetails = ({ bookingId, onBillGenerated }) => {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
 
-  useEffect(() => {
-    fetchBill();
-  }, [bookingId]);
-
-  const fetchBill = async () => {
+  const fetchBill = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.get(
@@ -26,7 +22,11 @@ const BillDetails = ({ bookingId, onBillGenerated }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [bookingId]);
+
+  useEffect(() => {
+    fetchBill();
+  }, [fetchBill]);
 
   const handleGenerateBill = async () => {
     setGenerating(true);

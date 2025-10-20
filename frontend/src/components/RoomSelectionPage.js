@@ -175,7 +175,7 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
     } finally {
       setLoading(false);
     }
-  }, [selectedBranch.id]);
+  }, [selectedBranch.id, checkInDate, checkOutDate]);
 
   // Fetch rooms when branch is selected
   useEffect(() => {

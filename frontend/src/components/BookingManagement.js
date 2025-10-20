@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import BillDetails from './BillDetails';
 import PaymentManager from './PaymentManager';
@@ -12,13 +12,7 @@ const BookingManagement = ({ booking, onStatusChange }) => {
   const [showBill, setShowBill] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
 
-  useEffect(() => {
-    if (booking.booking_status === 'checked_in') {
-      validateCheckout();
-    }
-  }, [booking.booking_id, booking.booking_status]);
-
-  const validateCheckout = async () => {
+  const validateCheckout = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.get(
@@ -29,7 +23,13 @@ const BookingManagement = ({ booking, onStatusChange }) => {
     } catch (error) {
       console.error('Validation failed:', error);
     }
-  };
+  }, [booking.booking_id]);
+
+  useEffect(() => {
+    if (booking.booking_status === 'checked_in') {
+      validateCheckout();
+    }
+  }, [booking.booking_id, booking.booking_status, validateCheckout]);
 
   const handleCheckIn = async () => {
     if (!window.confirm('Are you sure you want to check in this guest?')) {

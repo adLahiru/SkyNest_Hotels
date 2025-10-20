@@ -159,6 +159,7 @@ const AdminDashboard = ({ user }) => {
     } else if (activeTab === 'messages') {
       fetchContactMessages();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, searchQuery, roleFilter, roomSearchQuery, roomStateFilter, roomTypeFilter, roomBranchFilter, roomFloorFilter, roomTypeSearchQuery, minCapacityFilter, maxCapacityFilter, minPriceFilter, maxPriceFilter, branchSearchQuery, serviceSearchQuery, messageFilter, messageSearchQuery]);
 
   const fetchDashboardStats = async () => {

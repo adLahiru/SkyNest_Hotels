@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Edit, Save, X, Key, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
+import { User, Edit, Save, X, Key, Eye, EyeOff, CheckCircle, AlertCircle, Calendar, Clock } from 'lucide-react';
 import userService from '../services/userService';
 import bookingService from '../services/bookingService';
 

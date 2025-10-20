@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DollarSign, AlertCircle, CheckCircle, XCircle, Download } from 'lucide-react';
 import reportService from '../../services/reportService';
 
-const GuestBillingReport = ({ user }) => {
+const GuestBillingReport = () => {
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState(null);
   const [error, setError] = useState(null);
