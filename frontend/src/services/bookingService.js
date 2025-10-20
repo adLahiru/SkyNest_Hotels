@@ -107,6 +107,31 @@ const bookingService = {
   },
 
   /**
+   * Get current logged-in user's bookings (authenticated)
+   * @returns {Promise} Response with current user's bookings
+   */
+  getMyBookings: async () => {
+    try {
+      const response = await apiClient.get('/bookings/my-bookings');
+      return {
+        success: response.data.success,
+        bookings: response.data.data?.bookings || response.data.bookings || [],
+        count: response.data.data?.count || 0,
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.error('Get my bookings error:', error);
+      return {
+        success: false,
+        bookings: [],
+        count: 0,
+        message: error.response?.data?.message || 'Failed to fetch bookings',
+        error,
+      };
+    }
+  },
+
+  /**
    * Update booking
    * @param {string} bookingId - Booking ID
    * @param {Object} bookingData - Updated booking data

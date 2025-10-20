@@ -196,7 +196,12 @@ const RoomSelectionPage = ({ selectedBranch, onRoomSelect, onBackToBranches, isL
     
     setSelectedRoom(room.id);
     setTimeout(() => {
-      onRoomSelect(room, selectedBranch);
+      // Pass the selected dates along with room and branch
+      const dates = {
+        checkIn: checkInDate,
+        checkOut: checkOutDate
+      };
+      onRoomSelect(room, selectedBranch, dates);
     }, 300);
   };
 
