@@ -1,6 +1,8 @@
 import bcrypt from 'bcryptjs';
 import connection from '../config/db';
-import { v7 as uuidv7 } from 'uuid';
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { v7: uuidv7 } = require('uuid');
 
 const createManagers = async () => {
   let conn: any = null;

@@ -2,7 +2,9 @@ import { Response } from 'express';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { db } from '../config/db';
 import { UserRole, AuthenticatedRequest } from '../types/auth.types';
-import { v4 as uuidv4 } from 'uuid';
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { v4: uuidv4 } = require('uuid');
 
 /**
  * Booking Controller

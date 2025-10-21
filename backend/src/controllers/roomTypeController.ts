@@ -1,8 +1,10 @@
 import { Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import { RowDataPacket } from 'mysql2/promise';
 import { db } from '../config/db';
 import { AuthenticatedRequest, UserRole, ApiResponse } from '../types/auth.types';
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { v4: uuidv4 } = require('uuid');
 
 // Interface for room type creation request
 interface CreateRoomTypeRequest {

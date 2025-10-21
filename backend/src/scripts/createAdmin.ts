@@ -1,8 +1,10 @@
 import bcrypt from 'bcryptjs';
 import connection from '../config/db';
-import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
 import e from 'express';
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { v4: uuidv4 } = require('uuid');
 
 const createAdminUser = async () => {
   let conn: any = null;

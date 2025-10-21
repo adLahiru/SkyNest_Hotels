@@ -13,10 +13,13 @@ class DashboardController {
   async getAdminStats(req: Request, res: Response): Promise<void> {
     try {
       const authReq = req as AuthenticatedRequest;
+      console.log('=== Admin Dashboard Request ===');
+      console.log('User:', authReq.user);
       
       // Get total counts
       // Count guests (users with is_guest = 1 or users not in staff table)
       // Count staff (users in staff table - staff_id is FK to users.user_id)
+      console.log('Fetching user stats...');
       const [userStats] = await db.execute<RowDataPacket[]>(
         `SELECT 
           COUNT(DISTINCT u.user_id) as total,
@@ -25,12 +28,16 @@ class DashboardController {
         FROM users u
         LEFT JOIN staff s ON u.user_id = s.staff_id`
       );
+      console.log('User stats:', userStats[0]);
       
+      console.log('Fetching branch stats...');
       const [branchStats] = await db.execute<RowDataPacket[]>(
         'SELECT COUNT(*) as total FROM hotel_branches'
       );
+      console.log('Branch stats:', branchStats[0]);
 
       
+      console.log('Fetching room stats...');
       const [roomStats] = await db.execute<RowDataPacket[]>(
         `SELECT 
           COUNT(*) as total,
@@ -39,33 +46,37 @@ class DashboardController {
           SUM(CASE WHEN state = 'maintenance' THEN 1 ELSE 0 END) as maintenance
         FROM rooms`
       );
+      console.log('Room stats:', roomStats[0]);
       
+      console.log('Fetching booking stats...');
       const [bookingStats] = await db.execute<RowDataPacket[]>(
         `SELECT 
           COUNT(*) as total,
-          SUM(CASE WHEN booking_status = 'PENDING' THEN 1 ELSE 0 END) as pending,
-          SUM(CASE WHEN booking_status = 'CONFIRMED' THEN 1 ELSE 0 END) as confirmed,
-          SUM(CASE WHEN booking_status = 'CHECKED_IN' THEN 1 ELSE 0 END) as checked_in,
-          SUM(CASE WHEN booking_status = 'CHECKED_OUT' THEN 1 ELSE 0 END) as checked_out,
-          SUM(CASE WHEN booking_status = 'CANCELLED' THEN 1 ELSE 0 END) as cancelled
+          SUM(CASE WHEN booking_status = 'confirmed' THEN 1 ELSE 0 END) as confirmed,
+          SUM(CASE WHEN booking_status = 'checked_in' THEN 1 ELSE 0 END) as checked_in,
+          SUM(CASE WHEN booking_status = 'checked_out' THEN 1 ELSE 0 END) as checked_out,
+          SUM(CASE WHEN booking_status = 'cancelled' THEN 1 ELSE 0 END) as cancelled
         FROM booking`
       );
+      console.log('Booking stats:', bookingStats[0]);
       
-      // Get revenue statistics
+      // Get revenue statistics from payments table
+      console.log('Fetching revenue stats...');
       const [revenueStats] = await db.execute<RowDataPacket[]>(
         `SELECT 
-          SUM(p.total_charges) as total_revenue,
-          SUM(CASE WHEN MONTH(p.payment_date) = MONTH(CURRENT_DATE()) 
-              AND YEAR(p.payment_date) = YEAR(CURRENT_DATE()) 
-              THEN p.total_charges ELSE 0 END) as monthly_revenue,
-          SUM(CASE WHEN DATE(p.payment_date) = CURRENT_DATE() 
-              THEN p.total_charges ELSE 0 END) as daily_revenue
-        FROM booking bk
-        LEFT JOIN payments p ON bk.booking_id = p.booking_id
-        WHERE bk.booking_status IN ('CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT')`
+          COALESCE(SUM(total_charges), 0) as total_revenue,
+          COALESCE(SUM(CASE WHEN MONTH(created_at) = MONTH(CURRENT_DATE()) 
+              AND YEAR(created_at) = YEAR(CURRENT_DATE()) 
+              THEN total_charges ELSE 0 END), 0) as monthly_revenue,
+          COALESCE(SUM(CASE WHEN DATE(created_at) = CURRENT_DATE() 
+              THEN total_charges ELSE 0 END), 0) as daily_revenue
+        FROM payments
+        WHERE payment_status IN ('paid', 'partial')`
       );
+      console.log('Revenue stats:', revenueStats[0]);
       
       // Get branch-wise statistics
+      console.log('Fetching branch-wise stats...');
       const [branchWiseStats] = await db.execute<RowDataPacket[]>(
         `SELECT 
           b.branch_id,
@@ -73,8 +84,8 @@ class DashboardController {
           b.address as location,
           COUNT(DISTINCT r.room_id) as total_rooms,
           COUNT(DISTINCT bk.booking_id) as total_bookings,
-          SUM(CASE WHEN bk.booking_status IN ('CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT') 
-              THEN p.total_charges ELSE 0 END) as revenue
+          COALESCE(SUM(CASE WHEN bk.booking_status IN ('confirmed', 'checked_in', 'checked_out') 
+              THEN p.total_charges ELSE 0 END), 0) as revenue
         FROM hotel_branches b
         LEFT JOIN rooms r ON b.branch_id = r.branch_id
         LEFT JOIN booking bk ON r.room_id = bk.room_id
@@ -82,15 +93,17 @@ class DashboardController {
         GROUP BY b.branch_id, b.branch_name, b.address
         ORDER BY revenue DESC`
       );
+      console.log('Branch-wise stats count:', branchWiseStats.length);
       
       // Get recent bookings grouped by branch
+      console.log('Fetching recent bookings...');
       const [allRecentBookings] = await db.execute<RowDataPacket[]>(
         `SELECT 
           bk.booking_id,
           bk.checking_datetime as check_in,
           bk.checkout_datetime as check_out,
           bk.booking_status as status,
-          p.total_charges as total_amount,
+          bk.total_amount as total_amount,
           u.name as guest_name,
           b.branch_id,
           b.branch_name,
@@ -100,9 +113,10 @@ class DashboardController {
         JOIN users u ON bk.user_id = u.user_id
         JOIN rooms r ON bk.room_id = r.room_id
         JOIN hotel_branches b ON r.branch_id = b.branch_id
-        LEFT JOIN payments p ON bk.booking_id = p.booking_id
-        ORDER BY bk.created_at DESC`
+        ORDER BY bk.created_at DESC
+        LIMIT 100`
       );
+      console.log('Recent bookings count:', allRecentBookings.length);
 
       // Group bookings by branch and limit to 5 per branch
       const bookingsByBranch: Record<string, any> = {};
@@ -145,6 +159,7 @@ class DashboardController {
 
       const recentBookingsByBranch = Object.values(bookingsByBranch);
       
+      console.log('Sending response with all stats...');
       res.status(200).json({
         success: true,
         message: 'Admin dashboard stats retrieved successfully',
@@ -158,10 +173,13 @@ class DashboardController {
           recentBookingsByBranch
         }
       } as ApiResponse);
+      console.log('=== Dashboard Response Sent Successfully ===');
       
     } catch (error) {
-      console.error('Get admin stats error:', error);
-      console.error('Error details:', JSON.stringify(error, null, 2));
+      console.error('=== Get admin stats error ===');
+      console.error('Error:', error);
+      console.error('Error message:', (error as Error).message);
+      console.error('Error stack:', (error as Error).stack);
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve dashboard statistics',

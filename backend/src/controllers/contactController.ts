@@ -1,7 +1,9 @@
 import { Request, Response } from 'express';
 import { db } from '../config/db';
-import { v4 as uuidv4 } from 'uuid';
 import { RowDataPacket } from 'mysql2';
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { v4: uuidv4 } = require('uuid');
 
 interface AuthenticatedRequest extends Request {
   user?: {
