@@ -3,7 +3,7 @@ import { ArrowLeft, CheckCircle, XCircle, User, Phone, Calendar, DoorOpen, Searc
 import dashboardService from '../services/dashboardService';
 import bookingService from '../services/bookingService';
 
-const PendingGuestsManager = ({ user, onBack }) => {
+const PendingGuestsManager = ({ onBack }) => {
   const [pendingGuests, setPendingGuests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');

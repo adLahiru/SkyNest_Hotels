@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, User, Phone, Calendar, DoorOpen, Search, Filter, LogOut, FileText, CheckCircle, AlertCircle, DollarSign, X } from 'lucide-react';
+import { ArrowLeft, User, Phone, Calendar, DoorOpen, Search, Filter, LogOut, FileText, CheckCircle, AlertCircle, X } from 'lucide-react';
 import dashboardService from '../services/dashboardService';
 import bookingService from '../services/bookingService';
 import BillDetails from './BillDetails';
 
-const CurrentGuestsManager = ({ user, onBack }) => {
+const CurrentGuestsManager = ({ onBack }) => {
   const [currentGuests, setCurrentGuests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRoom, setFilterRoom] = useState('all');
   const [processingBookingId, setProcessingBookingId] = useState(null);
   const [notification, setNotification] = useState(null);
-  const [checkoutValidation, setCheckoutValidation] = useState({});
   const [selectedBillBookingId, setSelectedBillBookingId] = useState(null);
 
   useEffect(() => {
@@ -32,20 +31,11 @@ const CurrentGuestsManager = ({ user, onBack }) => {
     setTimeout(() => setNotification(null), 5000);
   };
 
-  const validateCheckout = async (bookingId) => {
-    const result = await bookingService.validateCheckout(bookingId);
-    setCheckoutValidation(prev => ({
-      ...prev,
-      [bookingId]: result
-    }));
-    return result;
-  };
-
   const handleCheckout = async (bookingId) => {
     if (processingBookingId) return;
 
     // Validate checkout first
-    const validation = await validateCheckout(bookingId);
+    const validation = await bookingService.validateCheckout(bookingId);
     
     if (!validation.canCheckout) {
       showNotification(validation.message || 'Cannot checkout: Payment incomplete', 'error');
