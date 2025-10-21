@@ -1108,6 +1108,25 @@ export const checkInGuest = async (req: AuthenticatedRequest, res: Response): Pr
       [BookingStatus.CHECKED_IN, staffId, booking_id]
     );
     
+    // Create or update payment record
+    const [existingPayment] = await connection.query<RowDataPacket[]>(
+      'SELECT * FROM payments WHERE booking_id = ?',
+      [booking_id]
+    );
+    
+    if (existingPayment.length === 0) {
+      // Get room charges from booking
+      const totalCharges = parseFloat(booking.room_charges || '0');
+      const payment_id = uuidv4();
+      
+      await connection.query(
+        `INSERT INTO payments 
+         (payment_id, booking_id, total_charges, amount_paid, due_amount, payment_status, created_at)
+         VALUES (?, ?, ?, 0, ?, 'pending', NOW())`,
+        [payment_id, booking_id, totalCharges, totalCharges]
+      );
+    }
+    
     await connection.commit();
     
     // Fetch updated booking with room details
@@ -1451,5 +1470,428 @@ export const getAvailableRooms = async (req: AuthenticatedRequest, res: Response
       message: 'Failed to fetch available rooms',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
+  }
+};
+
+/**
+ * Add service to a booking
+ * POST /api/bookings/:booking_id/services
+ */
+export const addServiceToBooking = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const connection = await db.getConnection();
+  
+  try {
+    const { booking_id } = req.params;
+    const { service_type_id, quantity } = req.body;
+    
+    // Validation
+    if (!service_type_id || !quantity || quantity < 1) {
+      res.status(400).json({
+        success: false,
+        message: 'service_type_id and quantity (minimum 1) are required'
+      });
+      return;
+    }
+    
+    await connection.beginTransaction();
+    
+    // Check if booking exists and is checked_in
+    const [bookings] = await connection.query<RowDataPacket[]>(
+      `SELECT b.*, r.branch_id 
+       FROM booking b
+       JOIN rooms r ON b.room_id = r.room_id
+       WHERE b.booking_id = ?`,
+      [booking_id]
+    );
+    
+    if (bookings.length === 0) {
+      await connection.rollback();
+      res.status(404).json({ success: false, message: 'Booking not found' });
+      return;
+    }
+    
+    const booking = bookings[0];
+    
+    if (!booking) {
+      await connection.rollback();
+      res.status(404).json({ success: false, message: 'Booking not found' });
+      return;
+    }
+    
+    if (booking.booking_status !== BookingStatus.CHECKED_IN) {
+      await connection.rollback();
+      res.status(400).json({
+        success: false,
+        message: 'Services can only be added to checked-in bookings'
+      });
+      return;
+    }
+    
+    // Get service details
+    const [services] = await connection.query<RowDataPacket[]>(
+      'SELECT * FROM service_types WHERE service_type_id = ? AND branch_id = ?',
+      [service_type_id, booking.branch_id]
+    );
+    
+    if (services.length === 0) {
+      await connection.rollback();
+      res.status(404).json({
+        success: false,
+        message: 'Service not found for this branch'
+      });
+      return;
+    }
+    
+    const service = services[0];
+    
+    if (!service) {
+      await connection.rollback();
+      res.status(404).json({
+        success: false,
+        message: 'Service not found for this branch'
+      });
+      return;
+    }
+    
+    const unit_price = parseFloat(service.price);
+    const total_price = unit_price * quantity;
+    
+    // Check if booking_services table exists, if not use service_usage
+    const booking_service_id = uuidv4();
+    
+    // Try to insert into booking_services first
+    try {
+      await connection.query(
+        `INSERT INTO booking_services 
+         (booking_service_id, booking_id, service_type_id, quantity, unit_price, added_at)
+         VALUES (?, ?, ?, ?, ?, NOW())`,
+        [booking_service_id, booking_id, service_type_id, quantity, unit_price]
+      );
+    } catch (tableError: any) {
+      // If booking_services doesn't exist or has different structure, use service_usage table
+      if (tableError.code === 'ER_NO_SUCH_TABLE' || tableError.code === 'ER_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN') {
+        const usage_id = uuidv4();
+        await connection.query(
+          `INSERT INTO service_usage 
+           (usage_id, service_id, booking_id, usage_date, quantity, total)
+           VALUES (?, ?, ?, CURDATE(), ?, ?)`,
+          [usage_id, service_type_id, booking_id, quantity, total_price]
+        );
+      } else {
+        throw tableError;
+      }
+    }
+    
+    // Update payment total_charges
+    await connection.query(
+      `UPDATE payments 
+       SET total_charges = total_charges + ?,
+           due_amount = due_amount + ?
+       WHERE booking_id = ?`,
+      [total_price, total_price, booking_id]
+    );
+    
+    await connection.commit();
+    
+    res.json({
+      success: true,
+      message: 'Service added successfully',
+      service: {
+        booking_service_id,
+        service_name: service.service_name,
+        quantity,
+        unit_price,
+        total_price
+      }
+    });
+    
+  } catch (error) {
+    await connection.rollback();
+    console.error('Add service error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add service',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  } finally {
+    connection.release();
+  }
+};
+
+/**
+ * Get services for a booking
+ * GET /api/bookings/:booking_id/services
+ */
+export const getBookingServices = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { booking_id } = req.params;
+    
+    // Try booking_services table first
+    let services: any[];
+    try {
+      const [result] = await db.query<RowDataPacket[]>(
+        `SELECT bs.*, st.service_name, st.description
+         FROM booking_services bs
+         JOIN service_types st ON bs.service_type_id = st.service_type_id
+         WHERE bs.booking_id = ?
+         ORDER BY bs.added_at DESC`,
+        [booking_id]
+      );
+      services = result;
+    } catch (error: any) {
+      // Fall back to service_usage if booking_services doesn't exist
+      if (error.code === 'ER_NO_SUCH_TABLE') {
+        const [result] = await db.query<RowDataPacket[]>(
+          `SELECT su.*, st.service_name, st.description, st.price as unit_price
+           FROM service_usage su
+           JOIN service_types st ON su.service_id = st.service_type_id
+           WHERE su.booking_id = ?
+           ORDER BY su.created_at DESC`,
+          [booking_id]
+        );
+        services = result;
+      } else {
+        throw error;
+      }
+    }
+    
+    const totalServiceCharges = services.reduce((sum, s) => sum + parseFloat(s.total_price || s.total || 0), 0);
+    
+    res.json({
+      success: true,
+      services,
+      totalServiceCharges,
+      count: services.length
+    });
+    
+  } catch (error) {
+    console.error('Get booking services error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch services'
+    });
+  }
+};
+
+/**
+ * Process payment for a booking
+ * POST /api/bookings/:booking_id/payments
+ */
+export const processBookingPayment = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const connection = await db.getConnection();
+  
+  try {
+    const { booking_id } = req.params;
+    const { amount, payment_method } = req.body;
+    
+    // Validation
+    if (!amount || amount <= 0) {
+      res.status(400).json({
+        success: false,
+        message: 'Amount must be greater than 0'
+      });
+      return;
+    }
+    
+    if (!payment_method) {
+      res.status(400).json({
+        success: false,
+        message: 'Payment method is required'
+      });
+      return;
+    }
+    
+    await connection.beginTransaction();
+    
+    // Get payment record
+    const [payments] = await connection.query<RowDataPacket[]>(
+      'SELECT * FROM payments WHERE booking_id = ?',
+      [booking_id]
+    );
+    
+    if (payments.length === 0) {
+      await connection.rollback();
+      res.status(404).json({
+        success: false,
+        message: 'Payment record not found. Please generate bill first.'
+      });
+      return;
+    }
+    
+    const payment = payments[0];
+    
+    if (!payment) {
+      await connection.rollback();
+      res.status(404).json({
+        success: false,
+        message: 'Payment record not found'
+      });
+      return;
+    }
+    
+    const currentDueAmount = parseFloat(payment.due_amount || 0);
+    
+    // Validate amount doesn't exceed due amount
+    if (amount > currentDueAmount) {
+      await connection.rollback();
+      res.status(400).json({
+        success: false,
+        message: `Amount exceeds due amount. Maximum allowed: ${currentDueAmount}`
+      });
+      return;
+    }
+    
+    // Create payment transaction
+    const transaction_id = uuidv4();
+    await connection.query(
+      `INSERT INTO payment_transactions 
+       (transaction_id, payment_id, booking_id, transaction_date, amount, payment_method, processed_by_staff_id)
+       VALUES (?, ?, ?, NOW(), ?, ?, ?)`,
+      [transaction_id, payment.payment_id, booking_id, amount, payment_method, req.user?.user_id]
+    );
+    
+    // Update payment record
+    const newAmountPaid = parseFloat(payment.amount_paid || 0) + amount;
+    const newDueAmount = parseFloat(payment.total_charges) - newAmountPaid;
+    const newStatus = newDueAmount <= 0 ? 'paid' : (newAmountPaid > 0 ? 'partial' : 'pending');
+    
+    await connection.query(
+      `UPDATE payments 
+       SET amount_paid = ?,
+           due_amount = ?,
+           payment_status = ?
+       WHERE payment_id = ?`,
+      [newAmountPaid, Math.max(0, newDueAmount), newStatus, payment.payment_id]
+    );
+    
+    await connection.commit();
+    
+    res.json({
+      success: true,
+      message: 'Payment processed successfully',
+      payment: {
+        transaction_id,
+        amount,
+        payment_method,
+        newAmountPaid,
+        newDueAmount: Math.max(0, newDueAmount),
+        paymentStatus: newStatus
+      }
+    });
+    
+  } catch (error) {
+    await connection.rollback();
+    console.error('Process payment error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to process payment',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  } finally {
+    connection.release();
+  }
+};
+
+/**
+ * Get payment details for a booking
+ * GET /api/bookings/:booking_id/payment-details
+ */
+export const getBookingPaymentDetails = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const connection = await db.getConnection();
+  
+  try {
+    const { booking_id } = req.params;
+    
+    // Get payment record
+    let [payments] = await connection.query<RowDataPacket[]>(
+      'SELECT * FROM payments WHERE booking_id = ?',
+      [booking_id]
+    );
+    
+    // If payment record doesn't exist, create it
+    if (payments.length === 0) {
+      // Get booking details to calculate charges
+      const [bookings] = await connection.query<RowDataPacket[]>(
+        'SELECT room_charges FROM booking WHERE booking_id = ?',
+        [booking_id]
+      );
+      
+      if (bookings.length === 0) {
+        res.status(404).json({
+          success: false,
+          message: 'Booking not found'
+        });
+        return;
+      }
+      
+      const booking = bookings[0];
+      if (!booking) {
+        res.status(404).json({
+          success: false,
+          message: 'Booking not found'
+        });
+        return;
+      }
+      
+      const totalCharges = parseFloat(booking.room_charges || '0');
+      const payment_id = uuidv4();
+      
+      // Create payment record
+      await connection.query(
+        `INSERT INTO payments 
+         (payment_id, booking_id, total_charges, amount_paid, due_amount, payment_status, created_at)
+         VALUES (?, ?, ?, 0, ?, 'pending', NOW())`,
+        [payment_id, booking_id, totalCharges, totalCharges]
+      );
+      
+      // Fetch the newly created payment
+      [payments] = await connection.query<RowDataPacket[]>(
+        'SELECT * FROM payments WHERE booking_id = ?',
+        [booking_id]
+      );
+    }
+    
+    const payment = payments[0];
+    
+    if (!payment) {
+      res.status(404).json({
+        success: false,
+        message: 'Payment record not found'
+      });
+      return;
+    }
+    
+    // Get payment transactions
+    const [transactions] = await connection.query<RowDataPacket[]>(
+      `SELECT pt.*, u.name as processed_by_name
+       FROM payment_transactions pt
+       LEFT JOIN users u ON pt.processed_by_staff_id = u.user_id
+       WHERE pt.booking_id = ?
+       ORDER BY pt.transaction_date DESC`,
+      [booking_id]
+    );
+    
+    res.json({
+      success: true,
+      payment: {
+        payment_id: payment.payment_id,
+        total_charges: parseFloat(payment.total_charges || 0),
+        amount_paid: parseFloat(payment.amount_paid || 0),
+        due_amount: parseFloat(payment.due_amount || 0),
+        payment_status: payment.payment_status,
+        payment_date: payment.payment_date
+      },
+      transactions,
+      canCheckout: parseFloat(payment.due_amount || 0) <= 0
+    });
+    
+  } catch (error) {
+    console.error('Get payment details error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch payment details'
+    });
+  } finally {
+    connection.release();
   }
 };

@@ -47,13 +47,14 @@ const bookingService = {
       const response = await apiClient.get(`/bookings?${params.toString()}`);
       return {
         success: response.data.success,
-        bookings: response.data.data || [],
+        bookings: response.data.data?.bookings || response.data.data || [],
         message: response.data.message,
       };
     } catch (error) {
       console.error('Get all bookings error:', error);
       return {
         success: false,
+        bookings: [],
         message: error.response?.data?.message || 'Failed to fetch bookings',
         error,
       };
@@ -186,7 +187,7 @@ const bookingService = {
    */
   cancelBooking: async (bookingId) => {
     try {
-      const response = await apiClient.post(`/bookings/${bookingId}/cancel`);
+      const response = await apiClient.delete(`/bookings/${bookingId}`);
       return {
         success: response.data.success,
         booking: response.data.data,
@@ -209,17 +210,17 @@ const bookingService = {
    */
   checkInBooking: async (bookingId) => {
     try {
-      const response = await apiClient.post(`/bookings/${bookingId}/check-in`);
+      const response = await apiClient.patch(`/bookings/${bookingId}/checkin`);
       return {
         success: response.data.success,
-        booking: response.data.data,
+        booking: response.data.booking || response.data.data,
         message: response.data.message || 'Check-in successful',
       };
     } catch (error) {
       console.error('Check-in booking error:', error);
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to check-in',
+        message: error.response?.data?.message || error.message || 'Failed to check-in',
         error,
       };
     }
@@ -232,17 +233,119 @@ const bookingService = {
    */
   checkOutBooking: async (bookingId) => {
     try {
-      const response = await apiClient.post(`/bookings/${bookingId}/check-out`);
+      const response = await apiClient.patch(`/bookings/${bookingId}/checkout`);
       return {
         success: response.data.success,
-        booking: response.data.data,
+        booking: response.data.booking || response.data.data,
         message: response.data.message || 'Check-out successful',
       };
     } catch (error) {
       console.error('Check-out booking error:', error);
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to check-out',
+        message: error.response?.data?.message || error.message || 'Failed to check-out',
+        error,
+      };
+    }
+  },
+
+  /**
+   * Add service to booking
+   * @param {string} bookingId - Booking ID
+   * @param {Object} serviceData - { service_type_id, quantity }
+   * @returns {Promise} Response with added service
+   */
+  addServiceToBooking: async (bookingId, serviceData) => {
+    try {
+      const response = await apiClient.post(`/bookings/${bookingId}/services`, serviceData);
+      return {
+        success: response.data.success,
+        service: response.data.service,
+        message: response.data.message || 'Service added successfully',
+      };
+    } catch (error) {
+      console.error('Add service error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to add service',
+        error,
+      };
+    }
+  },
+
+  /**
+   * Get services for a booking
+   * @param {string} bookingId - Booking ID
+   * @returns {Promise} Response with list of services
+   */
+  getBookingServices: async (bookingId) => {
+    try {
+      const response = await apiClient.get(`/bookings/${bookingId}/services`);
+      return {
+        success: response.data.success,
+        services: response.data.services || [],
+        totalServiceCharges: response.data.totalServiceCharges || 0,
+        count: response.data.count || 0,
+      };
+    } catch (error) {
+      console.error('Get booking services error:', error);
+      return {
+        success: false,
+        services: [],
+        totalServiceCharges: 0,
+        count: 0,
+        message: error.response?.data?.message || 'Failed to fetch services',
+        error,
+      };
+    }
+  },
+
+  /**
+   * Process payment for booking
+   * @param {string} bookingId - Booking ID
+   * @param {Object} paymentData - { amount, payment_method }
+   * @returns {Promise} Response with payment details
+   */
+  processBookingPayment: async (bookingId, paymentData) => {
+    try {
+      const response = await apiClient.post(`/bookings/${bookingId}/payments`, paymentData);
+      return {
+        success: response.data.success,
+        payment: response.data.payment,
+        message: response.data.message || 'Payment processed successfully',
+      };
+    } catch (error) {
+      console.error('Process payment error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to process payment',
+        error,
+      };
+    }
+  },
+
+  /**
+   * Get payment details for booking
+   * @param {string} bookingId - Booking ID
+   * @returns {Promise} Response with payment details and transactions
+   */
+  getBookingPaymentDetails: async (bookingId) => {
+    try {
+      const response = await apiClient.get(`/bookings/${bookingId}/payment-details`);
+      return {
+        success: response.data.success,
+        payment: response.data.payment,
+        transactions: response.data.transactions || [],
+        canCheckout: response.data.canCheckout || false,
+      };
+    } catch (error) {
+      console.error('Get payment details error:', error);
+      return {
+        success: false,
+        payment: null,
+        transactions: [],
+        canCheckout: false,
+        message: error.response?.data?.message || 'Failed to fetch payment details',
         error,
       };
     }

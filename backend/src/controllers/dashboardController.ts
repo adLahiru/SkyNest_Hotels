@@ -55,10 +55,10 @@ class DashboardController {
       const [revenueStats] = await db.execute<RowDataPacket[]>(
         `SELECT 
           SUM(p.total_charges) as total_revenue,
-          SUM(CASE WHEN MONTH(p.payment_date) = MONTH(CURRENT_DATE()) 
-              AND YEAR(p.payment_date) = YEAR(CURRENT_DATE()) 
+          SUM(CASE WHEN MONTH(p.created_at) = MONTH(CURRENT_DATE()) 
+              AND YEAR(p.created_at) = YEAR(CURRENT_DATE()) 
               THEN p.total_charges ELSE 0 END) as monthly_revenue,
-          SUM(CASE WHEN DATE(p.payment_date) = CURRENT_DATE() 
+          SUM(CASE WHEN DATE(p.created_at) = CURRENT_DATE() 
               THEN p.total_charges ELSE 0 END) as daily_revenue
         FROM booking bk
         LEFT JOIN payments p ON bk.booking_id = p.booking_id
@@ -234,10 +234,10 @@ class DashboardController {
       const [revenueStats] = await db.execute<RowDataPacket[]>(
         `SELECT 
           SUM(p.total_charges) as total_revenue,
-          SUM(CASE WHEN MONTH(p.payment_date) = MONTH(CURRENT_DATE()) 
-              AND YEAR(p.payment_date) = YEAR(CURRENT_DATE()) 
+          SUM(CASE WHEN MONTH(p.created_at) = MONTH(CURRENT_DATE()) 
+              AND YEAR(p.created_at) = YEAR(CURRENT_DATE()) 
               THEN p.total_charges ELSE 0 END) as monthly_revenue,
-          SUM(CASE WHEN DATE(p.payment_date) = CURRENT_DATE() 
+          SUM(CASE WHEN DATE(p.created_at) = CURRENT_DATE() 
               THEN p.total_charges ELSE 0 END) as daily_revenue
         FROM booking bk
         JOIN rooms r ON bk.room_id = r.room_id
@@ -815,7 +815,7 @@ class DashboardController {
           COALESCE(p.amount_paid, 0) as amount_paid,
           (p.total_charges - COALESCE(p.amount_paid, 0)) as unpaid_balance,
           p.payment_method,
-          p.payment_date,
+          p.created_at as payment_date,
           CASE 
             WHEN p.amount_paid IS NULL THEN 'UNPAID'
             WHEN p.amount_paid < p.total_charges THEN 'PARTIALLY_PAID'
