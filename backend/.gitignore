@@ -130,3 +130,6 @@ yarn.lock
 
 # Build artifacts
 *.tsbuildinfo
+# Backup files
+*.bak
+*.backup

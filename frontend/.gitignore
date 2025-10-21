@@ -164,3 +164,6 @@ next-env.d.ts
 *.temp
 .temp/
 .tmp/
+# Backup files
+*.bak
+*.backup

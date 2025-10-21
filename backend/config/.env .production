@@ -1,0 +1,19 @@
+# Database Configuration - AWS RDS
+DB_HOST=35.154.58.37
+DB_PORT=3306
+DB_USER=admin
+DB_PASSWORD=Lahiru@123
+DB_NAME=SkyNest_Hotels
+
+# Server Configuration
+PORT=8084
+NODE_ENV=development
+
+# JWT Configuration
+JWT_SECRET=skynest-hotels-super-secure-jwt-secret-key-minimum-32-characters-long
+JWT_REFRESH_SECRET=skynest-hotels-super-secure-refresh-secret-key-minimum-32-characters-long
+JWT_EXPIRES_IN=1h
+JWT_REFRESH_EXPIRES_IN=7d
+
+# CORS Configuration
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001

@@ -1478,12 +1478,18 @@ const AdminDashboard = ({ user }) => {
   const fetchBookings = useCallback(async () => {
     setLoadingBookings(true);
     try {
+      // Use 'status' parameter to match backend API expectation
       const result = await bookingService.getAllBookings({ 
-        booking_status: bookingFilter 
+        status: bookingFilter 
       });
       
       if (result.success) {
         let filtered = result.bookings || [];
+        
+        // CRITICAL: Filter by booking status to ensure correct separation
+        // Only show 'confirmed' bookings in Pending Check-In section
+        // Only show 'checked_in' bookings in Checked In section
+        filtered = filtered.filter(booking => booking.booking_status === bookingFilter);
         
         // Apply search filter
         if (bookingSearchQuery) {
