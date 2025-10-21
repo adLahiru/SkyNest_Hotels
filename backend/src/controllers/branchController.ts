@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { RowDataPacket } from 'mysql2/promise';
 import { db } from '../config/db';
 import { AuthenticatedRequest, UserRole, ApiResponse } from '../types/auth.types';
+import { logError, logInfo, logDebug, logWarn } from '../utils/logger';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { v4: uuidv4 } = require('uuid');
@@ -70,7 +71,7 @@ export class BranchController {
       connection.release();
       return rows.length > 0;
     } catch (error) {
-      console.error('Error validating manager:', error);
+      logError('Error validating manager', error);
       return false;
     }
   }
@@ -207,7 +208,7 @@ export class BranchController {
       }
 
     } catch (error) {
-      console.error('Error creating branch:', error);
+      logError('Error creating branch', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error while creating branch'
@@ -259,7 +260,7 @@ export class BranchController {
       }
 
     } catch (error) {
-      console.error('Error retrieving branches:', error);
+      logError('Error retrieving branches', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error while retrieving branches'
@@ -328,7 +329,7 @@ export class BranchController {
       }
 
     } catch (error) {
-      console.error('Error retrieving branch:', error);
+      logError('Error retrieving branch', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error while retrieving branch'
@@ -519,7 +520,7 @@ export class BranchController {
       }
 
     } catch (error) {
-      console.error('Error updating branch:', error);
+      logError('Error updating branch', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error while updating branch'
@@ -617,7 +618,7 @@ export class BranchController {
       }
 
     } catch (error) {
-      console.error('Error deleting branch:', error);
+      logError('Error deleting branch', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error while deleting branch'

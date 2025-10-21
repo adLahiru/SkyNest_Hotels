@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import '../styles/BillDetails.css';
+import logger from '../utils/logger';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -18,7 +19,7 @@ const BillDetails = ({ bookingId, onBillGenerated }) => {
       );
       setBill(response.data);
     } catch (error) {
-      console.error('Failed to fetch bill:', error);
+      logger.error('Failed to fetch bill:', error);
     } finally {
       setLoading(false);
     }
@@ -45,7 +46,7 @@ const BillDetails = ({ bookingId, onBillGenerated }) => {
         onBillGenerated(response.data);
       }
     } catch (error) {
-      console.error('Bill generation error:', error);
+      logger.error('Bill generation error:', error);
       alert('Failed to generate bill');
     } finally {
       setGenerating(false);

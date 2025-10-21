@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { db } from '../config/db';
 import { UserRole, AuthenticatedRequest } from '../types/auth.types';
+import { logError, logInfo, logDebug, logWarn } from '../utils/logger';
 
 /**
  * Discount Controller
@@ -234,7 +235,7 @@ export const createDiscount = async (req: AuthenticatedRequest, res: Response): 
 
   } catch (error) {
     await connection.rollback();
-    console.error('Error creating discount:', error);
+    logError('Error creating discount', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while creating the discount.',
@@ -315,7 +316,7 @@ export const getDiscounts = async (req: AuthenticatedRequest, res: Response): Pr
     });
 
   } catch (error) {
-    console.error('Error fetching discounts:', error);
+    logError('Error fetching discounts', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while retrieving discounts.',
@@ -376,7 +377,7 @@ export const getDiscountById = async (req: AuthenticatedRequest, res: Response):
     });
 
   } catch (error) {
-    console.error('Error fetching discount:', error);
+    logError('Error fetching discount', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while retrieving the discount.',
@@ -594,7 +595,7 @@ export const updateDiscount = async (req: AuthenticatedRequest, res: Response): 
 
   } catch (error) {
     await connection.rollback();
-    console.error('Error updating discount:', error);
+    logError('Error updating discount', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while updating the discount.',
@@ -663,7 +664,7 @@ export const deleteDiscount = async (req: AuthenticatedRequest, res: Response): 
 
   } catch (error) {
     await connection.rollback();
-    console.error('Error deleting discount:', error);
+    logError('Error deleting discount', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while deleting the discount.',
@@ -720,7 +721,7 @@ export const getActiveDiscountsByCategory = async (req: AuthenticatedRequest, re
     });
 
   } catch (error) {
-    console.error('Error fetching active discounts:', error);
+    logError('Error fetching active discounts', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while retrieving active discounts.',

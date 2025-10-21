@@ -8,6 +8,7 @@ import roomTypeService from '../services/roomTypeService';
 import serviceCatalogueService from '../services/serviceCatalogueService';
 import contactService from '../services/contactService';
 import ReportsMain from './Reports/ReportsMain';
+import logger from '../utils/logger';
 
 const AdminDashboard = ({ user }) => {
   const [stats, setStats] = useState(null);
@@ -214,7 +215,7 @@ const AdminDashboard = ({ user }) => {
         setServices([]); // Set empty array on failure
       }
     } catch (error) {
-      console.error('Error fetching services:', error);
+      logger.error('Error fetching services:', error);
       setServices([]); // Set empty array on error
     }
     setLoadingServices(false);
@@ -264,7 +265,7 @@ const AdminDashboard = ({ user }) => {
     if (roomFloorFilter) filters.floor_no = roomFloorFilter;
     
     const result = await roomService.getAllRooms(filters);
-    console.log('Fetched rooms result:', result); // Debug log
+    logger.debug('Fetched rooms result:', result); // Debug log
     if (result.success) {
       let filteredRooms = result.rooms || []; // Fixed: result.rooms NOT result.rooms.rooms
       
@@ -275,7 +276,7 @@ const AdminDashboard = ({ user }) => {
         );
       }
       
-      console.log('Filtered rooms:', filteredRooms); // Debug log
+      logger.debug('Filtered rooms:', filteredRooms); // Debug log
       setRooms(filteredRooms);
     } else {
     }
@@ -1405,7 +1406,7 @@ const AdminDashboard = ({ user }) => {
         setContactMessages([]);
       }
     } catch (error) {
-      console.error('Error fetching messages:', error);
+      logger.error('Error fetching messages:', error);
       setContactMessages([]);
     }
     setLoadingMessages(false);

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MapPin, Star, ArrowRight, Wifi, Car, Coffee, Utensils, Loader2, AlertCircle } from 'lucide-react';
 import branchService from '../services/branchService';
 import roomService from '../services/roomService';
+import logger from '../utils/logger';
 
 const BranchSelectionPage = ({ onBranchSelect }) => {
   const [selectedBranch, setSelectedBranch] = useState(null);
@@ -78,8 +79,8 @@ const BranchSelectionPage = ({ onBranchSelect }) => {
         // Filter out branches that have no rooms (including head office)
         const branchesWithRooms = branchesWithRoomCount.filter(branch => branch.rooms > 0);
         
-        console.log('All processed branches:', branchesWithRoomCount);
-        console.log('Branches with rooms:', branchesWithRooms);
+        logger.debug('All processed branches:', branchesWithRoomCount);
+        logger.debug('Branches with rooms:', branchesWithRooms);
         setBranches(branchesWithRooms);
       } else {
         setError(response.message || 'Failed to load branches');

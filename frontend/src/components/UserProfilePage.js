@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Edit, Save, X, Key, Eye, EyeOff, CheckCircle, AlertCircle, Calendar, Clock } from 'lucide-react';
 import userService from '../services/userService';
 import bookingService from '../services/bookingService';
+import logger from '../utils/logger';
 
 const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -177,7 +178,7 @@ const UserProfilePage = ({ user, onUpdateUser, onLogout }) => {
           setUserBookings([]);
         }
       } catch (error) {
-        console.error('Error fetching bookings:', error);
+        logger.error('Error fetching bookings:', error);
         setUserBookings([]);
       } finally {
         setIsBookingsLoading(false);

@@ -1,4 +1,5 @@
 import apiClient from '../config/api';
+import logger from '../utils/logger';
 
 /**
  * Contact Service
@@ -20,7 +21,7 @@ const contactService = {
         data: response.data.data,
       };
     } catch (error) {
-      console.error('Submit contact form error:', error);
+      logger.error('Submit contact form error', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to submit contact form. Please try again.',
@@ -51,7 +52,7 @@ const contactService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get all contact messages error:', error);
+      logger.error('Get all contact messages error', error);
       return {
         success: false,
         messages: [],
@@ -76,7 +77,7 @@ const contactService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get contact message by ID error:', error);
+      logger.error('Get contact message by ID error', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch contact message details',
@@ -100,7 +101,7 @@ const contactService = {
         data: response.data.data,
       };
     } catch (error) {
-      console.error('Update contact status error:', error);
+      logger.error('Update contact status error', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to update contact status',
@@ -122,7 +123,7 @@ const contactService = {
         message: response.data.message || 'Contact message deleted successfully',
       };
     } catch (error) {
-      console.error('Delete contact message error:', error);
+      logger.error('Delete contact message error', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to delete contact message',

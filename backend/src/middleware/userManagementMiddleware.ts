@@ -1,5 +1,18 @@
+/**
+ * User Management Middleware
+ * 
+ * Provides authorization middleware functions for:
+ * - User management permissions
+ * - Branch management permissions
+ * - Role creation validation
+ * - Branch access control
+ * - User access control
+ * - Minimum role requirements
+ */
+
 import { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest, UserRole, ApiResponse, RoleHierarchy } from '../types/auth.types';
+import { logError } from '../utils/logger';
 
 // Middleware to check if user can manage other users
 export const canManageUsers = (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
@@ -25,7 +38,7 @@ export const canManageUsers = (req: AuthenticatedRequest, res: Response, next: N
 
     next();
   } catch (error) {
-    console.error('Error in canManageUsers middleware:', error);
+    logError('Error in canManageUsers middleware', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'
@@ -57,7 +70,7 @@ export const canManageBranches = (req: AuthenticatedRequest, res: Response, next
 
     next();
   } catch (error) {
-    console.error('Error in canManageBranches middleware:', error);
+    logError('Error in canManageBranches middleware', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'
@@ -113,7 +126,7 @@ export const validateRoleCreation = (req: AuthenticatedRequest, res: Response, n
     } as ApiResponse);
 
   } catch (error) {
-    console.error('Error in validateRoleCreation middleware:', error);
+    logError('Error in validateRoleCreation middleware', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'
@@ -163,7 +176,7 @@ export const validateBranchAccess = (req: AuthenticatedRequest, res: Response, n
     } as ApiResponse);
 
   } catch (error) {
-    console.error('Error in validateBranchAccess middleware:', error);
+    logError('Error in validateBranchAccess middleware', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'
@@ -212,7 +225,7 @@ export const validateUserAccess = (req: AuthenticatedRequest, res: Response, nex
     } as ApiResponse);
 
   } catch (error) {
-    console.error('Error in validateUserAccess middleware:', error);
+    logError('Error in validateUserAccess middleware', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'
@@ -247,7 +260,7 @@ export const requireMinimumRole = (minimumRole: UserRole) => {
 
       next();
     } catch (error) {
-      console.error('Error in requireMinimumRole middleware:', error);
+      logError('Error in requireMinimumRole middleware', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error'

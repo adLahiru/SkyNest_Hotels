@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Mail, Phone, Calendar, DollarSign } from 'lucide-react';
 import axios from 'axios';
+import logger from '../../utils/logger';
 
 const ManagerStaff = ({ branchId }) => {
   const [staff, setStaff] = useState([]);
@@ -25,7 +26,7 @@ const ManagerStaff = ({ branchId }) => {
         setStaff(staffMembers);
       }
     } catch (error) {
-      console.error('Error fetching staff:', error);
+      logger.error('Error fetching staff:', error);
     } finally {
       setLoading(false);
     }

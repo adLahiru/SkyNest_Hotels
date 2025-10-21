@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { db } from '../config/db';
 import { UserRole, AuthenticatedRequest } from '../types/auth.types';
+import { logError, logInfo, logDebug, logWarn } from '../utils/logger';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { v4: uuidv4 } = require('uuid');
@@ -130,7 +131,7 @@ export const generateBill = async (req: AuthenticatedRequest, res: Response): Pr
     
   } catch (error) {
     await connection.rollback();
-    console.error('Bill generation error:', error);
+    logError('Bill generation error', error);
     res.status(500).json({ error: 'Failed to generate bill' });
   } finally {
     connection.release();
@@ -212,7 +213,7 @@ export const getBillDetails = async (req: AuthenticatedRequest, res: Response): 
     });
     
   } catch (error) {
-    console.error('Bill details error:', error);
+    logError('Bill details error', error);
     res.status(500).json({ error: 'Failed to fetch bill details' });
   }
 };
@@ -282,7 +283,7 @@ export const processPayment = async (req: AuthenticatedRequest, res: Response): 
       return;
     }
     
-    console.error('Payment processing error:', error);
+    logError('Payment processing error', error);
     res.status(500).json({ error: 'Payment processing failed' });
   } finally {
     connection.release();
@@ -332,7 +333,7 @@ export const getPaymentHistory = async (req: AuthenticatedRequest, res: Response
     });
     
   } catch (error) {
-    console.error('Payment history error:', error);
+    logError('Payment history error', error);
     res.status(500).json({ error: 'Failed to fetch payment history' });
   }
 };
@@ -400,7 +401,7 @@ export const getOutstandingBalances = async (req: AuthenticatedRequest, res: Res
     });
     
   } catch (error) {
-    console.error('Outstanding balances error:', error);
+    logError('Outstanding balances error', error);
     res.status(500).json({ error: 'Failed to fetch outstanding balances' });
   }
 };
@@ -457,7 +458,7 @@ export const getPaymentStatistics = async (req: AuthenticatedRequest, res: Respo
     });
     
   } catch (error) {
-    console.error('Payment statistics error:', error);
+    logError('Payment statistics error', error);
     res.status(500).json({ error: 'Failed to fetch payment statistics' });
   }
 };

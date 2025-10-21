@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { db } from '../config/db';
 import { UserRole, AuthenticatedRequest } from '../types/auth.types';
+import { logError, logInfo, logDebug, logWarn } from '../utils/logger';
 
 /**
  * Room Controller
@@ -269,7 +270,7 @@ export const createRoom = async (req: AuthenticatedRequest, res: Response): Prom
 
   } catch (error) {
     await connection.rollback();
-    console.error('Error creating room:', error);
+    logError('Error creating room', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while creating the room.',
@@ -364,7 +365,7 @@ export const getRooms = async (req: AuthenticatedRequest, res: Response): Promis
     });
 
   } catch (error) {
-    console.error('Error fetching rooms:', error);
+    logError('Error fetching rooms', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while retrieving rooms.',
@@ -439,7 +440,7 @@ export const getRoomById = async (req: AuthenticatedRequest, res: Response): Pro
     });
 
   } catch (error) {
-    console.error('Error fetching room:', error);
+    logError('Error fetching room', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while retrieving the room.',
@@ -681,7 +682,7 @@ export const updateRoom = async (req: AuthenticatedRequest, res: Response): Prom
 
   } catch (error) {
     await connection.rollback();
-    console.error('Error updating room:', error);
+    logError('Error updating room', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while updating the room.',
@@ -783,7 +784,7 @@ export const deleteRoom = async (req: AuthenticatedRequest, res: Response): Prom
 
   } catch (error) {
     await connection.rollback();
-    console.error('Error deleting room:', error);
+    logError('Error deleting room', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while deleting the room.',
@@ -852,7 +853,7 @@ export const getAvailableRooms = async (req: AuthenticatedRequest, res: Response
     });
 
   } catch (error) {
-    console.error('Error fetching available rooms:', error);
+    logError('Error fetching available rooms', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while retrieving available rooms.',

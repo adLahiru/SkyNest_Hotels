@@ -1,4 +1,5 @@
 import apiClient from '../config/api';
+import logger from '../utils/logger';
 
 /**
  * Branch Service
@@ -19,7 +20,7 @@ const branchService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get all branches (public) error:', error);
+      logger.error('Get all branches (public) error', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch branches',
@@ -63,7 +64,7 @@ const branchService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get branch by ID (public) error:', error);
+      logger.error('Get branch by ID (public) error', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch branch details',

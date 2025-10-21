@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Award, TrendingUp, Users, DollarSign, Download } from 'lucide-react';
 import reportService from '../../services/reportService';
+import logger from '../../utils/logger';
 
 const TopServicesReport = () => {
   const [loading, setLoading] = useState(false);
@@ -23,7 +24,7 @@ const TopServicesReport = () => {
       }
     } catch (err) {
       setError('An error occurred while fetching the report');
-      console.error(err);
+      logger.error('Error in report', err);
     } finally {
       setLoading(false);
     }

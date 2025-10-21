@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, CheckCircle, XCircle, User, Phone, Calendar, DoorOpen, Search, Filter, AlertCircle } from 'lucide-react';
 import dashboardService from '../services/dashboardService';
 import bookingService from '../services/bookingService';
+import logger from '../utils/logger';
 
 const PendingGuestsManager = ({ onBack }) => {
   const [pendingGuests, setPendingGuests] = useState([]);
@@ -47,7 +48,7 @@ const PendingGuestsManager = ({ onBack }) => {
       }
     } catch (error) {
       showNotification('An error occurred while confirming the booking', 'error');
-      console.error('Confirm error:', error);
+      logger.error('Confirm error:', error);
     } finally {
       setProcessingBookingId(null);
     }
@@ -71,7 +72,7 @@ const PendingGuestsManager = ({ onBack }) => {
       }
     } catch (error) {
       showNotification('An error occurred while cancelling the booking', 'error');
-      console.error('Cancel error:', error);
+      logger.error('Cancel error:', error);
     } finally {
       setProcessingBookingId(null);
     }

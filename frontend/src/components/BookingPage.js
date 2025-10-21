@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, Users, CheckCircle, AlertCircle, ArrowLeft, Loader2 } from 'lucide-react';
 import bookingService from '../services/bookingService';
 import userService from '../services/userService';
+import logger from '../utils/logger';
 
 const BookingPage = ({ user, selectedRoom, selectedBranch, selectedDates, onBackToRooms }) => {
   const [bookingForm, setBookingForm] = useState({
@@ -148,7 +149,7 @@ const BookingPage = ({ user, selectedRoom, selectedBranch, selectedDates, onBack
       const response = await bookingService.createBooking(bookingData);
       
       if (response.success) {
-        console.log('Booking created successfully:', response.booking);
+        logger.debug('Booking created successfully:', response.booking);
         setBookingReference(response.data?.booking?.booking_id || response.booking?.booking_id || 'SKN' + Date.now().toString().slice(-6));
         
         // Update the form with the response data to show correct charges

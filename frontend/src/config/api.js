@@ -1,4 +1,15 @@
+/**
+ * API Client Configuration
+ * 
+ * Configures Axios instance with interceptors for:
+ * - Automatic authentication token injection
+ * - Token refresh on expiration
+ * - Request/response logging
+ * - Error handling
+ */
+
 import axios from 'axios';
+import logger from '../utils/logger';
 
 // Backend API Base URL
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8084/api';
@@ -12,7 +23,10 @@ const apiClient = axios.create({
   timeout: 60000, // Increased to 60 seconds for remote database connections
 });
 
-// Request interceptor - Add auth token to requests (except public endpoints)
+/**
+ * Request interceptor
+ * Adds authentication token to non-public API requests
+ */
 apiClient.interceptors.request.use(
   (config) => {
     // Don't add token to public endpoints
@@ -25,7 +39,7 @@ apiClient.interceptors.request.use(
       }
     }
     
-    console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, {
+    logger.apiRequest(config.method || 'unknown', config.url || '', {
       isPublic: isPublicEndpoint,
       hasToken: !!config.headers.Authorization
     });
@@ -33,42 +47,56 @@ apiClient.interceptors.request.use(
     return config;
   },
   (error) => {
+    logger.error('API request configuration error', error);
     return Promise.reject(error);
   }
 );
 
-// Response interceptor - Handle token refresh and errors
+/**
+ * Response interceptor
+ * Handles successful responses and automatic token refresh on expiration
+ */
 apiClient.interceptors.response.use(
   (response) => {
-    console.log(`API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`, {
-      status: response.status,
-      success: response.data?.success,
-      dataLength: Array.isArray(response.data?.data) ? response.data.data.length : 'N/A'
-    });
+    logger.apiResponse(
+      response.config.method || 'unknown',
+      response.config.url || '',
+      response.status,
+      {
+        success: response.data?.success,
+        dataLength: Array.isArray(response.data?.data) ? response.data.data.length : 'N/A'
+      }
+    );
     return response;
   },
   async (error) => {
-    console.error(`API Error: ${error.config?.method?.toUpperCase()} ${error.config?.url}`, {
-      status: error.response?.status,
-      message: error.response?.data?.message || error.message,
-      code: error.code
-    });
-    
     const originalRequest = error.config;
+    
+    logger.apiError(
+      originalRequest?.method || 'unknown',
+      originalRequest?.url || '',
+      {
+        status: error.response?.status,
+        message: error.response?.data?.message || error.message,
+        code: error.code
+      }
+    );
 
-    // If token expired, try to refresh
+    // If token expired, attempt to refresh
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
       try {
         const refreshToken = localStorage.getItem('refreshToken');
         if (refreshToken) {
+          logger.debug('Attempting token refresh');
           const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
             refreshToken,
           });
 
           const { accessToken } = response.data.data;
           localStorage.setItem('accessToken', accessToken);
+          logger.info('Token refreshed successfully');
 
           // Retry original request with new token
           originalRequest.headers.Authorization = `Bearer ${accessToken}`;
@@ -76,6 +104,7 @@ apiClient.interceptors.response.use(
         }
       } catch (refreshError) {
         // Refresh failed, logout user
+        logger.warn('Token refresh failed, logging out user');
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');

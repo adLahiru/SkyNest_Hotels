@@ -1,9 +1,17 @@
+/**
+ * Main Application Entry Point
+ * 
+ * Initializes the Express server with middleware, routes, and error handling.
+ * Configures CORS, JSON parsing, and establishes database connection.
+ */
+
 import express from 'express';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import { testConnection } from './config/db';
 import routes from './routes';
+import { logInfo, logError, logWarn } from './utils/logger';
 
 dotenv.config(); // Load environment variables from .env file
 
@@ -50,44 +58,66 @@ app.get('/', (req, res) => {
   });
 });
 
-// Error handling middleware
+/**
+ * Global error handling middleware
+ * Catches unhandled errors and returns a generic error response
+ */
 app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Unhandled error:', error);
+  logError('Unhandled error in request', error, {
+    method: req.method,
+    url: req.url,
+    body: req.body,
+  });
   res.status(500).json({
     success: false,
     message: 'Internal server error'
   });
 });
 
-// Start server
+/**
+ * Start the Express server
+ * Tests database connection and initializes the HTTP server
+ */
 const startServer = async () => {
   try {
     // Test database connection
     await testConnection();
+    logInfo('Database connection established successfully');
     
     app.listen(PORT, () => {
       try {
         const bannerPath = path.join(__dirname, '..', 'banner.txt');
         const banner = fs.readFileSync(bannerPath, 'utf8');
-        console.log(banner);
+        console.log(banner); // Keep banner in console for visual appeal
       } catch (error) {
-        console.log('Banner file not found');
+        logWarn('Banner file not found');
       }
-      console.log(`\n🚀 Server is running on port ${PORT}`);
-      console.log(`🌐 API Base URL: http://localhost:${PORT}/api`);
-      console.log(`🔐 Auth Endpoints: http://localhost:${PORT}/api/auth`);
-      console.log(`👥 User Management: http://localhost:${PORT}/api/users`);
-      console.log(`🏢 Branch Management: http://localhost:${PORT}/api/branches`);
-      console.log(`🏠 Room Type Management: http://localhost:${PORT}/api/room-types`);
-      console.log(`🚪 Room Management: http://localhost:${PORT}/api/rooms`);
-      console.log(`📅 Booking System: http://localhost:${PORT}/api/bookings`);
-      console.log(`🛎️  Service Catalogue: http://localhost:${PORT}/api/services`);
-      console.log(`🎟️  Discount Management: http://localhost:${PORT}/api/discounts`);
-      console.log(`📊 Health Check: http://localhost:${PORT}/api/health`);
-      console.log('─'.repeat(50));
+      
+      // Log server startup information
+      logInfo(`Server started successfully on port ${PORT}`, {
+        port: PORT,
+        environment: process.env.NODE_ENV || 'development',
+        nodeVersion: process.version,
+      });
+      
+      // Display endpoint information in console (for development)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`\n🚀 Server is running on port ${PORT}`);
+        console.log(`🌐 API Base URL: http://localhost:${PORT}/api`);
+        console.log(`🔐 Auth Endpoints: http://localhost:${PORT}/api/auth`);
+        console.log(`👥 User Management: http://localhost:${PORT}/api/users`);
+        console.log(`🏢 Branch Management: http://localhost:${PORT}/api/branches`);
+        console.log(`🏠 Room Type Management: http://localhost:${PORT}/api/room-types`);
+        console.log(`🚪 Room Management: http://localhost:${PORT}/api/rooms`);
+        console.log(`📅 Booking System: http://localhost:${PORT}/api/bookings`);
+        console.log(`🛎️  Service Catalogue: http://localhost:${PORT}/api/services`);
+        console.log(`🎟️  Discount Management: http://localhost:${PORT}/api/discounts`);
+        console.log(`📊 Health Check: http://localhost:${PORT}/api/health`);
+        console.log('─'.repeat(50));
+      }
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logError('Failed to start server', error);
     process.exit(1);
   }
 };

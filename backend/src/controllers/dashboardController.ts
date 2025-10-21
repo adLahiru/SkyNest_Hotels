@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { RowDataPacket } from 'mysql2';
 import { db } from '../config/db';
 import { ApiResponse, AuthenticatedRequest } from '../types';
+import { logError, logInfo, logDebug, logWarn } from '../utils/logger';
 
 class DashboardController {
   /**
@@ -13,13 +14,13 @@ class DashboardController {
   async getAdminStats(req: Request, res: Response): Promise<void> {
     try {
       const authReq = req as AuthenticatedRequest;
-      console.log('=== Admin Dashboard Request ===');
-      console.log('User:', authReq.user);
+      logDebug('== Admin Dashboard Request ===');
+      logDebug('User', { user: authReq.user });
       
       // Get total counts
       // Count guests (users with is_guest = 1 or users not in staff table)
       // Count staff (users in staff table - staff_id is FK to users.user_id)
-      console.log('Fetching user stats...');
+      logDebug('Fetching user stats...');
       const [userStats] = await db.execute<RowDataPacket[]>(
         `SELECT 
           COUNT(DISTINCT u.user_id) as total,
@@ -28,16 +29,16 @@ class DashboardController {
         FROM users u
         LEFT JOIN staff s ON u.user_id = s.staff_id`
       );
-      console.log('User stats:', userStats[0]);
+      logDebug('User stats', { stats: userStats[0] });
       
-      console.log('Fetching branch stats...');
+      logDebug('Fetching branch stats...');
       const [branchStats] = await db.execute<RowDataPacket[]>(
         'SELECT COUNT(*) as total FROM hotel_branches'
       );
-      console.log('Branch stats:', branchStats[0]);
+      logDebug('Branch stats', { stats: branchStats[0] });
 
       
-      console.log('Fetching room stats...');
+      logDebug('Fetching room stats...');
       const [roomStats] = await db.execute<RowDataPacket[]>(
         `SELECT 
           COUNT(*) as total,
@@ -46,9 +47,9 @@ class DashboardController {
           SUM(CASE WHEN state = 'maintenance' THEN 1 ELSE 0 END) as maintenance
         FROM rooms`
       );
-      console.log('Room stats:', roomStats[0]);
+      logDebug('Room stats', { stats: roomStats[0] });
       
-      console.log('Fetching booking stats...');
+      logDebug('Fetching booking stats...');
       const [bookingStats] = await db.execute<RowDataPacket[]>(
         `SELECT 
           COUNT(*) as total,
@@ -58,10 +59,10 @@ class DashboardController {
           SUM(CASE WHEN booking_status = 'cancelled' THEN 1 ELSE 0 END) as cancelled
         FROM booking`
       );
-      console.log('Booking stats:', bookingStats[0]);
+      logDebug('Booking stats', { stats: bookingStats[0] });
       
       // Get revenue statistics from payments table
-      console.log('Fetching revenue stats...');
+      logDebug('Fetching revenue stats...');
       const [revenueStats] = await db.execute<RowDataPacket[]>(
         `SELECT 
           COALESCE(SUM(total_charges), 0) as total_revenue,
@@ -73,10 +74,10 @@ class DashboardController {
         FROM payments
         WHERE payment_status IN ('paid', 'partial')`
       );
-      console.log('Revenue stats:', revenueStats[0]);
+      logDebug('Revenue stats', { stats: revenueStats[0] });
       
       // Get branch-wise statistics
-      console.log('Fetching branch-wise stats...');
+      logDebug('Fetching branch-wise stats...');
       const [branchWiseStats] = await db.execute<RowDataPacket[]>(
         `SELECT 
           b.branch_id,
@@ -93,10 +94,10 @@ class DashboardController {
         GROUP BY b.branch_id, b.branch_name, b.address
         ORDER BY revenue DESC`
       );
-      console.log('Branch-wise stats count:', branchWiseStats.length);
+      logDebug('Branch-wise stats count', { count: branchWiseStats.length });
       
       // Get recent bookings grouped by branch
-      console.log('Fetching recent bookings...');
+      logDebug('Fetching recent bookings...');
       const [allRecentBookings] = await db.execute<RowDataPacket[]>(
         `SELECT 
           bk.booking_id,
@@ -116,7 +117,7 @@ class DashboardController {
         ORDER BY bk.created_at DESC
         LIMIT 100`
       );
-      console.log('Recent bookings count:', allRecentBookings.length);
+      logDebug('Recent bookings count', { count: allRecentBookings.length });
 
       // Group bookings by branch and limit to 5 per branch
       const bookingsByBranch: Record<string, any> = {};
@@ -159,7 +160,7 @@ class DashboardController {
 
       const recentBookingsByBranch = Object.values(bookingsByBranch);
       
-      console.log('Sending response with all stats...');
+      logDebug('Sending response with all stats...');
       res.status(200).json({
         success: true,
         message: 'Admin dashboard stats retrieved successfully',
@@ -173,13 +174,13 @@ class DashboardController {
           recentBookingsByBranch
         }
       } as ApiResponse);
-      console.log('=== Dashboard Response Sent Successfully ===');
+      logDebug('== Dashboard Response Sent Successfully ===');
       
     } catch (error) {
-      console.error('=== Get admin stats error ===');
-      console.error('Error:', error);
-      console.error('Error message:', (error as Error).message);
-      console.error('Error stack:', (error as Error).stack);
+      logError('=== Get admin stats error ===');
+      logError('Error:', error);
+      logError('Error message:', (error as Error).message);
+      logError('Error stack:', (error as Error).stack);
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve dashboard statistics',
@@ -343,7 +344,7 @@ class DashboardController {
       } as ApiResponse);
       
     } catch (error) {
-      console.error('Get manager stats error:', error);
+      logError('Get manager stats error:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve dashboard statistics'
@@ -518,7 +519,7 @@ class DashboardController {
       } as ApiResponse);
       
     } catch (error) {
-      console.error('Get receptionist stats error:', error);
+      logError('Get receptionist stats error:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve dashboard statistics'
@@ -694,7 +695,7 @@ class DashboardController {
       } as ApiResponse);
       
     } catch (error) {
-      console.error('Get housekeeping stats error:', error);
+      logError('Get housekeeping stats error:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve dashboard statistics'
@@ -788,7 +789,7 @@ class DashboardController {
         }
       } as ApiResponse);
     } catch (error) {
-      console.error('Get room occupancy report error:', error);
+      logError('Get room occupancy report error:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve room occupancy report'
@@ -885,7 +886,7 @@ class DashboardController {
         }
       } as ApiResponse);
     } catch (error) {
-      console.error('Get guest billing summary error:', error);
+      logError('Get guest billing summary error:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve guest billing summary'
@@ -981,7 +982,7 @@ class DashboardController {
         }
       } as ApiResponse);
     } catch (error) {
-      console.error('Get service usage breakdown error:', error);
+      logError('Get service usage breakdown error:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve service usage breakdown'
@@ -1079,7 +1080,7 @@ class DashboardController {
         }
       } as ApiResponse);
     } catch (error) {
-      console.error('Get monthly revenue per branch error:', error);
+      logError('Get monthly revenue per branch error:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve monthly revenue per branch'
@@ -1195,7 +1196,7 @@ class DashboardController {
         }
       } as ApiResponse);
     } catch (error) {
-      console.error('Get top-used services error:', error);
+      logError('Get top-used services error:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve top-used services'

@@ -1,4 +1,5 @@
 import apiClient from '../config/api';
+import logger from '../utils/logger';
 
 /**
  * Room Service
@@ -27,7 +28,7 @@ const roomService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get all rooms (public) error:', error);
+      logger.error('Get all rooms (public) error', error);
       return {
         success: false,
         rooms: [],

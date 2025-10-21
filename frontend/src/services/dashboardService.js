@@ -1,4 +1,5 @@
 import apiClient from '../config/api';
+import logger from '../utils/logger';
 
 /**
  * Dashboard Service
@@ -82,7 +83,7 @@ const dashboardService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get housekeeping stats error:', error);
+      logger.error('Get housekeeping stats error', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch housekeeping dashboard',

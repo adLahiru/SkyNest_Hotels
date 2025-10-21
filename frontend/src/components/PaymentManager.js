@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import '../styles/PaymentManager.css';
+import logger from '../utils/logger';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -24,7 +25,7 @@ const PaymentManager = ({ bookingId, onPaymentComplete }) => {
       );
       setPaymentHistory(response.data);
     } catch (error) {
-      console.error('Failed to fetch payment history:', error);
+      logger.error('Failed to fetch payment history:', error);
       alert('Failed to load payment details');
     } finally {
       setLoading(false);
@@ -81,7 +82,7 @@ const PaymentManager = ({ bookingId, onPaymentComplete }) => {
         onPaymentComplete(response.data);
       }
     } catch (error) {
-      console.error('Payment error:', error);
+      logger.error('Payment error:', error);
       const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Payment processing failed';
       alert(`Payment failed: ${errorMessage}`);
     } finally {

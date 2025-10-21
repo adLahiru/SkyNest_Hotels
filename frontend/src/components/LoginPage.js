@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { User, Eye, EyeOff, LogIn, UserPlus, CheckCircle, AlertCircle } from 'lucide-react';
 import authService from '../services/authService';
+import logger from '../utils/logger';
 
 const LoginPage = ({ onLogin, setCurrentPage }) => {
   const [isLogin, setIsLogin] = useState(true);
@@ -79,7 +80,7 @@ const LoginPage = ({ onLogin, setCurrentPage }) => {
       }
     } catch (error) {
       // eslint-disable-next-line no-console
-      console.error('Login error:', error);
+      logger.error('Login error:', error);
       setApiError('An error occurred during login. Please try again.');
       setIsSubmitting(false);
     }
@@ -132,7 +133,7 @@ const LoginPage = ({ onLogin, setCurrentPage }) => {
       }
     } catch (error) {
       // eslint-disable-next-line no-console
-      console.error('Registration error:', error);
+      logger.error('Registration error:', error);
       setApiError('An error occurred during registration. Please try again.');
       setIsSubmitting(false);
     }

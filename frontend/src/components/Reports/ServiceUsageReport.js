@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { FileText, Search, Download } from 'lucide-react';
 import reportService from '../../services/reportService';
+import logger from '../../utils/logger';
 
 const ServiceUsageReport = () => {
   const [loading, setLoading] = useState(false);
@@ -25,7 +26,7 @@ const ServiceUsageReport = () => {
       }
     } catch (err) {
       setError('An error occurred while fetching the report');
-      console.error(err);
+      logger.error('Error in report', err);
     } finally {
       setLoading(false);
     }

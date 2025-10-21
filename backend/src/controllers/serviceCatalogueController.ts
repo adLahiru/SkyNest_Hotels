@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { db } from '../config/db';
 import { UserRole, AuthenticatedRequest } from '../types/auth.types';
+import { logError, logInfo, logDebug, logWarn } from '../utils/logger';
 
 /**
  * Service Catalogue Controller
@@ -179,7 +180,7 @@ export const createService = async (req: AuthenticatedRequest, res: Response): P
 
   } catch (error) {
     await connection.rollback();
-    console.error('Error creating service:', error);
+    logError('Error creating service', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while adding the service.',
@@ -237,7 +238,7 @@ export const getServices = async (req: AuthenticatedRequest, res: Response): Pro
     });
 
   } catch (error) {
-    console.error('Error fetching services:', error);
+    logError('Error fetching services', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while retrieving services.',
@@ -295,7 +296,7 @@ export const getServiceById = async (req: AuthenticatedRequest, res: Response): 
     });
 
   } catch (error) {
-    console.error('Error fetching service:', error);
+    logError('Error fetching service', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while retrieving the service.',
@@ -494,7 +495,7 @@ export const updateService = async (req: AuthenticatedRequest, res: Response): P
 
   } catch (error) {
     await connection.rollback();
-    console.error('Error updating service:', error);
+    logError('Error updating service', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while updating the service.',
@@ -559,7 +560,7 @@ export const deleteService = async (req: AuthenticatedRequest, res: Response): P
 
   } catch (error) {
     await connection.rollback();
-    console.error('Error deleting service:', error);
+    logError('Error deleting service', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while deleting the service.',
@@ -593,7 +594,7 @@ export const getServiceCategories = async (req: AuthenticatedRequest, res: Respo
     });
 
   } catch (error) {
-    console.error('Error fetching service categories:', error);
+    logError('Error fetching service categories', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while retrieving service categories.',

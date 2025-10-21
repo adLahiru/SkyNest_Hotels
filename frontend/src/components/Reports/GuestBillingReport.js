@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DollarSign, AlertCircle, CheckCircle, XCircle, Download } from 'lucide-react';
 import reportService from '../../services/reportService';
+import logger from '../../utils/logger';
 
 const GuestBillingReport = () => {
   const [loading, setLoading] = useState(false);
@@ -26,7 +27,7 @@ const GuestBillingReport = () => {
       }
     } catch (err) {
       setError('An error occurred while fetching the report');
-      console.error(err);
+      logger.error('Error in report', err);
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,5 @@
 import apiClient from '../config/api';
+import logger from '../utils/logger';
 
 /**
  * Booking Service
@@ -14,7 +15,7 @@ const bookingService = {
   createBooking: async (bookingData) => {
     try {
       const response = await apiClient.post('/bookings', bookingData);
-      console.log('Booking API response:', response.data);
+      logger.debug('Booking API response:', response.data);
       return {
         success: response.data.success,
         booking: response.data.data?.booking || response.data.data,
@@ -116,7 +117,7 @@ const bookingService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get my bookings error:', error);
+      logger.error('Get my bookings error', error);
       return {
         success: false,
         bookings: [],
@@ -329,7 +330,7 @@ const bookingService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get available rooms error:', error);
+      logger.error('Get available rooms error', error);
       return {
         success: false,
         availableRooms: [],

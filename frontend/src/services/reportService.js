@@ -1,4 +1,5 @@
 import apiClient from '../config/api';
+import logger from '../utils/logger';
 
 /**
  * Report Service
@@ -25,7 +26,7 @@ const reportService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get room occupancy error:', error);
+      logger.error('Get room occupancy error', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch room occupancy report',
@@ -49,7 +50,7 @@ const reportService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get guest billing error:', error);
+      logger.error('Get guest billing error', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch guest billing summary',
@@ -72,7 +73,7 @@ const reportService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get service usage error:', error);
+      logger.error('Get service usage error', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch service usage breakdown',
@@ -102,7 +103,7 @@ const reportService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get monthly revenue error:', error);
+      logger.error('Get monthly revenue error', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch monthly revenue report',
@@ -133,7 +134,7 @@ const reportService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get top services error:', error);
+      logger.error('Get top services error', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch top services report',

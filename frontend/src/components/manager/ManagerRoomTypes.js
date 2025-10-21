@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Home, Users, DollarSign, Info } from 'lucide-react';
 import axios from 'axios';
+import logger from '../../utils/logger';
 
 const ManagerRoomTypes = () => {
   const [roomTypes, setRoomTypes] = useState([]);
@@ -22,7 +23,7 @@ const ManagerRoomTypes = () => {
         setRoomTypes(response.data.data);
       }
     } catch (error) {
-      console.error('Error fetching room types:', error);
+      logger.error('Error fetching room types:', error);
     } finally {
       setLoading(false);
     }

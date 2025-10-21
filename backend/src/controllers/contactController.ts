@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { db } from '../config/db';
 import { RowDataPacket } from 'mysql2';
+import { logError, logInfo, logDebug, logWarn } from '../utils/logger';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { v4: uuidv4 } = require('uuid');
@@ -104,7 +105,7 @@ export const submitContactForm = async (req: AuthenticatedRequest, res: Response
     });
 
   } catch (error) {
-    console.error('Error submitting contact form:', error);
+    logError('Error submitting contact form', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while submitting your message. Please try again.',
@@ -176,7 +177,7 @@ export const getAllContactMessages = async (req: AuthenticatedRequest, res: Resp
     });
 
   } catch (error) {
-    console.error('Error fetching contact messages:', error);
+    logError('Error fetching contact messages', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while retrieving contact messages.',
@@ -231,7 +232,7 @@ export const getContactMessageById = async (req: AuthenticatedRequest, res: Resp
     });
 
   } catch (error) {
-    console.error('Error fetching contact message:', error);
+    logError('Error fetching contact message', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while retrieving the contact message.',
@@ -270,7 +271,7 @@ export const updateContactStatus = async (req: AuthenticatedRequest, res: Respon
     });
 
   } catch (error) {
-    console.error('Error updating contact status:', error);
+    logError('Error updating contact status', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while updating the contact message status.',
@@ -295,7 +296,7 @@ export const deleteContactMessage = async (req: AuthenticatedRequest, res: Respo
     });
 
   } catch (error) {
-    console.error('Error deleting contact message:', error);
+    logError('Error deleting contact message', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while deleting the contact message.',

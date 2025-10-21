@@ -2,15 +2,25 @@ import { Response } from 'express';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { db } from '../config/db';
 import { UserRole, AuthenticatedRequest } from '../types/auth.types';
+import { logError, logInfo, logDebug } from '../utils/logger';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { v4: uuidv4 } = require('uuid');
 
 /**
  * Booking Controller
- * Allows all authenticated users to create and manage their own bookings
- * Staff can view and manage bookings in their branch
- * Admins have full access
+ * 
+ * Handles all booking-related operations including:
+ * - Creating new bookings
+ * - Retrieving booking information
+ * - Updating and cancelling bookings
+ * - Check-in and check-out processes
+ * - Room availability checks
+ * 
+ * Access Control:
+ * - All authenticated users can create and view their own bookings
+ * - Staff (Manager/Receptionist) can manage bookings in their branch
+ * - Admins have full access to all bookings across all branches
  */
 
 // Booking status enum
@@ -88,9 +98,12 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
   const connection = await db.getConnection();
   
   try {
-    console.log('=== CREATE BOOKING REQUEST ===');
-    console.log('Request body:', req.body);
-    console.log('User from JWT:', req.user);
+    logDebug('Create booking request received', {
+      userId: req.user?.user_id,
+      roomId: req.body.room_id,
+      checkIn: req.body.checking_datetime,
+      checkOut: req.body.checkout_datetime
+    });
     
     const { 
       room_id, 
@@ -105,7 +118,7 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
     const user_id = req.user?.user_id;
 
     if (!user_id) {
-      console.log('ERROR: No user_id found in JWT token');
+      logError('Authentication failed: No user_id in JWT token');
       res.status(401).json({
         success: false,
         message: 'Authentication required.'
@@ -258,7 +271,7 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
     // Generate UUID for booking
     const booking_id = uuidv4();
 
-    console.log('Creating booking with data:', {
+    logDebug('Creating booking with data', {
       booking_id,
       user_id,
       room_id,
@@ -341,8 +354,8 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response): P
 
   } catch (error) {
     await connection.rollback();
-    console.error('Error creating booking:', error);
-    console.error('Error details:', {
+    logError('Error creating booking', error);
+    logDebug('Error details', {
       message: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
       error: error
@@ -469,7 +482,7 @@ export const getBookings = async (req: AuthenticatedRequest, res: Response): Pro
     });
 
   } catch (error) {
-    console.error('Error fetching bookings:', error);
+    logError('Error fetching bookings', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while retrieving bookings.',
@@ -570,7 +583,7 @@ export const getBookingById = async (req: AuthenticatedRequest, res: Response): 
     });
 
   } catch (error) {
-    console.error('Error fetching booking:', error);
+    logError('Error fetching booking', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while retrieving the booking.',
@@ -835,7 +848,7 @@ export const updateBooking = async (req: AuthenticatedRequest, res: Response): P
 
   } catch (error) {
     await connection.rollback();
-    console.error('Error updating booking:', error);
+    logError('Error updating booking', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while updating the booking.',
@@ -939,7 +952,7 @@ export const cancelBooking = async (req: AuthenticatedRequest, res: Response): P
 
   } catch (error) {
     await connection.rollback();
-    console.error('Error cancelling booking:', error);
+    logError('Error cancelling booking', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while cancelling the booking.',
@@ -1036,7 +1049,7 @@ export const getMyBookings = async (req: AuthenticatedRequest, res: Response): P
     });
 
   } catch (error) {
-    console.error('Error fetching user bookings:', error);
+    logError('Error fetching user bookings', error);
     res.status(500).json({
       success: false,
       message: 'An error occurred while retrieving your bookings.',
@@ -1141,7 +1154,7 @@ export const checkInGuest = async (req: AuthenticatedRequest, res: Response): Pr
       return;
     }
     
-    console.error('Check-in error:', error);
+    logError('Check-in error', error);
     res.status(500).json({ error: 'Check-in failed' });
   } finally {
     connection.release();
@@ -1280,7 +1293,7 @@ export const checkOutGuest = async (req: AuthenticatedRequest, res: Response): P
       return;
     }
     
-    console.error('Check-out error:', error);
+    logError('Check-out error', error);
     res.status(500).json({ error: 'Check-out failed' });
   } finally {
     connection.release();
@@ -1361,7 +1374,7 @@ export const validateCheckout = async (req: AuthenticatedRequest, res: Response)
     });
     
   } catch (error) {
-    console.error('Validation error:', error);
+    logError('Validation error', error);
     res.status(500).json({ error: 'Validation failed' });
   }
 };
@@ -1447,7 +1460,7 @@ export const getAvailableRooms = async (req: AuthenticatedRequest, res: Response
     });
 
   } catch (error) {
-    console.error('Error fetching available rooms:', error);
+    logError('Error fetching available rooms', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch available rooms',

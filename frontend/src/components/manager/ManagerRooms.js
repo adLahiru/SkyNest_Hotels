@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, X } from 'lucide-react';
 import axios from 'axios';
+import logger from '../../utils/logger';
 
 const ManagerRooms = ({ branchId }) => {
   const [rooms, setRooms] = useState([]);
@@ -31,7 +32,7 @@ const ManagerRooms = ({ branchId }) => {
         setRooms(response.data.data);
       }
     } catch (error) {
-      console.error('Error fetching rooms:', error);
+      logger.error('Error fetching rooms:', error);
     } finally {
       setLoading(false);
     }
@@ -48,7 +49,7 @@ const ManagerRooms = ({ branchId }) => {
         setRoomTypes(response.data.data);
       }
     } catch (error) {
-      console.error('Error fetching room types:', error);
+      logger.error('Error fetching room types:', error);
     }
   };
 

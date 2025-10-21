@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DollarSign, TrendingUp, TrendingDown, Calendar, CreditCard, FileText } from 'lucide-react';
 import axios from 'axios';
+import logger from '../../utils/logger';
 
 const ManagerFinancial = ({ branchId, stats }) => {
   const [payments, setPayments] = useState([]);
@@ -24,7 +25,7 @@ const ManagerFinancial = ({ branchId, stats }) => {
         setPayments(response.data.data || []);
       }
     } catch (error) {
-      console.error('Error fetching payments:', error);
+      logger.error('Error fetching payments:', error);
       setPayments([]);
     } finally {
       setLoading(false);

@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { RowDataPacket } from 'mysql2/promise';
 import { db } from '../config/db';
 import { AuthenticatedRequest, UserRole, ApiResponse } from '../types/auth.types';
+import { logError, logInfo, logDebug, logWarn } from '../utils/logger';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { v4: uuidv4 } = require('uuid');
@@ -178,7 +179,7 @@ export class RoomTypeController {
       }
 
     } catch (error) {
-      console.error('Error creating room type:', error);
+      logError('Error creating room type', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error while creating room type'
@@ -228,7 +229,7 @@ export class RoomTypeController {
       }
 
     } catch (error) {
-      console.error('Error retrieving room types:', error);
+      logError('Error retrieving room types', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error while retrieving room types'
@@ -297,7 +298,7 @@ export class RoomTypeController {
       }
 
     } catch (error) {
-      console.error('Error retrieving room type:', error);
+      logError('Error retrieving room type', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error while retrieving room type'
@@ -487,7 +488,7 @@ export class RoomTypeController {
       }
 
     } catch (error) {
-      console.error('Error updating room type:', error);
+      logError('Error updating room type', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error while updating room type'
@@ -562,7 +563,7 @@ export class RoomTypeController {
       }
 
     } catch (error) {
-      console.error('Error deleting room type:', error);
+      logError('Error deleting room type', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error while deleting room type'

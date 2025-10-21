@@ -3,6 +3,7 @@ import axios from 'axios';
 import BillDetails from './BillDetails';
 import PaymentManager from './PaymentManager';
 import '../styles/BookingManagement.css';
+import logger from '../utils/logger';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -21,7 +22,7 @@ const BookingManagement = ({ booking, onStatusChange }) => {
       );
       setValidation(response.data);
     } catch (error) {
-      console.error('Validation failed:', error);
+      logger.error('Validation failed:', error);
     }
   }, [booking.booking_id]);
 
@@ -50,7 +51,7 @@ const BookingManagement = ({ booking, onStatusChange }) => {
         onStatusChange(response.data.booking);
       }
     } catch (error) {
-      console.error('Check-in failed:', error);
+      logger.error('Check-in failed:', error);
       const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Check-in failed';
       alert(`Check-in failed: ${errorMessage}`);
     } finally {
@@ -82,7 +83,7 @@ const BookingManagement = ({ booking, onStatusChange }) => {
         onStatusChange(response.data.booking);
       }
     } catch (error) {
-      console.error('Check-out failed:', error);
+      logger.error('Check-out failed:', error);
       const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Check-out failed';
       alert(`Check-out failed: ${errorMessage}`);
     } finally {

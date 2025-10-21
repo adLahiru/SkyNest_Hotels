@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import PaymentManager from './PaymentManager';
 import '../styles/OutstandingBalancesDashboard.css';
+import logger from '../utils/logger';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -25,7 +26,7 @@ const OutstandingBalancesDashboard = () => {
       setBookings(response.data.bookings);
       setTotalOutstanding(parseFloat(response.data.totalOutstanding));
     } catch (error) {
-      console.error('Failed to fetch outstanding balances:', error);
+      logger.error('Failed to fetch outstanding balances:', error);
       alert('Failed to load outstanding balances');
     } finally {
       setLoading(false);

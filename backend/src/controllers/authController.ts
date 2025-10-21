@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { RowDataPacket } from 'mysql2';
 import { db } from '../config/db';
+import { logError, logInfo, logDebug, logWarn } from '../utils/logger';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { v4: uuidv4 } = require('uuid');
@@ -115,7 +116,7 @@ class AuthController {
 
       res.status(200).json(response);
     } catch (error) {
-      console.error('Login error:', error);
+      logError('Login error', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error'
@@ -183,7 +184,7 @@ class AuthController {
       } as ApiResponse);
 
     } catch (error) {
-      console.error('Refresh token error:', error);
+      logError('Refresh token error', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error'
@@ -231,7 +232,7 @@ class AuthController {
       } as ApiResponse);
 
     } catch (error) {
-      console.error('Logout error:', error);
+      logError('Logout error', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error'
@@ -266,7 +267,7 @@ class AuthController {
       } as ApiResponse);
 
     } catch (error) {
-      console.error('Get profile error:', error);
+      logError('Get profile error', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error'
@@ -317,7 +318,7 @@ class AuthController {
         staff_id: row.staff_id || undefined
       };
     } catch (error) {
-      console.error('Database error in getUserWithRole:', error);
+      logError('Database error in getUserWithRole', error);
       return null;
     }
   }
@@ -363,7 +364,7 @@ class AuthController {
         staff_id: row.staff_id || undefined
       };
     } catch (error) {
-      console.error('Database error in getUserById:', error);
+      logError('Database error in getUserById', error);
       return null;
     }
   }
@@ -384,7 +385,7 @@ class AuthController {
     try {
       await db.execute(query, [sessionId, userId, deviceInfo, ipAddress, userAgent]);
     } catch (error) {
-      console.error('Error creating user session:', error);
+      logError('Error creating user session', error);
       throw error;
     }
   }
@@ -466,7 +467,7 @@ class AuthController {
     try {
       await db.execute(query, [jti, userId, sessionId, tokenHash]);
     } catch (error) {
-      console.error('Error storing refresh token:', error);
+      logError('Error storing refresh token', error);
       throw error;
     }
   }
@@ -481,7 +482,7 @@ class AuthController {
       const [rows] = await db.execute<RowDataPacket[]>(query, [jti]);
       return rows.length > 0 ? rows[0] as RefreshToken : null;
     } catch (error) {
-      console.error('Error getting refresh token:', error);
+      logError('Error getting refresh token', error);
       return null;
     }
   }
@@ -495,7 +496,7 @@ class AuthController {
     try {
       await db.execute(query, [jti]);
     } catch (error) {
-      console.error('Error invalidating refresh token:', error);
+      logError('Error invalidating refresh token', error);
     }
   }
 
@@ -508,7 +509,7 @@ class AuthController {
     try {
       await db.execute(query, [sessionId]);
     } catch (error) {
-      console.error('Error invalidating session:', error);
+      logError('Error invalidating session', error);
     }
   }
 

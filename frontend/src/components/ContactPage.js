@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Send, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import contactService from '../services/contactService';
 import userService from '../services/userService';
+import logger from '../utils/logger';
 
 const ContactPage = () => {
   const [contactForm, setContactForm] = useState({
@@ -59,7 +60,7 @@ const ContactPage = () => {
           setIsLoggedIn(false);
         }
       } catch (error) {
-        console.error('Error fetching user data:', error);
+        logger.error('Error fetching user data:', error);
         // Fallback to localStorage on error
         try {
           const storedUser = localStorage.getItem('user');

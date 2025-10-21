@@ -3,6 +3,7 @@ import { ArrowLeft, User, Phone, Calendar, DoorOpen, Search, Filter, LogOut, Fil
 import dashboardService from '../services/dashboardService';
 import bookingService from '../services/bookingService';
 import BillDetails from './BillDetails';
+import logger from '../utils/logger';
 
 const CurrentGuestsManager = ({ onBack }) => {
   const [currentGuests, setCurrentGuests] = useState([]);
@@ -57,7 +58,7 @@ const CurrentGuestsManager = ({ onBack }) => {
       }
     } catch (error) {
       showNotification('An error occurred during checkout', 'error');
-      console.error('Checkout error:', error);
+      logger.error('Checkout error:', error);
     } finally {
       setProcessingBookingId(null);
     }

@@ -1,4 +1,5 @@
 import apiClient from '../config/api';
+import logger from '../utils/logger';
 
 /**
  * Room Type Service
@@ -19,7 +20,7 @@ const roomTypeService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get all room types (public) error:', error);
+      logger.error('Get all room types (public) error', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch room types',
@@ -63,7 +64,7 @@ const roomTypeService = {
         message: response.data.message,
       };
     } catch (error) {
-      console.error('Get room type by ID (public) error:', error);
+      logger.error('Get room type by ID (public) error', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch room type details',
