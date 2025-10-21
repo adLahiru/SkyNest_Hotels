@@ -1,42 +1,11 @@
 import React, { useState } from 'react';
-import { FileText, DollarSign, TrendingUp, Award, Calendar } from 'lucide-react';
-import RoomOccupancyReport from './RoomOccupancyReport';
-import GuestBillingReport from './GuestBillingReport';
-import ServiceUsageReport from './ServiceUsageReport';
+import { FileText, TrendingUp } from 'lucide-react';
 import MonthlyRevenueReport from './MonthlyRevenueReport';
-import TopServicesReport from './TopServicesReport';
 
 const ReportsMain = ({ user }) => {
   const [activeReport, setActiveReport] = useState(null);
 
   const reports = [
-    {
-      id: 'room-occupancy',
-      name: 'Room Occupancy Report',
-      description: 'Track room utilization and occupancy rates by date period',
-      icon: Calendar,
-      color: 'blue',
-      component: RoomOccupancyReport,
-      adminOnly: true
-    },
-    {
-      id: 'guest-billing',
-      name: 'Guest Billing Summary',
-      description: 'View billing details with unpaid balances',
-      icon: DollarSign,
-      color: 'green',
-      component: GuestBillingReport,
-      adminOnly: false
-    },
-    {
-      id: 'service-usage',
-      name: 'Service Usage Breakdown',
-      description: 'Analyze service consumption patterns and revenue',
-      icon: FileText,
-      color: 'purple',
-      component: ServiceUsageReport,
-      adminOnly: false
-    },
     {
       id: 'monthly-revenue',
       name: 'Monthly Revenue Per Branch',
@@ -44,15 +13,6 @@ const ReportsMain = ({ user }) => {
       icon: TrendingUp,
       color: 'indigo',
       component: MonthlyRevenueReport,
-      adminOnly: false
-    },
-    {
-      id: 'top-services',
-      name: 'Top-Used Services & Trends',
-      description: 'Identify popular services and customer preferences',
-      icon: Award,
-      color: 'yellow',
-      component: TopServicesReport,
       adminOnly: false
     }
   ];
@@ -65,19 +25,21 @@ const ReportsMain = ({ user }) => {
     return true;
   });
 
-  if (activeReport) {
-    const ReportComponent = activeReport.component;
+  if (activeReport || availableReports.length === 1) {
+    const ReportComponent = (activeReport || availableReports[0]).component;
     return (
       <div className="p-6">
-        <button
-          onClick={() => setActiveReport(null)}
-          className="flex items-center text-blue-600 hover:text-blue-800 mb-6 transition-colors"
-        >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Back to Reports
-        </button>
+        {availableReports.length > 1 && (
+          <button
+            onClick={() => setActiveReport(null)}
+            className="flex items-center text-blue-600 hover:text-blue-800 mb-6 transition-colors"
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Reports
+          </button>
+        )}
         <ReportComponent user={user} />
       </div>
     );
