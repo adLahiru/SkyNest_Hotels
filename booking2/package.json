@@ -1,0 +1,23 @@
+{
+  "name": "hotel-booking-sync",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node --loader ts-node/esm server.ts",
+    "dev": "nodemon --exec ts-node --esm server.ts",
+    "check": "ts-node --esm check-availability.ts"
+  },
+  "dependencies": {
+    "axios": "^1.12.2",
+    "express": "^4.21.2",
+    "mysql2": "^3.15.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.23",
+    "@types/node": "^24.9.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
