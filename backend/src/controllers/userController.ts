@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { PoolConnection, RowDataPacket } from 'mysql2/promise';
 import { db } from '../config/db';
 import { AuthenticatedRequest, UserRole, ApiResponse, RoleHierarchy } from '../types/auth.types';
+import { logError, logInfo } from '../utils/logger';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { v4: uuidv4 } = require('uuid');
@@ -96,7 +97,7 @@ export class UserController {
       // Check if the user is the manager of this branch
       return rows[0]?.manager_id === userId;
     } catch (error) {
-      console.error('Error validating branch access:', error);
+      logError('Error validating branch access:', error);
       return false;
     }
   }
@@ -111,7 +112,7 @@ export class UserController {
 
       return rows.length > 0;
     } catch (error) {
-      console.error('Error checking user existence:', error);
+      logError('Error checking user existence:', error);
       return true; // Assume exists to prevent creation on error
     }
   }
@@ -126,7 +127,7 @@ export class UserController {
 
       return rows.length > 0;
     } catch (error) {
-      console.error('Error checking branch manager:', error);
+      logError('Error checking branch manager:', error);
       return true; // Assume has manager to prevent conflicts on error
     }
   }
@@ -262,7 +263,7 @@ export class UserController {
                 [userId, branch_id]
               );
               
-              console.log(`✅ Manager ${userId} assigned to branch ${branch_id}`);
+              logInfo(`✅ Manager ${userId} assigned to branch ${branch_id}`);
             }
           }
 
@@ -313,7 +314,7 @@ export class UserController {
       }
 
     } catch (error) {
-      console.error('Error creating user:', error);
+      logError('Error creating user:', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error while creating user'
@@ -428,7 +429,7 @@ export class UserController {
       } as ApiResponse);
 
     } catch (error) {
-      console.error('Error retrieving users:', error);
+      logError('Error retrieving users:', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error while retrieving users'
@@ -517,7 +518,7 @@ export class UserController {
       } as ApiResponse);
 
     } catch (error) {
-      console.error('Error retrieving user:', error);
+      logError('Error retrieving user:', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error while retrieving user'
@@ -646,7 +647,7 @@ export class UserController {
       }
 
     } catch (error) {
-      console.error('Error registering guest:', error);
+      logError('Error registering guest:', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error during registration'
@@ -766,7 +767,7 @@ export class UserController {
       } as ApiResponse);
 
     } catch (error) {
-      console.error('Error updating profile:', error);
+      logError('Error updating profile:', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error while updating profile'
@@ -870,7 +871,7 @@ export class UserController {
       } as ApiResponse);
 
     } catch (error) {
-      console.error('Error changing password:', error);
+      logError('Error changing password:', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error while changing password'
@@ -1101,7 +1102,7 @@ export class UserController {
       }
 
     } catch (error) {
-      console.error('Error updating user:', error);
+      logError('Error updating user:', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error while updating user'
@@ -1251,7 +1252,7 @@ export class UserController {
       }
 
     } catch (error) {
-      console.error('Error deleting user:', error);
+      logError('Error deleting user:', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error while deleting user'

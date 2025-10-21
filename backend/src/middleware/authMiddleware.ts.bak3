@@ -111,7 +111,7 @@ export const requireRole = (requiredRole: UserRole, allowSelf: boolean = false) 
 
       next();
     } catch (error) {
-      logError('Role authorization error', error);
+      console.error('Role authorization error:', error);
       res.status(500).json({
         success: false,
         message: 'Authorization check failed'
@@ -168,7 +168,7 @@ export const requireAnyRole = (allowedRoles: UserRole[]) => {
 
       next();
     } catch (error) {
-      logError('Role authorization error', error);
+      console.error('Role authorization error:', error);
       res.status(500).json({
         success: false,
         message: 'Authorization check failed'
@@ -211,7 +211,7 @@ export const requireBranchAccess = (allowAdminOverride: boolean = true) => {
 
       next();
     } catch (error) {
-      logError('Branch authorization error', error);
+      console.error('Branch authorization error:', error);
       res.status(500).json({
         success: false,
         message: 'Branch authorization check failed'
@@ -254,7 +254,7 @@ export const requireSelfOrAdmin = (userIdField: string = 'userId') => {
 
       next();
     } catch (error) {
-      logError('Self authorization error', error);
+      console.error('Self authorization error:', error);
       res.status(500).json({
         success: false,
         message: 'Self authorization check failed'
@@ -333,7 +333,7 @@ export const optionalAuth = async (
     next();
   } catch (error) {
     // Don't fail on optional auth, just log the error
-    logError('Optional authentication error', error);
+    console.error('Optional authentication error:', error);
     next();
   }
 };

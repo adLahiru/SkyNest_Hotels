@@ -1622,7 +1622,7 @@ export const addServiceToBooking = async (req: AuthenticatedRequest, res: Respon
     
   } catch (error) {
     await connection.rollback();
-    console.error('Add service error:', error);
+    logError('Add service error', error);
     res.status(500).json({
       success: false,
       message: 'Failed to add service',
@@ -1680,7 +1680,7 @@ export const getBookingServices = async (req: AuthenticatedRequest, res: Respons
     });
     
   } catch (error) {
-    console.error('Get booking services error:', error);
+    logError('Get booking services error', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch services'
@@ -1796,7 +1796,7 @@ export const processBookingPayment = async (req: AuthenticatedRequest, res: Resp
     
   } catch (error) {
     await connection.rollback();
-    console.error('Process payment error:', error);
+    logError('Process payment error', error);
     res.status(500).json({
       success: false,
       message: 'Failed to process payment',
@@ -1901,7 +1901,7 @@ export const getBookingPaymentDetails = async (req: AuthenticatedRequest, res: R
     });
     
   } catch (error) {
-    console.error('Get payment details error:', error);
+    logError('Get payment details error', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch payment details'

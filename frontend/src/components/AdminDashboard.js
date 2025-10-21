@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Users, Building2, DollarSign, TrendingUp, Calendar, BarChart3, Plus, Edit, Trash2, Search, Filter, X, Eye, EyeOff, Home, Bed, Upload, FileText, Briefcase, MessageSquare, Mail, Phone, Clock, CheckCircle, XCircle, CreditCard, Package } from 'lucide-react';
 import dashboardService from '../services/dashboardService';
 import userService from '../services/userService';
@@ -184,6 +184,7 @@ const AdminDashboard = ({ user }) => {
     } else if (activeTab === 'booking-management') {
       fetchBookings();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, searchQuery, roleFilter, roomSearchQuery, roomStateFilter, roomTypeFilter, roomBranchFilter, roomFloorFilter, roomTypeSearchQuery, minCapacityFilter, maxCapacityFilter, minPriceFilter, maxPriceFilter, branchSearchQuery, serviceSearchQuery, messageFilter, messageSearchQuery, bookingFilter, bookingSearchQuery]);
 
   const fetchDashboardStats = async () => {
@@ -195,7 +196,7 @@ const AdminDashboard = ({ user }) => {
     setLoading(false);
   };
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setLoadingUsers(true);
     const filters = {};
     if (searchQuery) filters.search = searchQuery;
@@ -207,7 +208,7 @@ const AdminDashboard = ({ user }) => {
     } else {
     }
     setLoadingUsers(false);
-  };
+  }, [searchQuery, roleFilter]);
 
   const fetchBranches = async () => {
     setLoadingBranches(true);
@@ -218,7 +219,7 @@ const AdminDashboard = ({ user }) => {
     setLoadingBranches(false);
   };
 
-  const fetchServices = async () => {
+  const fetchServices = useCallback(async () => {
     setLoadingServices(true);
     try {
       const result = await serviceCatalogueService.getAllServices();
@@ -234,17 +235,17 @@ const AdminDashboard = ({ user }) => {
         
         setServices(filteredServices);
       } else {
-        console.error('Failed to fetch services:', result.message);
+        logger.error('Failed to fetch services', { message: result.message });
         setServices([]); // Set empty array on failure
       }
     } catch (error) {
-      logger.error('Error fetching services:', error);
+      logger.error('Error fetching services', error);
       setServices([]); // Set empty array on error
     }
     setLoadingServices(false);
-  };
+  }, [serviceSearchQuery]);
 
-  const fetchRoomTypes = async () => {
+  const fetchRoomTypes = useCallback(async () => {
     setLoadingRoomTypes(true);
     const result = await roomTypeService.getAllRoomTypes();
     if (result.success) {
@@ -277,9 +278,9 @@ const AdminDashboard = ({ user }) => {
     } else {
     }
     setLoadingRoomTypes(false);
-  };
+  }, [roomTypeSearchQuery, minCapacityFilter, maxCapacityFilter, minPriceFilter, maxPriceFilter]);
 
-  const fetchRooms = async () => {
+  const fetchRooms = useCallback(async () => {
     setLoadingRooms(true);
     const filters = {};
     if (roomStateFilter) filters.state = roomStateFilter;
@@ -288,9 +289,9 @@ const AdminDashboard = ({ user }) => {
     if (roomFloorFilter) filters.floor_no = roomFloorFilter;
     
     const result = await roomService.getAllRooms(filters);
-    logger.debug('Fetched rooms result:', result); // Debug log
+    logger.debug('Fetched rooms result', result);
     if (result.success) {
-      let filteredRooms = result.rooms || []; // Fixed: result.rooms NOT result.rooms.rooms
+      let filteredRooms = result.rooms || [];
       
       // Apply search filter on room number
       if (roomSearchQuery) {
@@ -299,12 +300,12 @@ const AdminDashboard = ({ user }) => {
         );
       }
       
-      logger.debug('Filtered rooms:', filteredRooms); // Debug log
+      logger.debug('Filtered rooms', { count: filteredRooms.length });
       setRooms(filteredRooms);
     } else {
     }
     setLoadingRooms(false);
-  };
+  }, [roomSearchQuery, roomStateFilter, roomTypeFilter, roomBranchFilter, roomFloorFilter]);
 
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
@@ -1406,7 +1407,7 @@ const AdminDashboard = ({ user }) => {
   };
 
   // Contact Messages Functions
-  const fetchContactMessages = async () => {
+  const fetchContactMessages = useCallback(async () => {
     setLoadingMessages(true);
     try {
       const result = await contactService.getAllContactMessages({ status: messageFilter });
@@ -1425,22 +1426,22 @@ const AdminDashboard = ({ user }) => {
         
         setContactMessages(filtered);
       } else {
-        console.error('Failed to fetch messages:', result.message);
+        logger.error('Failed to fetch messages', { message: result.message });
         setContactMessages([]);
       }
     } catch (error) {
-      logger.error('Error fetching messages:', error);
+      logger.error('Error fetching messages', error);
       setContactMessages([]);
     }
     setLoadingMessages(false);
-  };
+  }, [messageFilter, messageSearchQuery]);
 
   const handleMarkAsRead = async (messageId) => {
     const result = await contactService.updateContactStatus(messageId, 'read');
     if (result.success) {
       fetchContactMessages();
     } else {
-      console.error('Failed to mark message as read:', result.message);
+      logger.error('Failed to mark message as read', { message: result.message });
     }
   };
 
@@ -1474,7 +1475,7 @@ const AdminDashboard = ({ user }) => {
 
   // ==================== BOOKING MANAGEMENT FUNCTIONS ====================
   
-  const fetchBookings = async () => {
+  const fetchBookings = useCallback(async () => {
     setLoadingBookings(true);
     try {
       const result = await bookingService.getAllBookings({ 
@@ -1499,12 +1500,12 @@ const AdminDashboard = ({ user }) => {
         alert('Failed to fetch bookings: ' + result.message);
       }
     } catch (error) {
-      console.error('Fetch bookings error:', error);
+      logger.error('Fetch bookings error', error);
       alert('Error fetching bookings');
     } finally {
       setLoadingBookings(false);
     }
-  };
+  }, [bookingFilter, bookingSearchQuery]);
 
   const handleCheckIn = async (booking) => {
     if (!window.confirm(`Check in ${booking.user_name} for Room ${booking.room_no}?`)) {
@@ -1521,7 +1522,7 @@ const AdminDashboard = ({ user }) => {
         alert('Check-in failed: ' + result.message);
       }
     } catch (error) {
-      console.error('Check-in error:', error);
+      logger.error('Check-in error', error);
       alert('Error during check-in');
     }
   };
@@ -1539,7 +1540,7 @@ const AdminDashboard = ({ user }) => {
         setAvailableServices(result.services || []);
       }
     } catch (error) {
-      console.error('Fetch services error:', error);
+      logger.error('Fetch services error', error);
     }
     
     // Fetch existing booking services
@@ -1549,7 +1550,7 @@ const AdminDashboard = ({ user }) => {
         setBookingServices(result.services || []);
       }
     } catch (error) {
-      console.error('Fetch booking services error:', error);
+      logger.error('Fetch booking services error', error);
     }
     
     setBookingServiceFormData({ service_type_id: '', quantity: 1 });
