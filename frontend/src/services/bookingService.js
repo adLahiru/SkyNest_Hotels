@@ -180,7 +180,7 @@ const bookingService = {
    */
   cancelBooking: async (bookingId) => {
     try {
-      const response = await apiClient.post(`/bookings/${bookingId}/cancel`);
+      const response = await apiClient.delete(`/bookings/${bookingId}`);
       return {
         success: response.data.success,
         booking: response.data.data,
@@ -196,22 +196,70 @@ const bookingService = {
   },
 
   /**
+   * Confirm booking (update status to confirmed)
+   * @param {string} bookingId - Booking ID
+   * @returns {Promise} Response with confirmed booking
+   */
+  confirmBooking: async (bookingId) => {
+    try {
+      const response = await apiClient.patch(`/bookings/${bookingId}/status`, { 
+        status: 'confirmed' 
+      });
+      return {
+        success: response.data.success,
+        booking: response.data.data,
+        message: response.data.message || 'Booking confirmed successfully',
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to confirm booking',
+        error,
+      };
+    }
+  },
+
+  /**
    * Check-in booking
    * @param {string} bookingId - Booking ID
    * @returns {Promise} Response with checked-in booking
    */
   checkInBooking: async (bookingId) => {
     try {
-      const response = await apiClient.post(`/bookings/${bookingId}/check-in`);
+      const response = await apiClient.patch(`/bookings/${bookingId}/checkin`);
       return {
         success: response.data.success,
-        booking: response.data.data,
+        booking: response.data.booking || response.data.data,
         message: response.data.message || 'Check-in successful',
       };
     } catch (error) {
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to check-in',
+        message: error.response?.data?.message || error.response?.data?.error || 'Failed to check-in',
+        error,
+      };
+    }
+  },
+
+  /**
+   * Validate checkout eligibility
+   * @param {string} bookingId - Booking ID
+   * @returns {Promise} Response with checkout validation
+   */
+  validateCheckout: async (bookingId) => {
+    try {
+      const response = await apiClient.get(`/bookings/${bookingId}/checkout-validation`);
+      return {
+        success: response.data.success,
+        canCheckout: response.data.canCheckout,
+        payment: response.data.payment,
+        message: response.data.message,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        canCheckout: false,
+        message: error.response?.data?.message || 'Failed to validate checkout',
         error,
       };
     }
@@ -224,16 +272,16 @@ const bookingService = {
    */
   checkOutBooking: async (bookingId) => {
     try {
-      const response = await apiClient.post(`/bookings/${bookingId}/check-out`);
+      const response = await apiClient.patch(`/bookings/${bookingId}/checkout`);
       return {
         success: response.data.success,
-        booking: response.data.data,
+        booking: response.data.booking || response.data.data,
         message: response.data.message || 'Check-out successful',
       };
     } catch (error) {
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to check-out',
+        message: error.response?.data?.message || error.response?.data?.error || 'Failed to check-out',
         error,
       };
     }
