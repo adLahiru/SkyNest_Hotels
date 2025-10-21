@@ -1236,13 +1236,15 @@ export const checkOutGuest = async (req: AuthenticatedRequest, res: Response): P
       return;
     }
     
-    if (payment[0]?.payment_status !== 'paid' || (payment[0]?.due_amount || 0) > 0) {
+    // Check if there's any outstanding balance (using 0.01 threshold for floating point precision)
+    const dueAmount = payment[0]?.due_amount || 0;
+    if (dueAmount > 0.01) {
       await connection.rollback();
       res.status(400).json({
         error: 'Payment incomplete',
-        message: `Outstanding balance: $${payment[0]?.due_amount || 0}`,
+        message: `Outstanding balance: $${dueAmount.toFixed(2)}`,
         totalCharges: payment[0]?.total_charges || 0,
-        dueAmount: payment[0]?.due_amount || 0
+        dueAmount: dueAmount
       });
       return;
     }
