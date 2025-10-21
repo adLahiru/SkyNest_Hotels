@@ -9,7 +9,11 @@ import {
   checkInGuest,
   checkOutGuest,
   validateCheckout,
-  getAvailableRooms
+  getAvailableRooms,
+  addServiceToBooking,
+  getBookingServices,
+  processBookingPayment,
+  getBookingPaymentDetails
 } from '../controllers/bookingController';
 import { authenticateToken } from '../middleware/authMiddleware';
 
@@ -55,5 +59,17 @@ router.get('/:booking_id/checkout-validation', authenticateToken, validateChecko
 
 // Check-out guest (staff only)
 router.patch('/:booking_id/checkout', authenticateToken, checkOutGuest);
+
+// Add service to booking
+router.post('/:booking_id/services', authenticateToken, addServiceToBooking);
+
+// Get services for a booking
+router.get('/:booking_id/services', authenticateToken, getBookingServices);
+
+// Process payment for booking
+router.post('/:booking_id/payments', authenticateToken, processBookingPayment);
+
+// Get payment details for booking
+router.get('/:booking_id/payment-details', authenticateToken, getBookingPaymentDetails);
 
 export default router;

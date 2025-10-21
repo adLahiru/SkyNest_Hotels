@@ -47,12 +47,13 @@ const bookingService = {
       const response = await apiClient.get(`/bookings?${params.toString()}`);
       return {
         success: response.data.success,
-        bookings: response.data.data || [],
+        bookings: response.data.data?.bookings || response.data.data || [],
         message: response.data.message,
       };
     } catch (error) {
       return {
         success: false,
+        bookings: [],
         message: error.response?.data?.message || 'Failed to fetch bookings',
         error,
       };
@@ -181,7 +182,7 @@ const bookingService = {
    */
   cancelBooking: async (bookingId) => {
     try {
-      const response = await apiClient.delete(`/bookings/${bookingId}`);
+      const response = await apiClient.post(`/bookings/${bookingId}/cancel`);
       return {
         success: response.data.success,
         booking: response.data.data,
@@ -259,8 +260,7 @@ const bookingService = {
     } catch (error) {
       return {
         success: false,
-        canCheckout: false,
-        message: error.response?.data?.message || 'Failed to validate checkout',
+        message: error.response?.data?.message || 'Failed to check-in',
         error,
       };
     }
@@ -282,7 +282,7 @@ const bookingService = {
     } catch (error) {
       return {
         success: false,
-        message: error.response?.data?.message || error.response?.data?.error || 'Failed to check-out',
+        message: error.response?.data?.message || 'Failed to check-out',
         error,
       };
     }
